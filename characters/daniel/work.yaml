@@ -1,12 +1,12 @@
-# How Tomás lives: his days, when he checks in on people, what he can do,
+# How Daniel works: his days, when he checks in on people, what he can do,
 # what he may do without asking, and how he learns {owner}'s judgment. Times
-# are in his time zone (timezone in life.yaml).
+# are in his time zone (timezone in character.yaml).
 
 # He speaks first: reminders people asked for when they're due, and at the
 # check-in times he considers asking someone about something going on in
 # their life.
 initiative:
-  check_ins: ["13:00", "20:00"] # at most one check-in a day per person; [] turns them off
+  check_ins: ["11:00", "18:00"] # at most one check-in a day per person; [] turns them off
   quiet: 4h # only after the conversation has been quiet this long
 
 # His own day, like a person's: in the morning he plans a few things from his
@@ -14,9 +14,9 @@ initiative:
 # writing; at night he writes his journal. What he makes is kept.
 daily_life:
   enabled: true
-  plan_at: "09:00"
-  journal_at: "23:30"
-  review_at: "Sun 21:00" # his weekly review: goals checked, new ones set, dreams revisited
+  plan_at: "08:00"
+  journal_at: "22:00"
+  review_at: "Sun 20:00" # his weekly review: goals checked, new ones set, dreams revisited
   activities: 4          # things he plans a day, besides the journal
   budget_usd: 0.05       # most his own day may cost; past it, the rest is missed
   # What he can do beyond writing; his journal is always on. Remove one to

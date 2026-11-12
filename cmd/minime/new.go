@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/Grandbusta/minime"
+	"github.com/Grandbusta/minime/internal/agent"
 	"github.com/Grandbusta/minime/internal/channel/telegram"
 	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/person"
 	"github.com/Grandbusta/minime/internal/secret"
 	"github.com/Grandbusta/minime/internal/setup"
 	"github.com/Grandbusta/minime/internal/store"
@@ -23,7 +23,7 @@ import (
 // newPerson returns whether to run the person now. This process's
 // environment then has the new .env, and nothing from the one before.
 func newPerson(ctx context.Context) (bool, error) {
-	s := &setup.Setup{Ask: setup.Terminal{}, Out: os.Stdout, Files: minime.Files, Lives: "lives", Example: ".env.example", Env: ".env",
+	s := &setup.Setup{Ask: setup.Terminal{}, Out: os.Stdout, Files: minime.Files, Characters: "characters", Example: ".env.example", Env: ".env",
 		BotName: telegram.BotName, FirstMessage: telegram.FirstMessage, Database: databaseWhose, Save: saveNew}
 	if _, err := exec.LookPath("docker"); err == nil {
 		s.Postgres = dockerPostgres
@@ -70,7 +70,7 @@ func saveNew(ctx context.Context, url, key string, files map[string][]byte, secr
 		return err
 	}
 	defer st.Close()
-	name, ok, err := person.Start(ctx, st, k, files, secrets, nil, memory.SelfNew, time.Now().UTC())
+	name, ok, err := agent.Start(ctx, st, k, agent.BySection(files), secrets, nil, memory.SelfNew, time.Now().UTC())
 	if err == nil && !ok {
 		err = fmt.Errorf("someone already lives in that database; %s needs their own", name)
 	}

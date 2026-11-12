@@ -1,4 +1,4 @@
-# minime: create an AI person with a life of their own
+# minime: raise an agent, put it to work
 
 <p align="center">
   <picture>
@@ -7,11 +7,12 @@
   </picture>
 </p>
 
-Not an assistant that waits for instructions: **someone**. You write who they are (a name,
-a story, a family, dreams), and from there they live. They plan their days, make things,
-read, keep a journal, and get better at what they care about. They talk with you on
-Telegram, keep their promises, and ask before doing anything that reaches other people.
-Over time they learn how you decide. They always say plainly that they're an AI.
+**Raise an agent. Put it to work.** An agent with character, not a blank prompt: pick one
+of five ready characters or write your own (a name, a story, a family, dreams), and from
+there they work. They plan their days, make real things, read, keep a journal, and get
+better at what they do. They talk with you on Telegram, keep their promises, and ask
+before anything that reaches other people. Over time they learn how you decide, and ask
+less. They always say plainly that they're an AI.
 
 ## 👋 Meet Daniel
 
@@ -35,17 +36,20 @@ hook came from something you told him a week ago. The question at the end is how
 learns your judgment: he guesses what you'd pick, and when you pick differently, asks what
 tipped it.
 
-## 💡 How they differ from an assistant
+## 💡 What makes them different
 
-- **They have a life of their own.** A life story they never contradict, a family, a
-  personality, a routine. Anything their story doesn't cover (a favourite food, an opinion)
-  they decide the first time it comes up, and remember.
-- **They grow from evidence.** Dreams lead to goals, goals to projects and learning plans.
-  Every piece of work is scored, your feedback counts double, and their skill levels move
-  with what they actually make.
-- **Their autonomy is earned.** Every action is `auto`, `ask` or `forbid`. What reaches
-  other people waits for your approval, and they track how often they'd have chosen what
-  you chose.
+- **Character.** The same agent every day, with a consistent voice and taste: a story they
+  never contradict, a family, a personality, a routine. Anything their story doesn't cover
+  (a favourite food, an opinion) they decide the first time it comes up, and remember.
+- **They remember.** You, the people in your life, what they made, and what you decided.
+- **They take initiative.** A plan each morning, work done before you ask, promises kept on
+  time.
+- **They get better, and you can see why.** Dreams lead to goals, goals to projects and
+  learning plans. Every piece of work is scored, your feedback counts double, and their
+  skill levels move with what they actually make.
+- **They learn how you decide, and ask before anything that matters.** Every action is
+  `auto`, `ask` or `forbid`. What reaches other people waits for your approval, and they
+  track how often they'd have chosen what you chose.
 
 ## 🌱 Quick start
 
@@ -63,7 +67,7 @@ Then, in a folder for them (their `.env` is written there):
 minime new
 ```
 
-Pick a life, paste your token and key, message your bot once so it knows it's you, and say
+Pick a character, paste your token and key, message your bot once so it knows it's you, and say
 who you are to them. It puts them in their own database (`.env` only says where, and holds
 the key to their secrets) and starts them. After that:
 
@@ -75,12 +79,13 @@ If something's wrong, `minime doctor` says what; `minime backup` keeps everythin
 them in one file. Every setting, Docker, and setting things up by hand: [docs/SETUP.md](docs/SETUP.md).
 
 **What it costs:** only your OpenAI usage. Their own day is capped by `budget_usd` in
-`living.yaml` ($0.05 a day at a person's pace), and a message to them costs a fraction of
+`work.yaml` ($0.05 a day at a human pace), and a message to them costs a fraction of
 a cent. On the day the screenshots below were taken, Daniel made 100 decisions for $0.03.
 
-## 👥 Pick a life
+## 👥 Pick a character
 
-Five lives come ready in [lives](lives). Nothing about any of them is in the code.
+Five characters come ready in [characters](characters). Nothing about any of them is in the
+code.
 
 | | | Where | Working toward |
 |---|---|---|---|
@@ -90,11 +95,11 @@ Five lives come ready in [lives](lives). Nothing about any of them is in the cod
 | **Priya** | 30 | Bengaluru | a cookbook of her grandmother's kitchen |
 | **Elsa** | 67 | Gothenburg | the history of her neighbourhood, before the people who remember it are gone |
 
-Or write your own: a person is a folder of three files. `life.yaml` is who they are,
-`living.yaml` is how they live, and `judgment.yaml` is how you decide
-([making your own life](docs/SETUP.md)).
+Or write your own: an agent is a folder of three files. `character.yaml` is who they are,
+`work.yaml` is how they work, and `judgment.yaml` is how you decide
+([making your own character](docs/SETUP.md#making-your-own-character)).
 
-## ☀️ A day in their life
+## ☀️ A day with them
 
 | When | What |
 |---|---|
@@ -129,9 +134,9 @@ Or write your own: a person is a folder of three files. `life.yaml` is who they 
 
 ## 📖 Learn more
 
-- [Living with them](docs/GUIDE.md): talking, promises, their day, growth, judgment, the
+- [Working with them](docs/GUIDE.md): talking, promises, their day, growth, judgment, the
   console and every command.
-- [Setup and every setting](docs/SETUP.md): `minime new`, Docker, the person's files, the
+- [Setup and every setting](docs/SETUP.md): `minime new`, Docker, the agent's files, the
   config, developing.
 - [How it works inside](docs/ARCHITECTURE.md): the two-system mind, memory, the parts and
   how they fit.

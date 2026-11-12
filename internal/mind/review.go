@@ -12,10 +12,10 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/minime/internal/action"
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/decision"
 	"github.com/Grandbusta/minime/internal/memory"
 	"github.com/Grandbusta/minime/internal/providers/system2"
-	"github.com/Grandbusta/minime/internal/self"
 )
 
 // The weekly review: it checks its goals and skills, sets new goals for its
@@ -99,7 +99,7 @@ var reviewFormat = &system2.Format{Name: "weekly_review", Schema: map[string]any
 			"type": "object", "additionalProperties": false, "required": []string{"text", "types", "calls"},
 			"properties": map[string]any{
 				"text":  map[string]any{"type": "string", "description": "a rule of your owner's, in a sentence"},
-				"types": map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": self.DecisionTypes}},
+				"types": map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": character.DecisionTypes}},
 				"calls": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "ids of the calls it comes from"},
 			},
 		}},
@@ -432,7 +432,7 @@ func (m *Mind) Review(ctx context.Context, now time.Time) error {
 		text := strings.TrimSpace(pr.Text)
 		var types, keys []string
 		for _, t := range pr.Types {
-			if slices.Contains(self.DecisionTypes, t) && !slices.Contains(types, t) {
+			if slices.Contains(character.DecisionTypes, t) && !slices.Contains(types, t) {
 				types = append(types, t)
 			}
 		}

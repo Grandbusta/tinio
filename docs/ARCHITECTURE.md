@@ -1,6 +1,6 @@
 # Architecture
 
-How minime works today: every part of the AI person, what flows between them, and what
+How minime works today: every part of an agent (inside, a person with character), what flows between them, and what
 each model sees and returns. For what it does, see the [README](../README.md); for setting
 it up and every setting, [SETUP.md](SETUP.md).
 
@@ -56,7 +56,7 @@ flowchart TB
 ```
 
 Started by `minime run` ([cmd/minime/main.go](../cmd/minime/main.go)), which loads the
-config, the life story, the judgment file, the question sets and the prompts, opens
+config, their character, the judgment, the question sets and the prompts, opens
 Postgres (running any new migrations), and then runs five goroutines:
 
 | Goroutine | What it does |
@@ -75,16 +75,17 @@ taken on in a chat needs a learning plan.
 
 ## Who the person is
 
-The person is their database; the code has nothing about them. `DATABASE_URL` says where
+The agent is their database; the code has nothing about them. `DATABASE_URL` says where
 it is and `MINIME_KEY` opens their secrets; nothing else about them is outside it
-([internal/person](../internal/person)). Their three sections are YAML, each edit a new
+([internal/agent](../internal/agent)). Their three sections are YAML, each edit a new
 version (`self_versions`; the newest is used); `minime new` writes the first from one of
-the templates in [lives](../lives), all at once (`person.Start`). Every command starts the
+the characters in [characters](../characters), all at once (`agent.Start`). Every command starts the
 same way: open the database, put their secrets in the process's
-environment where it doesn't set them already (`person.Env`), then read the config with
-their `living` over it.
+environment where it doesn't set them already (`agent.Env`), then read the config with
+their `work` over it. (Before v0.4.0 the sections were `life` and `living`; migration
+00027 renames them, and files with the old names still import.)
 
-- **life** ([internal/self](../internal/self)): name, time zone, story,
+- **character** ([internal/character](../internal/character)): name, time zone, story,
   personality, routine, what they make, dreams, starting skills, family. The story,
   personality and routine are in every System 2 instruction: a person always knows who they
   are. On start, the family is copied into memory as people in the *family* circle
@@ -96,7 +97,7 @@ their `living` over it.
 - **Embeddings** ([internal/providers/embed](../internal/providers/embed)): your approved
   decisions as vectors, stored with them, so the ones most like a decision at hand go into
   the note (`similarCases`). Switchable like System 1 and 2; without one, the newest.
-- **living** ([internal/config](../internal/config)): how they live: check-in
+- **work** ([internal/config](../internal/config)): how they work: check-in
   times, the day's times and budget, abilities and web caps, autonomy, judgment calls,
   tools. Read over the config's defaults, with the same keys.
 - **Secrets** ([internal/secret](../internal/secret)): their bot token, owner ID, OpenAI key
@@ -105,7 +106,7 @@ their `living` over it.
   wins over a stored one. Never in a prompt, a log, an export or the console.
 - **[configs/minime.yaml](../configs/minime.yaml)** ([internal/config](../internal/config)):
   the machinery every person shares: providers, the database, Telegram, prompts,
-  addresses, pricing. It, the prompts, the question sets and the lives are built into the
+  addresses, pricing. It, the prompts, the question sets and the characters are built into the
   binary ([minime.go](../minime.go), `minime.Files`), a file on disk at the same path
   winning, so one binary with `DATABASE_URL` and `MINIME_KEY` runs a person. `${VAR}` is filled from the environment, where their secrets are by
   then.
@@ -366,7 +367,7 @@ and the console's download links offer whatever the set holds.
 A format made from data a work carries beside its words is a `render.DataFormat`, which
 defines that data: its schema, how to write it, and how it's cleaned. MIDI is made from a
 `score`, a spreadsheet and a CSV from a `table`, a calendar from `events`, a zip from
-`files`. A craft names the data its works carry (`data: score` in life.yaml); each work of
+`files`. A craft names the data its works carry (`data: score` in character.yaml); each work of
 that kind then writes it with its words, kept in `works.data` with its `data_kind`.
 
 Adding a format:
@@ -607,8 +608,8 @@ internal/
   portfolio/             the profile page: writer and server
   console/               the mind console: API, live stream, web/
   replay/                labelled messages re-asked
-  self/                  reading and checking a life and a judgment
-  person/                the person from their database: loading and starting them
+  character/             reading and checking a character and a judgment
+  agent/                 the agent from their database: loading and starting them
   secret/                sealing secrets with MINIME_KEY
   config/ pricing/
 decisions/               System 1's question sets

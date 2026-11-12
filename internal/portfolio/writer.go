@@ -19,13 +19,13 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/minime/internal/action"
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/decision"
 	"github.com/Grandbusta/minime/internal/decision/questions"
 	"github.com/Grandbusta/minime/internal/memory"
 	"github.com/Grandbusta/minime/internal/mind"
 	"github.com/Grandbusta/minime/internal/providers/system1"
 	"github.com/Grandbusta/minime/internal/providers/system2"
-	"github.com/Grandbusta/minime/internal/self"
 )
 
 type Page struct {
@@ -69,7 +69,7 @@ const (
 // Writer keeps the page up to date: once a day at UpdateAt (UTC), and on
 // start only if the page has never been written.
 type Writer struct {
-	Life    self.Life
+	Life    character.Character
 	Store   Store
 	System1 system1.DecisionModel
 	System2 system2.Reasoner

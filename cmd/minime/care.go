@@ -15,9 +15,9 @@ import (
 	"github.com/go-telegram/bot/models"
 
 	"github.com/Grandbusta/minime"
+	"github.com/Grandbusta/minime/internal/agent"
 	"github.com/Grandbusta/minime/internal/config"
 	"github.com/Grandbusta/minime/internal/decision/questions"
-	"github.com/Grandbusta/minime/internal/person"
 	"github.com/Grandbusta/minime/internal/providers/openaiclient"
 	s1openai "github.com/Grandbusta/minime/internal/providers/system1/openai"
 	"github.com/Grandbusta/minime/internal/secret"
@@ -32,7 +32,7 @@ func backup(ctx context.Context, args []string, out io.Writer) error {
 	}
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {
-		return person.ErrNoOne
+		return agent.ErrNoOne
 	}
 	st, err := store.Open(ctx, url)
 	if err != nil {
@@ -139,8 +139,8 @@ func doctor(ctx context.Context, cfgPath string, out io.Writer) error {
 		bad("key", err)
 		return stop()
 	}
-	p, err := person.Load(ctx, st, key)
-	if errors.Is(err, person.ErrNoOne) {
+	p, err := agent.Load(ctx, st, key)
+	if errors.Is(err, agent.ErrNoOne) {
 		if _, serr := os.Stat(filepath.Join(oldSelf, "life.yaml")); serr == nil {
 			err = fmt.Errorf("no one lives here yet: start them once to move them in from %s/", oldSelf)
 		}
@@ -159,7 +159,7 @@ func doctor(ctx context.Context, cfgPath string, out io.Writer) error {
 		bad("skill", errors.New(u))
 	}
 
-	cfg, err := config.Load(minime.Files, cfgPath, p.Living)
+	cfg, err := config.Load(minime.Files, cfgPath, p.Work)
 	if err == nil {
 		if cfg.Initiative.Timezone == "" {
 			cfg.Initiative.Timezone = p.Life.Timezone

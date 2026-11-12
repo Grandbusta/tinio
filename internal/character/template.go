@@ -1,4 +1,4 @@
-package self
+package character
 
 import (
 	"bytes"
@@ -23,7 +23,7 @@ type Template struct {
 	Relations []string `yaml:"relations"`
 }
 
-var Files = []string{"life.yaml", "living.yaml", "judgment.yaml"}
+var Files = []string{"character.yaml", "work.yaml", "judgment.yaml"}
 
 type Owner struct {
 	Name     string
@@ -31,7 +31,7 @@ type Owner struct {
 	Account  string
 }
 
-// Templates are the lives in dir, in files.
+// Templates are the characters in dir, in files.
 func Templates(files fs.FS, dir string) ([]Template, error) {
 	entries, err := fs.ReadDir(files, dir)
 	if err != nil {

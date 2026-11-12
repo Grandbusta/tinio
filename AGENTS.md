@@ -7,11 +7,19 @@ and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## What minime is
 
-minime creates an AI person, not an assistant: someone with a life of their own (a
+minime raises an agent with character: inside, a person with a life of their own (a
 story, a family, dreams), who plans their days, makes things in writing (and music, as
 MIDI), reads, keeps a journal, grows skills from evidence, talks with their owner on
 Telegram, and learns how the owner decides. What reaches other people waits for the
 owner's approval. They always say plainly that they're an AI.
+
+**The words.** What people see and type says *agent* and *character*: "Raise an agent.
+Put it to work." The sections are `character`, `work` and `judgment`; the ready ones are
+in `characters/`; the command is `minime agent`; the packages are `agent` and `character`.
+Only the prompts stay a *person*, and they must: their person framing is what makes the
+character. The mind keeps its own words for how they live (the life loop, `Life` on its
+config). Never call them an "AI
+person", "assistant", "companion" or "clone" in what users read.
 
 It is one Go process: Postgres for memory, OpenAI for the models (System 1, a fast
 decision model that answers typed questions; System 2, a reasoning model that writes),
@@ -22,12 +30,12 @@ Telegram for talking. Always write the name as **minime**, never "mini-me".
 | Path | What it is |
 |---|---|
 | `cmd/minime` | The binary: wiring, `minime new`, and the commands (`day`, `growth`, `work`, `replay`, ...). |
-| `configs/minime.yaml` | The machinery every person shares: models, prompts, ports. `${VAR}`s come from the environment and the person's secrets. |
-| `lives/<name>/` | The five ready lives: `life.yaml` (who), `living.yaml` (how they live), `judgment.yaml` (how the owner decides). |
+| `configs/minime.yaml` | The machinery every agent shares: models, prompts, ports. `${VAR}`s come from the environment and the agent's secrets. |
+| `characters/<name>/` | The five ready characters: `character.yaml` (who), `work.yaml` (how they work), `judgment.yaml` (how the owner decides). |
 | `prompts/*.md` | Everything System 2 is told, as templates. |
 | `decisions/*.yaml` | System 1's question sets, versioned (`incoming_message@1`). |
 | `docs/` | Users' docs, the brand, screenshots. |
-| `minime.go` | Builds `configs/`, `prompts/`, `decisions/`, `lives/` and `.env.example` into the binary (`minime.Files`); a file on disk at the same path wins. Read them only through it. |
+| `minime.go` | Builds `configs/`, `prompts/`, `decisions/`, `characters/` and `.env.example` into the binary (`minime.Files`); a file on disk at the same path wins. Read them only through it. |
 | `deploy/Dockerfile` | One person in one container (no compose). |
 | `.github/workflows/release.yml` | A `v*` tag: binaries on a draft release, the image on `ghcr.io` as that tag; publishing the release moves `:latest` to it. |
 
@@ -47,9 +55,9 @@ Telegram for talking. Always write the name as **minime**, never "mini-me".
 | `agentskill` | Skills in the Agent Skills format (`SKILL.md`), stored in the person's database and given when they fit. |
 | `render` (`pdf`, `docx`, `table`, `calendar`, `midi`, `archive`; `markdown`) | A work made into a file. Each kind is a `render.Format` (a `render.DataFormat` if it's made from data the work carries, like MIDI from a score); a new one is a type plus a line in main. Formats that lay out words read them with `render/markdown`. |
 | `action` | Autonomy: every action is `auto`, `ask` or `forbid`. |
-| `person` | The person as their database holds them: loading them, and starting someone (`minime new`). Only `DATABASE_URL` and `MINIME_KEY` are outside it. |
+| `agent` | The agent as their database holds them: loading them, and starting someone (`minime new`). Only `DATABASE_URL` and `MINIME_KEY` are outside it. |
 | `secret` | Sealing their secrets with `MINIME_KEY` (AES-GCM). |
-| `self`, `config`, `setup` | Reading and checking a life and a judgment, the config, and `minime new`. |
+| `character`, `config`, `setup` | Reading and checking a character and a judgment, the config, and `minime new`. |
 | `console` | The private mind console (localhost unless a token is set). |
 | `portfolio` | The public profile page they write themselves. |
 | `replay`, `pricing`, `perception` | Replaying labelled reads, model prices, the percept type. |
@@ -121,7 +129,7 @@ Every change is reviewed against these. They come from real reviews of this code
 - Work out what never changes once (`m.dataOf()` with `sync.Once`).
 
 **The person, not the code, holds the life.**
-- Nothing about any person is in the code: lives are YAML, prompts are `prompts/*.md`,
+- Nothing about any person is in the code: characters are YAML, prompts are `prompts/*.md`,
   questions are `decisions/*.yaml`. Text for System 2 lives in prompts or the mind; a
   render format may describe its own file (`Describe`, `WriteHelp`) so it stays pluggable.
 - What the person writes never has em dashes (the prompts say so; System 2's output
@@ -188,7 +196,7 @@ safe for concurrent use; a test of both loops orders every step through channels
   and their scripts are never run.
 - The console listens on localhost unless a token of 16+ characters is set.
 - Everything particular to a person is in their own database, never in files or the
-  code: their life, living, judgment, skills and secrets. Secrets are sealed with
+  code: their character, work, judgment, skills and secrets. Secrets are sealed with
   `MINIME_KEY` before they're stored, and never reach System 2, a log, an export or the
   console (which shows only that one is set).
 

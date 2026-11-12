@@ -144,7 +144,7 @@ func TestShippedConfigPolicy(t *testing.T) {
 	}
 }
 
-func TestLiving(t *testing.T) {
+func TestWork(t *testing.T) {
 	dir := writeConfig(t, "database:\n  url: postgres://x\ninitiative:\n  check_ins: [\"11:00\"]\n  quiet: 2h\n"+
 		"daily_life:\n  plan_at: \"06:00\"\n  plan_prompt: prompts/mine.md\n")
 	cfg, err := Load(dir, "minime.yaml", []byte(`initiative:
@@ -165,6 +165,6 @@ judgment:
 		t.Errorf("with living: %+v %+v %+v %+v", cfg.Initiative, cfg.DailyLife, cfg.Autonomy, cfg.Judgment)
 	}
 	if _, err := Load(dir, "minime.yaml", []byte("database:\n  url: postgres://elsewhere\n")); err == nil {
-		t.Error("living set the database; want an error")
+		t.Error("work set the database; want an error")
 	}
 }

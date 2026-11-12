@@ -1,5 +1,5 @@
-// Package setup is `minime new`: it starts a person from one of the lives in
-// lives/, in their own database. Nothing is written until every answer is in;
+// Package setup is `minime new`: it raises an agent from one of the
+// characters in characters/, in their own database. Nothing is written until every answer is in;
 // then .env holds only where they live (DATABASE_URL) and the key to their
 // secrets (MINIME_KEY).
 package setup
@@ -19,8 +19,8 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/secret"
-	"github.com/Grandbusta/minime/internal/self"
 )
 
 type BotName func(ctx context.Context, token string) (string, error)
@@ -50,12 +50,12 @@ type Setup struct {
 	Ask Prompter
 	Out io.Writer
 
-	// Files has Lives, the folder of lives to start from, and Example, what
-	// a new .env is written from. Env is on disk.
-	Files   fs.FS
-	Lives   string
-	Example string
-	Env     string
+	// Files has Characters, the folder of characters to start from, and
+	// Example, what a new .env is written from. Env is on disk.
+	Files      fs.FS
+	Characters string
+	Example    string
+	Env        string
 
 	BotName      BotName
 	FirstMessage FirstMessage
@@ -79,7 +79,7 @@ func (s *Setup) Run(ctx context.Context) (Result, error) {
 	if s.Now == nil {
 		s.Now = time.Now
 	}
-	s.say("Let's start a person.\n")
+	s.say("Let's raise an agent.\n")
 
 	before := s.readEnv()
 	have, whose := before, ""
@@ -87,15 +87,15 @@ func (s *Setup) Run(ctx context.Context) (Result, error) {
 		whose, _ = s.Database(ctx, url)
 	}
 	if whose != "" {
-		s.say("\n%s lives in the database .env points to. Starting someone new leaves %s as they are, and moves their .env to "+
+		s.say("\n%s is the agent in the database .env points to. Raising a new one leaves %s as they are, and moves their .env to "+
 			"%s: `cp %[3]s .env` brings them back.\n", whose, whose, s.Env+"."+strings.ToLower(whose))
-		if ok, err := s.Ask.Confirm("Start someone new instead?", false); err != nil || !ok {
+		if ok, err := s.Ask.Confirm("Raise a new agent instead?", false); err != nil || !ok {
 			return Result{}, errStop
 		}
 		have = map[string]string{} // their bot and their owner are theirs
 	}
 
-	tmpl, err := s.pickLife()
+	tmpl, err := s.pickCharacter()
 	if err != nil {
 		return Result{}, err
 	}
@@ -127,34 +127,34 @@ func (s *Setup) Run(ctx context.Context) (Result, error) {
 			dropped = append(dropped, k)
 		}
 	}
-	s.say("\n%s is ready. Everything about them is in their database: their life, how they live, their keys, and a starting "+
+	s.say("\n%s is ready. Everything about them is in their database: their character, how they work, their keys, and a starting "+
 		"judgment for you to review in the console. .env only says where that is (DATABASE_URL) and holds the key to their "+
 		"secrets (%s): keep both safe.\n", tmpl.Name, secret.EnvKey)
 	start, err := s.Ask.Confirm(fmt.Sprintf("Start %s now?", tmpl.Name), true)
 	return Result{Name: tmpl.Name, Env: kept, Dropped: dropped, Start: start && err == nil}, nil
 }
 
-func (s *Setup) pickLife() (self.Template, error) {
-	ts, err := self.Templates(s.Files, s.Lives)
+func (s *Setup) pickCharacter() (character.Template, error) {
+	ts, err := character.Templates(s.Files, s.Characters)
 	if err != nil {
-		return self.Template{}, err
+		return character.Template{}, err
 	}
 	if len(ts) == 0 {
-		return self.Template{}, fmt.Errorf("no lives in %s", s.Lives)
+		return character.Template{}, fmt.Errorf("no characters in %s", s.Characters)
 	}
 	labels := make([]string, len(ts))
 	for i, t := range ts {
 		labels[i] = t.Name + ": " + t.About
 	}
-	n, err := s.Ask.Select("Who would you like to start?", labels)
+	n, err := s.Ask.Select("Which character would you like to raise?", labels)
 	if err != nil {
-		return self.Template{}, err
+		return character.Template{}, err
 	}
 	return ts[n], nil
 }
 
 // keys are their secrets, and DATABASE_URL; have is what .env has now.
-func (s *Setup) keys(ctx context.Context, tmpl self.Template, have map[string]string) (map[string]string, error) {
+func (s *Setup) keys(ctx context.Context, tmpl character.Template, have map[string]string) (map[string]string, error) {
 	env := map[string]string{}
 
 	s.say("\nTelegram: %s talks with you through a bot. Make one with @BotFather (/newbot) and paste its token.\n", tmpl.Name)
@@ -183,7 +183,7 @@ func (s *Setup) keys(ctx context.Context, tmpl self.Template, have map[string]st
 		return nil, err
 	}
 
-	s.say("\nDatabase: %s's memory lives in Postgres, one database per person.\n", tmpl.Name)
+	s.say("\nDatabase: %s's memory lives in Postgres, one database per agent.\n", tmpl.Name)
 	for {
 		url := have["DATABASE_URL"]
 		if url == "" && s.Postgres != nil && s.confirm("You have no database set. Start one on this machine with Docker?", true) {
@@ -221,7 +221,7 @@ func (s *Setup) keys(ctx context.Context, tmpl self.Template, have map[string]st
 	return env, nil
 }
 
-func (s *Setup) owner(ctx context.Context, tmpl self.Template, env, have map[string]string) (self.Owner, error) {
+func (s *Setup) owner(ctx context.Context, tmpl character.Template, env, have map[string]string) (character.Owner, error) {
 	firstName := ""
 	if id := have["TELEGRAM_OWNER_ID"]; id != "" && s.confirm(fmt.Sprintf("Keep %s as your Telegram user ID?", id), true) {
 		env["TELEGRAM_OWNER_ID"] = id
@@ -235,7 +235,7 @@ func (s *Setup) owner(ctx context.Context, tmpl self.Template, env, have map[str
 				break
 			}
 			if !s.confirm(fmt.Sprintf("No message yet (%v). Keep waiting?", err), true) {
-				return self.Owner{}, errStop
+				return character.Owner{}, errStop
 			}
 		}
 	}
@@ -243,7 +243,7 @@ func (s *Setup) owner(ctx context.Context, tmpl self.Template, env, have map[str
 
 	name, err := s.Ask.Input(fmt.Sprintf("What should %s call you?", tmpl.Name), firstName, false)
 	if err != nil {
-		return self.Owner{}, err
+		return character.Owner{}, err
 	}
 	labels := make([]string, len(tmpl.Relations))
 	for i, r := range tmpl.Relations {
@@ -251,9 +251,9 @@ func (s *Setup) owner(ctx context.Context, tmpl self.Template, env, have map[str
 	}
 	n, err := s.Ask.Select(fmt.Sprintf("Who are you to %s?", tmpl.Name), labels)
 	if err != nil {
-		return self.Owner{}, err
+		return character.Owner{}, err
 	}
-	return self.Owner{Name: name, Relation: tmpl.Relations[n], Account: "telegram:" + env["TELEGRAM_OWNER_ID"]}, nil
+	return character.Owner{Name: name, Relation: tmpl.Relations[n], Account: "telegram:" + env["TELEGRAM_OWNER_ID"]}, nil
 }
 
 // writeEnv writes a new .env from the example. One already there is moved

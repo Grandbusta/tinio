@@ -2,7 +2,7 @@
 // they live, their owner's judgment, their skills and their secrets. Only
 // DATABASE_URL and MINIME_KEY are outside it. Files only come in (minime
 // new, their old self/ folder, minime self import) and go out (export).
-package person
+package agent
 
 import (
 	"context"
@@ -20,9 +20,9 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/Grandbusta/minime/internal/agentskill"
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/memory"
 	"github.com/Grandbusta/minime/internal/secret"
-	"github.com/Grandbusta/minime/internal/self"
 )
 
 type Store interface {
@@ -50,15 +50,51 @@ func CheckName(name string) error {
 	return nil
 }
 
-// Files are the sections as files, as each life in lives/ has them.
-var Files = map[string]string{memory.SectionLife: "life.yaml", memory.SectionLiving: "living.yaml", memory.SectionJudgment: "judgment.yaml"}
+// Files are the sections as files, as each character in characters/ has them.
+var Files = map[string]string{memory.SectionCharacter: "character.yaml", memory.SectionWork: "work.yaml", memory.SectionJudgment: "judgment.yaml"}
+
+// oldFiles are the names before v0.4.0, still read so an old self/ folder
+// or export loads.
+var oldFiles = map[string]string{memory.SectionCharacter: "life.yaml", memory.SectionWork: "living.yaml"}
+
+// BySection is files, by file name (Files, or the names before v0.4.0), by
+// section; a file of neither name is left out.
+func BySection(files map[string][]byte) map[string][]byte {
+	out := map[string][]byte{}
+	for _, s := range memory.Sections {
+		if raw, ok := files[Files[s]]; ok {
+			out[s] = raw
+		} else if raw, ok := files[oldFiles[s]]; ok {
+			out[s] = raw
+		}
+	}
+	return out
+}
+
+// ReadFolder is the sections in dir, by section; a missing file is left out.
+func ReadFolder(dir string) (map[string][]byte, error) {
+	files := map[string][]byte{}
+	for _, names := range []map[string]string{Files, oldFiles} {
+		for _, f := range names {
+			raw, err := os.ReadFile(filepath.Join(dir, f))
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			files[f] = raw
+		}
+	}
+	return BySection(files), nil
+}
 
 var ErrNoOne = errors.New("no one lives here yet: start someone with `minime new`")
 
-type Person struct {
-	Life     self.Life
-	Living   []byte // read over the config (config.Load)
-	Judgment self.Judgment
+type Agent struct {
+	Life     character.Character // their character
+	Work     []byte              // read over the config (config.Load)
+	Judgment character.Judgment
 	Skills   []agentskill.Skill
 	// FromEnv are stored secrets the environment sets too: it wins.
 	FromEnv []string
@@ -67,9 +103,9 @@ type Person struct {
 }
 
 // Load reads them from their database, their secrets into the environment (Env).
-func Load(ctx context.Context, st Store, key secret.Key) (Person, error) {
-	var p Person
-	life, ok, err := st.Self(ctx, memory.SectionLife)
+func Load(ctx context.Context, st Store, key secret.Key) (Agent, error) {
+	var p Agent
+	doc, ok, err := st.Self(ctx, memory.SectionCharacter)
 	if err != nil {
 		return p, err
 	}
@@ -79,19 +115,19 @@ func Load(ctx context.Context, st Store, key secret.Key) (Person, error) {
 	if p.FromEnv, err = Env(ctx, st, key); err != nil {
 		return p, err
 	}
-	if p.Life, err = self.ParseLife([]byte(life.Doc)); err != nil {
+	if p.Life, err = character.Parse([]byte(doc.Doc)); err != nil {
 		return p, err
 	}
-	living, _, err := st.Self(ctx, memory.SectionLiving)
+	work, _, err := st.Self(ctx, memory.SectionWork)
 	if err != nil {
 		return p, err
 	}
-	p.Living = []byte(living.Doc)
+	p.Work = []byte(work.Doc)
 	judgment, _, err := st.Self(ctx, memory.SectionJudgment)
 	if err != nil {
 		return p, err
 	}
-	if p.Judgment, err = self.ParseJudgment([]byte(judgment.Doc)); err != nil {
+	if p.Judgment, err = character.ParseJudgment([]byte(judgment.Doc)); err != nil {
 		return p, err
 	}
 	skills, err := st.AgentSkills(ctx)
@@ -133,21 +169,21 @@ func Env(ctx context.Context, st Store, key secret.Key) ([]string, error) {
 	return fromEnv, nil
 }
 
-// Start makes the database theirs, all at once: files are their sections by
-// file name (Files), checked first. It returns false, changing nothing, if
+// Start makes the database theirs, all at once: sections are their YAML by
+// section (BySection), checked first. It returns false, changing nothing, if
 // someone lives there already.
-func Start(ctx context.Context, st Store, key secret.Key, files map[string][]byte, secrets map[string]string, skills []agentskill.Skill,
+func Start(ctx context.Context, st Store, key secret.Key, sections map[string][]byte, secrets map[string]string, skills []agentskill.Skill,
 	source string, now time.Time) (string, bool, error) {
-	life, err := self.ParseLife(files[Files[memory.SectionLife]])
+	life, err := character.Parse(sections[memory.SectionCharacter])
 	if err != nil {
 		return "", false, err
 	}
-	if _, err := self.ParseJudgment(files[Files[memory.SectionJudgment]]); err != nil {
+	if _, err := character.ParseJudgment(sections[memory.SectionJudgment]); err != nil {
 		return "", false, err
 	}
 	var vs []memory.SelfVersion
 	for i, section := range memory.Sections {
-		if raw, ok := files[Files[section]]; ok {
+		if raw, ok := sections[section]; ok {
 			at := now.Add(time.Duration(i) * time.Millisecond)
 			vs = append(vs, memory.SelfVersion{ID: ulid.Make(), Section: section, Doc: string(raw), Source: source, At: at})
 		}
@@ -174,25 +210,18 @@ func Start(ctx context.Context, st Store, key secret.Key, files map[string][]byt
 // database already.
 func Import(ctx context.Context, st Store, key secret.Key, dir string, now time.Time) (Imported, error) {
 	var im Imported
-	files := map[string][]byte{}
-	for _, f := range Files {
-		raw, err := os.ReadFile(filepath.Join(dir, f))
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return im, err
-		}
-		files[f] = raw
+	sections, err := ReadFolder(dir)
+	if err != nil {
+		return im, err
 	}
-	if _, ok := files[Files[memory.SectionLife]]; !ok {
+	if _, ok := sections[memory.SectionCharacter]; !ok {
 		return im, nil
 	}
-	if _, ok, err := st.Self(ctx, memory.SectionLife); err != nil || ok {
+	if _, ok, err := st.Self(ctx, memory.SectionCharacter); err != nil || ok {
 		return im, err
 	}
 	secrets := map[string]string{}
-	for _, name := range append(slices.Clone(Known), toolSecrets(files[Files[memory.SectionLiving]])...) {
+	for _, name := range append(slices.Clone(Known), toolSecrets(sections[memory.SectionWork])...) {
 		if v := os.Getenv(name); v != "" && CheckName(name) == nil {
 			secrets[name] = v
 			im.Secrets = append(im.Secrets, name)
@@ -204,7 +233,7 @@ func Import(ctx context.Context, st Store, key secret.Key, dir string, now time.
 		im.Skills = append(im.Skills, s.Name)
 	}
 	sort.Strings(im.Secrets)
-	name, ok, err := Start(ctx, st, key, files, secrets, skills, memory.SelfImported, now)
+	name, ok, err := Start(ctx, st, key, sections, secrets, skills, memory.SelfImported, now)
 	if err != nil || !ok {
 		return Imported{}, err
 	}
@@ -247,8 +276,8 @@ func SkillsIn(dir string) ([]agentskill.Skill, []string) {
 	return out, skipped
 }
 
-// toolSecrets are the environment variables living's tool servers name.
-func toolSecrets(living []byte) []string {
+// toolSecrets are the environment variables work's tool servers name.
+func toolSecrets(work []byte) []string {
 	var doc struct {
 		Tools struct {
 			Servers []struct {
@@ -257,7 +286,7 @@ func toolSecrets(living []byte) []string {
 			} `yaml:"servers"`
 		} `yaml:"tools"`
 	}
-	yaml.Unmarshal(living, &doc)
+	yaml.Unmarshal(work, &doc)
 	var out []string
 	for _, s := range doc.Tools.Servers {
 		if s.AuthEnv != "" {

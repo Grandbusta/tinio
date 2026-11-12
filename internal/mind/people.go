@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/memory"
 	"github.com/Grandbusta/minime/internal/perception"
 	"github.com/Grandbusta/minime/internal/providers/system1"
-	"github.com/Grandbusta/minime/internal/self"
 )
 
 // classifyRelation is "" if the person_circle set is not configured.
@@ -66,7 +66,7 @@ func (m *Mind) bornKnowing(ctx context.Context) {
 }
 
 // familyKey is for a relative who never talks to the agent.
-func familyKey(r self.Relative) string {
+func familyKey(r character.Relative) string {
 	return "family:" + strings.ToLower(r.Relation) + ":" + strings.ToLower(r.Name)
 }
 

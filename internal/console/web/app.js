@@ -529,7 +529,7 @@ const eeg = (() => {
 
 const FAMILY_COLOR = { system1: "var(--s1)", system2: "var(--s2)", reflex: "var(--rx)", life: "var(--lf)" };
 // Colours for kinds of work and projects: the built-in ones fixed, the ones an
-// agent makes (from its life.yaml) picked from the palette by name.
+// agent makes (from its character.yaml) picked from the palette by name.
 const PALETTE = ["#7cff6b", "#ffc35c", "#ff9de2", "#5be7ff", "#8affd6", "#ff8a6b", "#c9ff5c", "#6b9dff"];
 const hashColor = (s) => PALETTE[[...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % PALETTE.length];
 const KIND_FIXED = { journal: "#b48cff", notes: "#5be7ff", reading_notes: "#8affd6", writing: "#ff9de2" };

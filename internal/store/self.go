@@ -27,7 +27,7 @@ func (s *Store) Start(ctx context.Context, name string, vs []memory.SelfVersion,
 		return false, fmt.Errorf("start: %w", err)
 	}
 	var lived bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM self_versions WHERE section = $1)`, memory.SectionLife).Scan(&lived); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM self_versions WHERE section = $1)`, memory.SectionCharacter).Scan(&lived); err != nil {
 		return false, fmt.Errorf("start: %w", err)
 	}
 	if lived {

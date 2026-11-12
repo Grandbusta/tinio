@@ -1,12 +1,12 @@
-# How Mei lives: her days, when she checks in on people, what she can do,
+# How Elsa works: her days, when she checks in on people, what she can do,
 # what she may do without asking, and how she learns {owner}'s judgment. Times
-# are in her time zone (timezone in life.yaml).
+# are in her time zone (timezone in character.yaml).
 
 # She speaks first: reminders people asked for when they're due, and at the
 # check-in times she considers asking someone about something going on in
 # their life.
 initiative:
-  check_ins: ["12:30", "19:30"] # at most one check-in a day per person; [] turns them off
+  check_ins: ["10:00", "17:00"] # at most one check-in a day per person; [] turns them off
   quiet: 4h # only after the conversation has been quiet this long
 
 # Her own day, like a person's: in the morning she plans a few things from her
@@ -14,9 +14,9 @@ initiative:
 # writing; at night she writes her journal. What she makes is kept.
 daily_life:
   enabled: true
-  plan_at: "06:30"
-  journal_at: "22:30"
-  review_at: "Sun 19:00" # her weekly review: goals checked, new ones set, dreams revisited
+  plan_at: "07:30"
+  journal_at: "21:00"
+  review_at: "Sun 16:00" # her weekly review: goals checked, new ones set, dreams revisited
   activities: 4          # things she plans a day, besides the journal
   budget_usd: 0.05       # most her own day may cost; past it, the rest is missed
   # What she can do beyond writing; her journal is always on. Remove one to

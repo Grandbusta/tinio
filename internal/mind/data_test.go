@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/memory"
 	"github.com/Grandbusta/minime/internal/providers/system2"
 	"github.com/Grandbusta/minime/internal/render"
 	"github.com/Grandbusta/minime/internal/render/calendar"
 	"github.com/Grandbusta/minime/internal/render/pdf"
 	"github.com/Grandbusta/minime/internal/render/table"
-	"github.com/Grandbusta/minime/internal/self"
 )
 
 const score = `{"bpm":82,"beats_per_bar":4,"bars":1,"tracks":[{"name":"Drums","instrument":"drums","notes":[
@@ -25,7 +25,7 @@ const beatJSON = `{"title":"Lagos After Rain","kind":"beat_idea","text":"82 BPM,
 	"project_notes":"","project_done":false,"remember":[],"lessons":[],"ask_for_review":true,"review_question":"Too sparse?",
 	"stage_done":"","score":` + score + `}`
 
-var musicLife = self.Life{Name: "Tobi", Story: []string{"Tobi makes beats."}, Makes: []self.Craft{
+var musicLife = character.Character{Name: "Tobi", Story: []string{"Tobi makes beats."}, Makes: []character.Craft{
 	{Kind: "beat_idea", About: "a beat", Data: "score"}, {Kind: "lyrics", About: "lyrics"}}}
 
 func TestMusicIsMadeWithItsScore(t *testing.T) {

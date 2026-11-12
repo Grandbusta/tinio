@@ -1,4 +1,4 @@
-package person
+package agent
 
 import (
 	"context"
@@ -22,7 +22,7 @@ type fakeStore struct {
 
 func (f *fakeStore) Start(_ context.Context, _ string, vs []memory.SelfVersion, secrets map[string][]byte, skills []memory.AgentSkill,
 	_ time.Time) (bool, error) {
-	if _, ok, _ := f.Self(context.Background(), memory.SectionLife); ok {
+	if _, ok, _ := f.Self(context.Background(), memory.SectionCharacter); ok {
 		return false, nil
 	}
 	f.versions, f.secrets, f.skills = append(f.versions, vs...), secrets, skills
@@ -88,8 +88,8 @@ func TestTheirFolderMovesIntoTheirDatabaseOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Life.Story[0] != "Tobi is 29." || !strings.Contains(string(p.Living), "DRIVE_TOKEN") {
-		t.Errorf("life = %+v, living %q", p.Life, p.Living)
+	if p.Life.Story[0] != "Tobi is 29." || !strings.Contains(string(p.Work), "DRIVE_TOKEN") {
+		t.Errorf("character = %+v, work %q", p.Life, p.Work)
 	}
 	if os.Getenv("DRIVE_TOKEN") != "drive-secret" || !slices.Equal(p.FromEnv, []string{"OPENAI_API_KEY"}) {
 		t.Errorf("env: DRIVE_TOKEN %q, set there already %v", os.Getenv("DRIVE_TOKEN"), p.FromEnv)

@@ -5,17 +5,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/self"
 )
 
 func TestJudgment(t *testing.T) {
-	judgment := self.Judgment{
-		Principles: []self.Principle{
+	judgment := character.Judgment{
+		Principles: []character.Principle{
 			{Text: "Start small, then build on it.", Types: []string{"general"}, Cases: []string{"tiny"}},
 			{Text: "Keep providers switchable.", Types: []string{"engineering"}},
 		},
-		Cases: []self.Case{
+		Cases: []character.Case{
 			{Key: "tiny", Type: "general", Situation: "What to build first.", Options: []string{"all of it", "the tiniest part"},
 				Choice: "the tiniest part", Reason: "so we can build on it"},
 			{Key: "managed", Type: "engineering", Situation: "Where the database runs.", Choice: "managed Postgres"},
@@ -58,8 +58,8 @@ func TestJudgment(t *testing.T) {
 func TestPrioritiesAndBoundaries(t *testing.T) {
 	ctx := context.Background()
 	m, s := newMind(&fakeReplier{}, &fakeSystem1{}, &fakeSystem2{})
-	m.Judgment = self.Judgment{Priorities: []string{"Health", "Honesty"}, Boundaries: []string{"Never lie to family."},
-		Principles: []self.Principle{{Text: "Finish what you started.", Types: []string{"life"}}}}
+	m.Judgment = character.Judgment{Priorities: []string{"Health", "Honesty"}, Boundaries: []string{"Never lie to family."},
+		Principles: []character.Principle{{Text: "Finish what you started.", Types: []string{"life"}}}}
 	m.seedJudgment(ctx)
 	m.seedJudgment(ctx)
 	if len(s.principles) != 4 || s.principles[1].Kind != memory.PrincipleRank || s.principles[1].Rank != 1 || s.principles[2].Rank != 2 ||

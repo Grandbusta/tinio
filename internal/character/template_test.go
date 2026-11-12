@@ -1,4 +1,4 @@
-package self
+package character
 
 import (
 	"os"
@@ -9,13 +9,13 @@ import (
 	"github.com/Grandbusta/minime/internal/config"
 )
 
-func TestLives(t *testing.T) {
-	ts, err := Templates(os.DirFS("../.."), "lives")
+func TestCharacters(t *testing.T) {
+	ts, err := Templates(os.DirFS("../.."), "characters")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(ts) != 5 {
-		t.Errorf("%d lives; want 5", len(ts))
+		t.Errorf("%d characters; want 5", len(ts))
 	}
 	for _, tmpl := range ts {
 		for _, rel := range tmpl.Relations {
@@ -35,7 +35,7 @@ func TestLives(t *testing.T) {
 						t.Errorf("%s/%s: an em dash", tmpl.Key, name)
 					}
 				}
-				l, err := ParseLife(files["life.yaml"])
+				l, err := Parse(files["character.yaml"])
 				if err != nil {
 					t.Fatalf("%s as %s: %v", tmpl.Key, rel, err)
 				}
@@ -48,7 +48,7 @@ func TestLives(t *testing.T) {
 				} else if !strings.Contains(string(files["judgment.yaml"]), "ask Sam first") {
 					t.Errorf("%s: judgment doesn't name its owner", tmpl.Key)
 				}
-				living(t, files["living.yaml"], l)
+				work(t, files["work.yaml"], l)
 				owner := l.Family[0]
 				if owner.Name != "Sam" || owner.Relation != rel || owner.Account != account || owner.Circle != CircleOf(rel) {
 					t.Errorf("%s as %s: owner = %+v", tmpl.Key, rel, owner)
@@ -61,8 +61,8 @@ func TestLives(t *testing.T) {
 	}
 }
 
-// living checks a person's living.yaml is read over the config.
-func living(t *testing.T, doc []byte, l Life) {
+// work checks a character's work.yaml is read over the config.
+func work(t *testing.T, doc []byte, l Character) {
 	t.Helper()
 	cfg, err := config.Load(fstest.MapFS{"minime.yaml": {Data: []byte("database:\n  url: postgres://x\n")}}, "minime.yaml", doc)
 	if err != nil {
@@ -84,7 +84,7 @@ func living(t *testing.T, doc []byte, l Life) {
 }
 
 func TestRenderRefuses(t *testing.T) {
-	tmpl, err := LoadTemplate(os.DirFS("../.."), "lives/daniel")
+	tmpl, err := LoadTemplate(os.DirFS("../.."), "characters/daniel")
 	if err != nil {
 		t.Fatal(err)
 	}

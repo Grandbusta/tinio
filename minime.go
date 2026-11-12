@@ -1,5 +1,5 @@
 // Package minime is what every person shares, built into the binary: the
-// config, the prompts, the question sets, and the lives to start from. So
+// config, the prompts, the question sets, and the characters to start from. So
 // the binary alone, with a person's DATABASE_URL and MINIME_KEY, runs them.
 package minime
 
@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-//go:embed configs prompts decisions lives .env.example
+//go:embed configs prompts decisions characters .env.example
 var built embed.FS
 
 // Files is the shared files, a file or folder on disk (relative to where it

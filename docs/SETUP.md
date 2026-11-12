@@ -1,19 +1,19 @@
 # Setup and configuration
 
-Everything about getting a person running, and every setting there is. For what minime is,
-see the [README](../README.md); for living with them day to day, [GUIDE.md](GUIDE.md); for how it works inside,
+Everything about getting an agent running, and every setting there is. For what minime is,
+see the [README](../README.md); for working with them day to day, [GUIDE.md](GUIDE.md); for how it works inside,
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - [Quick start](#quick-start)
 - [Setting up by hand](#setting-up-by-hand)
 - [Running with Docker](#running-with-docker)
 - [The files](#the-files)
-- [life.yaml: who they are](#lifeyaml-who-they-are)
-- [living.yaml: how they live](#livingyaml-how-they-live)
+- [character.yaml: who they are](#characteryaml-who-they-are)
+- [work.yaml: how they work](#workyaml-how-they-work)
 - [judgment.yaml: how you decide](#judgmentyaml-how-you-decide)
 - [configs/minime.yaml: the machinery](#configsminimeyaml-the-machinery)
 - [.env, secrets and the environment](#env-secrets-and-the-environment)
-- [Making your own life](#making-your-own-life)
+- [Making your own character](#making-your-own-character)
 - [Developing](#developing)
 
 ## Quick start
@@ -29,41 +29,41 @@ Go 1.27+:
 go install github.com/Grandbusta/minime/cmd/minime@latest
 ```
 
-Everything every person shares (the config, prompts, question sets and lives) is built into
+Everything every agent shares (the config, prompts, question sets and characters) is built into
 it. Then, in a folder for them (their `.env` is written there):
 
 ```bash
 minime new
 ```
 
-It asks, then puts them in their own database and starts them:
+It asks, then raises them in their own database and starts them:
 
-1. **Which life:** one of the five in [lives](../lives).
+1. **Which character:** one of the five in [characters](../characters).
 2. **Your bot token:** make a bot with [@BotFather](https://t.me/BotFather) (`/newbot`) and
    paste its token. It checks it and shows the bot's name.
 3. **Your OpenAI key and model** (`gpt-6-luna` by default).
 4. **A Postgres URL**, or it starts one on this machine with Docker. It won't use a
-   database where someone already lives.
+   database where another agent already lives.
 5. **You:** message your bot once, so it knows it's you, then say what they should call
    you and who you are to them (their father, mentor, friend...).
 
-**A person is their database.** Their life, how they live, your judgment, their skills
+**An agent is their database.** Their character, how they work, your judgment, their skills
 and their keys (bot token, OpenAI key, console token) are all in it, the keys sealed. `.env`
 only has two lines: `DATABASE_URL`, where they live, and `MINIME_KEY`, which opens their
 keys. Keep both safe and together: a copy of the database alone holds no working key.
 
-After that, `minime` starts them again. Starting someone new when someone
+After that, `minime` starts them again. Raising a new agent when one
 already lives in the database `.env` points to leaves them as they are and moves their
 `.env` to `.env.<name>`: `cp .env.<name> .env` brings them back.
 
-Each person needs their own database, their own bot and their own OpenAI key (a project
+Each agent needs their own database, their own bot and their own OpenAI key (a project
 key with a spend limit keeps a leak small). Telegram allows one poller per
 bot, so a second copy on the same bot gets `409 Conflict` errors.
 
 ## Setting up by hand
 
 Without `minime new`: put `DATABASE_URL` and `MINIME_KEY` (`openssl rand -hex 32`) in
-`.env`, then give them their keys and a life.
+`.env`, then give them their keys and a character.
 
 1. **Create a bot.** Message [@BotFather](https://t.me/BotFather), send `/newbot`, and copy
    the token. Then send your bot any message and open
@@ -77,12 +77,13 @@ Without `minime new`: put `DATABASE_URL` and `MINIME_KEY` (`openssl rand -hex 32
    ```
 
    and the same for `TELEGRAM_OWNER_ID`, `OPENAI_API_KEY` and `OPENAI_MODEL`.
-3. **Give them a life.** Copy a life from [lives](../lives) to a folder and put yourself
-   in it (see [Making your own life](#making-your-own-life)), then import it; its
-   `life.yaml`, `living.yaml`, `judgment.yaml` and `skills/` go into their database:
+3. **Give them a character.** Copy one from [characters](../characters) to a folder and put
+   yourself in it (see [Making your own character](#making-your-own-character)), then
+   import it; its
+   `character.yaml`, `work.yaml`, `judgment.yaml` and `skills/` go into their database:
 
    ```bash
-   minime self import mylife/
+   minime agent import mine/
    ```
 
 4. **Start them**, from the folder with their `.env`:
@@ -98,8 +99,8 @@ Without `minime new`: put `DATABASE_URL` and `MINIME_KEY` (`openssl rand -hex 32
 
 ## Running with Docker
 
-One person per container. Each release publishes an image for amd64 and arm64,
-`ghcr.io/grandbusta/minime`; the person is their database, reached with the two lines in
+One agent per container. Each release publishes an image for amd64 and arm64,
+`ghcr.io/grandbusta/minime`; the agent is their database, reached with the two lines in
 their `.env`, so nothing about them is in the image.
 
 ```bash
@@ -147,26 +148,26 @@ where Postgres runs:
 
 ## The files
 
-A person has three sections, kept in their database as YAML. Each life in
-[lives](../lives) is a folder of them as files, plus a `template.yaml`.
+An agent has three sections, kept in their database as YAML. Each character in
+[characters](../characters) is a folder of them as files, plus a `template.yaml`.
 
 | Section | What's in it |
 |---|---|
-| [life](#lifeyaml-who-they-are) | Who they are: their name, where they live, their story, personality, routine, what they make, dreams, starting skills and family. |
-| [living](#livingyaml-how-they-live) | How they live: their pace, their days, check-ins, abilities, budget, tools, what they may do without asking you, and how often they ask what you'd choose. |
+| [character](#characteryaml-who-they-are) | Who they are: their name, where they live, their story, personality, routine, what they make, dreams, starting skills and family. |
+| [work](#workyaml-how-they-work) | How they work: their pace, their days, check-ins, abilities, budget, tools, what they may do without asking you, and how often they ask what you'd choose. |
 | [judgment](#judgmentyaml-how-you-decide) | How you decide (optional): your priorities, boundaries, principles and past decisions. |
 
-Change them with `minime self`. Every change is checked the way it is when they start, and
+Change them with `minime agent`. Every change is checked the way it is when they start, and
 kept as a new version, so you can go back:
 
 | Command | What it does |
 |---|---|
-| `minime self edit <section>` | Opens it in `$EDITOR`; saved only if it checks out. |
-| `minime self export <section>` | Prints it. |
-| `minime self export <folder>` | Writes all three and their skills to a new folder, laid out like a life in `lives/`. Never their keys. |
-| `minime self import <file\|folder>` | Takes a `life.yaml`, `living.yaml` or `judgment.yaml`, or a folder of them (with `skills/`). |
-| `minime self history <section>` | Its versions, newest (in use) first. |
-| `minime self rollback <section> <version>` | Makes an earlier version the one in use. |
+| `minime agent edit <section>` | Opens it in `$EDITOR`; saved only if it checks out. |
+| `minime agent export <section>` | Prints it. |
+| `minime agent export <folder>` | Writes all three and their skills to a new folder, laid out like a character in `characters/`. Never their keys. Files from before v0.4.0 (`life.yaml`, `living.yaml`) still import. |
+| `minime agent import <file\|folder>` | Takes a `character.yaml`, `work.yaml` or `judgment.yaml`, or a folder of them (with `skills/`). |
+| `minime agent history <section>` | Its versions, newest (in use) first. |
+| `minime agent rollback <section> <version>` | Makes an earlier version the one in use. |
 
 Changes apply the next time they start.
 
@@ -178,12 +179,12 @@ rebuild (copy it from the source first); `-config` points at another config:
 |---|---|
 | [configs/minime.yaml](#configsminimeyaml-the-machinery) | Models, Telegram, prompts, addresses, pricing. |
 | [.env](#env-secrets-and-the-environment) | Where their database is, and the key to their secrets. Never committed. |
-| [prompts/](../prompts), [decisions/](../decisions) | System 2's instructions and System 1's questions, written for anyone and filled in from the person. You shouldn't need to edit them. |
+| [prompts/](../prompts), [decisions/](../decisions) | System 2's instructions and System 1's questions, written for anyone and filled in from the agent. You shouldn't need to edit them. |
 
-`living` is read over the defaults below with the same keys, so you set only what you
-change. An empty `living` means every default.
+`work` is read over the defaults below with the same keys, so you set only what you
+change. An empty `work` means every default.
 
-## life.yaml: who they are
+## character.yaml: who they are
 
 Written in the third person with their name ("Tobi is 29 years old."), so they never
 confuse themselves with the people they talk to. They won't start without a name and a
@@ -208,7 +209,7 @@ skills:
   - {name: poetry, level: 3, shown_by: [poem]}
 ```
 
-## living.yaml: how they live
+## work.yaml: how they work
 
 ### Their pace
 
@@ -265,9 +266,9 @@ in `abilityMakers` in [cmd/minime/main.go](../cmd/minime/main.go).
 
 | Key | As shipped | What it is |
 |---|---|---|
-| `initiative.check_ins` | none | Times (`HH:MM`) they consider asking about something going on in your life. At most one check-in a day per person. |
+| `initiative.check_ins` | none | Times (`HH:MM`) they consider asking about something going on in your life. At most one check-in a day per person they know. |
 | `initiative.quiet` | `4h` | Only after the conversation has been quiet this long. |
-| `initiative.timezone` | their life's | Overrides `timezone` in `life.yaml`. |
+| `initiative.timezone` | their life's | Overrides `timezone` in `character.yaml`. |
 
 ### What they may do on their own
 
@@ -335,7 +336,7 @@ cases:
 
 ## configs/minime.yaml: the machinery
 
-The same for everyone; `${VAR}` is filled from the environment, or else from the person's
+The same for everyone; `${VAR}` is filled from the environment, or else from the agent's
 secrets.
 
 | Key | As shipped | What it is |
@@ -355,7 +356,7 @@ secrets.
 | `daily_life.*_prompt` | `prompts/…` | The prompts for planning, activities, the review and learning plans. |
 | `embedding.provider`, `model` | `openai`, `text-embedding-3-small` | Finds your past decisions most like the one at hand. Remove it to use the newest instead. |
 | `search.provider`, `model` | `openai`, the System 2 model | What web searches use. |
-| `tools.servers` | none | MCP servers whose tools they may use: [below](#tools-mcp-servers). Usually in their `living`. |
+| `tools.servers` | none | MCP servers whose tools they may use: [below](#tools-mcp-servers). Usually in their `work`. |
 | `tools.calls_per_day` | `50` | Reading tool calls a day across all servers, times their pace. |
 | `tools.actions_per_day` | `10` | Tools that change things they may propose a day. Not times their pace: these have real effects. |
 | `console.addr` | `127.0.0.1:8090` | The private mind console; empty: none. |
@@ -369,7 +370,7 @@ secrets.
 
 Skills are know-how you give them, in the open Agent Skills
 format, the same as Claude's: a folder with a `SKILL.md` (a `name` and a `description` in
-its frontmatter, then the instructions) and any files it points to. Each person has their
+its frontmatter, then the instructions) and any files it points to. Each agent has their
 own, in their database:
 
 ```bash
@@ -431,14 +432,14 @@ A new one is a package and a `case` in [cmd/minime/main.go](../cmd/minime/main.g
 
 ## .env, secrets and the environment
 
-`.env` says where the person is; everything else about them is in their database. minime
+`.env` says where the agent is; everything else about them is in their database. minime
 reads `.env` from the repository root itself; anything already set in the environment (or
 passed with Docker's `--env-file`) wins. Values with characters like `$`, `&` or `#` go in
 single quotes. `minime new` writes it for you.
 
 | Variable | What it is |
 |---|---|
-| `DATABASE_URL` | Their Postgres, password included, e.g. `postgres://user:password@host:5432/minime?sslmode=require`. One database per person. |
+| `DATABASE_URL` | Their Postgres, password included, e.g. `postgres://user:password@host:5432/minime?sslmode=require`. One database per agent. |
 | `MINIME_KEY` | Opens their secrets: 64 hex characters (`openssl rand -hex 32`). Keep it safe, and with `DATABASE_URL`. |
 | `MINIME_CONSOLE_ADDR` | Overrides `console.addr` (the Docker image sets `:8090`). |
 | `MINIME_PROFILE_ADDR` | Overrides `portfolio.addr` (the Docker image sets `:8080`). |
@@ -467,7 +468,7 @@ only shows that one is set.
 
 A secret set in the environment too wins over the stored one, so a container or CI can
 override one without touching the database. Lose `MINIME_KEY` and only the secrets are
-gone, not the person: set them again.
+gone, not the agent: set them again.
 
 ## Checking and backing up
 
@@ -484,7 +485,7 @@ has pressed Start in the bot (so it can message you), and each tool server. It c
 nothing but bringing the database up to date, and exits with an error if anything is
 wrong. In Docker: `docker exec daniel /minime doctor`.
 
-A person is their database, so a backup is everything in it:
+An agent is their database, so a backup is everything in it:
 
 ```bash
 minime backup
@@ -506,18 +507,18 @@ writes over anyone. A backup from an older minime is brought up to date after it
 loaded; one from a newer minime needs that one. Then run `minime doctor` with the
 `MINIME_KEY` they had.
 
-## Making your own life
+## Making your own character
 
-Each life in [lives](../lives) is a folder with `template.yaml` (who they are in a line,
+Each character in [characters](../characters) is a folder with `template.yaml` (who they are in a line,
 and who you may be to them) and the three files, with `{owner}`, `{relation}`, `{account}`
 and `{circle}` where you go. `minime new` fills them in. To do it by hand, copy the three
 files to a folder, put in your name, who you are to them (one of the template's
 `relations`), your account (`telegram:<your user id>`) and the circle you're from
-(`family`; `friend` for a friend; `school` for a mentor), and `minime self import` it.
-After that it's their life: `minime self edit life` as you like.
+(`family`; `friend` for a friend; `school` for a mentor), and `minime agent import` it.
+After that it's their character: `minime agent edit character` as you like.
 
-To write a new life, add a folder to `lives/` the same way. The tests check that every life
-loads for every relation it allows.
+To write a new character, add a folder to `characters/` the same way. The tests check that
+every character loads for every relation it allows.
 
 ## Developing
 

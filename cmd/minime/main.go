@@ -6,7 +6,7 @@
 //	minime decisions [-n 20] [-config path]  show the latest decisions
 //	minime profile [-force] [-config path]   update the profile page now
 //	minime day [-date YYYY-MM-DD] [-config path]  what it planned and made that day
-//	minime self export|import|edit|history|rollback  their life, living and judgment, as YAML
+//	minime agent export|import|edit|history|rollback  their character, work and judgment, as YAML
 //	minime secret list|set|unset|rekey   their keys, sealed in their database
 //	minime skill list|add|remove         the know-how they've been given
 //	minime doctor [-config path]         check everything they need to run
@@ -44,8 +44,10 @@ import (
 	"github.com/Grandbusta/minime/internal/ability/journal"
 	"github.com/Grandbusta/minime/internal/ability/reading"
 	"github.com/Grandbusta/minime/internal/ability/web"
+	"github.com/Grandbusta/minime/internal/agent"
 	"github.com/Grandbusta/minime/internal/agentskill"
 	"github.com/Grandbusta/minime/internal/channel/telegram"
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/config"
 	"github.com/Grandbusta/minime/internal/console"
 	"github.com/Grandbusta/minime/internal/decision"
@@ -54,7 +56,6 @@ import (
 	"github.com/Grandbusta/minime/internal/memory"
 	"github.com/Grandbusta/minime/internal/mind"
 	"github.com/Grandbusta/minime/internal/perception"
-	"github.com/Grandbusta/minime/internal/person"
 	"github.com/Grandbusta/minime/internal/portfolio"
 	"github.com/Grandbusta/minime/internal/pricing"
 	"github.com/Grandbusta/minime/internal/providers/embed"
@@ -72,7 +73,6 @@ import (
 	"github.com/Grandbusta/minime/internal/render/table"
 	"github.com/Grandbusta/minime/internal/replay"
 	"github.com/Grandbusta/minime/internal/search"
-	"github.com/Grandbusta/minime/internal/self"
 	"github.com/Grandbusta/minime/internal/store"
 	"github.com/Grandbusta/minime/internal/tools"
 )
@@ -125,18 +125,21 @@ func run(args []string) error {
 	}
 	defer st.Close()
 	switch cmd {
-	case "self":
-		return selfCommand(ctx, st, key, *cfgPath, fs.Args(), os.Stdout)
+	case "agent", "self":
+		if cmd == "self" {
+			fmt.Fprintln(os.Stderr, "`minime self` is `minime agent` now; self stops working in a later release.")
+		}
+		return agentCommand(ctx, st, key, *cfgPath, fs.Args(), os.Stdout)
 	case "secret":
 		return secretCommand(ctx, st, key, fs.Args(), os.Stdout)
 	case "skill":
 		return skillCommand(ctx, st, fs.Args(), os.Stdout)
 	}
-	p, err := person.Load(ctx, st, key)
+	p, err := agent.Load(ctx, st, key)
 	if err != nil {
 		return err
 	}
-	cfg, err := config.Load(minime.Files, *cfgPath, p.Living)
+	cfg, err := config.Load(minime.Files, *cfgPath, p.Work)
 	if err != nil {
 		return err
 	}
@@ -194,11 +197,11 @@ func run(args []string) error {
 	case "work":
 		return works(ctx, st, fs.Args(), *limit, os.Stdout)
 	default:
-		return fmt.Errorf("unknown command %q (want new, run, decisions, profile, day, work, growth, review, learn, replay, self, secret, skill, doctor, backup or restore)", cmd)
+		return fmt.Errorf("unknown command %q (want new, run, decisions, profile, day, work, growth, review, learn, replay, agent, secret, skill, doctor, backup or restore)", cmd)
 	}
 }
 
-func runAgent(ctx context.Context, cfg *config.Config, p person.Person, st *store.Store, log *slog.Logger) error {
+func runAgent(ctx context.Context, cfg *config.Config, p agent.Agent, st *store.Store, log *slog.Logger) error {
 	life := p.Life
 	embedder := newEmbedder(cfg, log)
 	s1, err := newDecisionModel(cfg.Decision.Provider, cfg.Pricing, log)
@@ -425,7 +428,7 @@ func runClock(ctx context.Context, ticks chan<- time.Time) error {
 
 // updateProfile works whether or not the agent is running: the page is served
 // from the database.
-func updateProfile(ctx context.Context, cfg *config.Config, life self.Life, st *store.Store, force bool, log *slog.Logger) error {
+func updateProfile(ctx context.Context, cfg *config.Config, life character.Character, st *store.Store, force bool, log *slog.Logger) error {
 	s1, err := newDecisionModel(cfg.Decision.Provider, cfg.Pricing, log)
 	if err != nil {
 		return err
@@ -484,7 +487,7 @@ func newDay(cfg *config.Config) (mind.Day, error) {
 
 // growthMind talks to no one: changes to its dreams are saved for the owner's
 // approval, and the running agent asks them.
-func growthMind(cfg *config.Config, life self.Life, st *store.Store, log *slog.Logger) (*mind.Mind, error) {
+func growthMind(cfg *config.Config, life character.Character, st *store.Store, log *slog.Logger) (*mind.Mind, error) {
 	s2, err := newReasoner(cfg.Reasoning, cfg.Pricing, log)
 	if err != nil {
 		return nil, err
@@ -536,7 +539,7 @@ func calls(cfg *config.Config) mind.Calls {
 	return mind.Calls{On: cfg.Judgment.Calls, AsksPerDay: cfg.Judgment.AsksPerDay, ReplyWindow: cfg.Judgment.ReplyWindow}
 }
 
-func runReview(ctx context.Context, cfg *config.Config, life self.Life, st *store.Store, log *slog.Logger) error {
+func runReview(ctx context.Context, cfg *config.Config, life character.Character, st *store.Store, log *slog.Logger) error {
 	m, err := growthMind(cfg, life, st, log)
 	if err != nil {
 		return err
@@ -548,7 +551,7 @@ func runReview(ctx context.Context, cfg *config.Config, life self.Life, st *stor
 	return nil
 }
 
-func runLearn(ctx context.Context, cfg *config.Config, life self.Life, st *store.Store, log *slog.Logger) error {
+func runLearn(ctx context.Context, cfg *config.Config, life character.Character, st *store.Store, log *slog.Logger) error {
 	m, err := growthMind(cfg, life, st, log)
 	if err != nil {
 		return err
@@ -578,7 +581,7 @@ func printGrowth(ctx context.Context, st growthStore, zone *time.Location, out i
 		return err
 	}
 	if len(dreams) == 0 {
-		fmt.Fprintln(out, "No dreams yet: they're seeded from self/life.yaml when the agent starts.")
+		fmt.Fprintln(out, "No dreams yet: they're seeded from their character when the agent starts.")
 	}
 	for _, d := range dreams {
 		fmt.Fprintf(out, "Dream: %s\n", d.Text)
@@ -690,7 +693,7 @@ func works(ctx context.Context, st worksStore, args []string, n int, out io.Writ
 	return nil
 }
 
-func newProfileWriter(cfg *config.Config, life self.Life, st *store.Store, s1 system1.DecisionModel,
+func newProfileWriter(cfg *config.Config, life character.Character, st *store.Store, s1 system1.DecisionModel,
 	s2 system2.Reasoner, sets map[string]questions.Set, log *slog.Logger) (*portfolio.Writer, error) {
 	public, ok := sets["public_profile"]
 	if !ok {

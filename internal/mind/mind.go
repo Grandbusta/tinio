@@ -24,6 +24,7 @@ import (
 	"github.com/Grandbusta/minime/internal/ability"
 	"github.com/Grandbusta/minime/internal/action"
 	"github.com/Grandbusta/minime/internal/agentskill"
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/decision"
 	"github.com/Grandbusta/minime/internal/decision/questions"
 	"github.com/Grandbusta/minime/internal/memory"
@@ -33,7 +34,6 @@ import (
 	"github.com/Grandbusta/minime/internal/providers/system2"
 	"github.com/Grandbusta/minime/internal/render"
 	"github.com/Grandbusta/minime/internal/search"
-	"github.com/Grandbusta/minime/internal/self"
 )
 
 const nonTextSetID = "reflex.non_text@1"
@@ -158,9 +158,9 @@ type Prompt struct {
 }
 
 type Config struct {
-	Life self.Life
+	Life character.Character
 	// Judgment is seeded for the owner to review; only what they approve is used.
-	Judgment self.Judgment
+	Judgment character.Judgment
 	Percepts <-chan perception.Percept
 	Store    Store
 	Replier  Replier

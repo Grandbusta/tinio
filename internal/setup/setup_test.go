@@ -16,8 +16,8 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/secret"
-	"github.com/Grandbusta/minime/internal/self"
 )
 
 func fakeBotName(_ context.Context, token string) (string, error) {
@@ -55,13 +55,13 @@ func newSetup(t *testing.T, answers string) (*Setup, *bytes.Buffer, string, *sav
 		*got = saved{url, key, files, secrets}
 		return nil
 	}
-	return &Setup{Ask: &script{in: bufio.NewReader(strings.NewReader(answers)), out: out}, Out: out, Files: os.DirFS("../.."), Lives: "lives",
+	return &Setup{Ask: &script{in: bufio.NewReader(strings.NewReader(answers)), out: out}, Out: out, Files: os.DirFS("../.."), Characters: "characters",
 		Example: ".env.example", Env: filepath.Join(dir, ".env"), BotName: fakeBotName, FirstMessage: fakeFirstMessage,
 		Database: fakeDatabase, Save: save, Now: func() time.Time { return time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC) }}, out, dir, got
 }
 
 func TestStartingMei(t *testing.T) {
-	ts, _ := self.Templates(os.DirFS("../.."), "lives")
+	ts, _ := character.Templates(os.DirFS("../.."), "characters")
 	mei, rel := 0, 0
 	for i, tm := range ts {
 		if tm.Key == "mei" {
@@ -115,7 +115,7 @@ func TestStartingMei(t *testing.T) {
 		t.Errorf(".env.elsa = %q", old)
 	}
 
-	life, err := self.ParseLife(got.files["life.yaml"])
+	life, err := character.Parse(got.files["character.yaml"])
 	if err != nil {
 		t.Fatal(err)
 	}

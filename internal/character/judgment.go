@@ -1,4 +1,4 @@
-package self
+package character
 
 import (
 	"bytes"

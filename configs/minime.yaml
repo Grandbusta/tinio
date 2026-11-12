@@ -45,7 +45,7 @@ working_memory:
 memory:
   recall_candidates: 30
 
-# The prompts for its own day (when and what is in their living).
+# The prompts for its own day (when and what is in their work).
 daily_life:
   plan_prompt: prompts/plan.md
   activity_prompt: prompts/activity.md
@@ -82,7 +82,7 @@ search:
 #       tools: {search: read}
 
 # Who approves what the person asks first: default, the first of
-# telegram.owner_ids. What they may do is in their living.
+# telegram.owner_ids. What they may do is in their work.
 # autonomy:
 #   owner: telegram:123
 

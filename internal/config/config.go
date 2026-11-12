@@ -335,10 +335,10 @@ type Log struct {
 	Level string `yaml:"level"`
 }
 
-// Load reads the file at path in fsys, then the person's living
-// (living.yaml; nil if none) over it, expanding ${VAR} references from the
+// Load reads the file at path in fsys, then how the person works
+// (work.yaml; nil if none) over it, expanding ${VAR} references from the
 // environment.
-func Load(fsys fs.FS, path string, living []byte) (*Config, error) {
+func Load(fsys fs.FS, path string, work []byte) (*Config, error) {
 	raw, err := fs.ReadFile(fsys, path)
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
@@ -365,7 +365,7 @@ func Load(fsys fs.FS, path string, living []byte) (*Config, error) {
 	if err := yaml.Unmarshal([]byte(os.ExpandEnv(string(raw))), cfg); err != nil {
 		return nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
-	if err := cfg.loadLiving(living); err != nil {
+	if err := cfg.loadWork(work); err != nil {
 		return nil, err
 	}
 	// The environment wins: in a container these must be all addresses, not localhost.
@@ -381,8 +381,8 @@ func Load(fsys fs.FS, path string, living []byte) (*Config, error) {
 	return cfg, nil
 }
 
-func (c *Config) loadLiving(raw []byte) error {
-	living := struct {
+func (c *Config) loadWork(raw []byte) error {
+	work := struct {
 		Initiative *Initiative `yaml:"initiative"`
 		DailyLife  *DailyLife  `yaml:"daily_life"`
 		Autonomy   *Autonomy   `yaml:"autonomy"`
@@ -391,8 +391,8 @@ func (c *Config) loadLiving(raw []byte) error {
 	}{&c.Initiative, &c.DailyLife, &c.Autonomy, &c.Judgment, &c.Tools}
 	dec := yaml.NewDecoder(strings.NewReader(os.ExpandEnv(string(raw))))
 	dec.KnownFields(true)
-	if err := dec.Decode(&living); err != nil && !errors.Is(err, io.EOF) {
-		return fmt.Errorf("living: %w", err)
+	if err := dec.Decode(&work); err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("work: %w", err)
 	}
 	return nil
 }

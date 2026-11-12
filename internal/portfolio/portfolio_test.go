@@ -14,13 +14,13 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/minime/internal/action"
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/decision"
 	"github.com/Grandbusta/minime/internal/decision/questions"
 	"github.com/Grandbusta/minime/internal/memory"
 	"github.com/Grandbusta/minime/internal/mind"
 	"github.com/Grandbusta/minime/internal/providers/system1"
 	"github.com/Grandbusta/minime/internal/providers/system2"
-	"github.com/Grandbusta/minime/internal/self"
 )
 
 type fakeStore struct {
@@ -168,7 +168,7 @@ func fact(subject, text string) memory.Fact {
 
 func newWriter(st *fakeStore, s1 *fakeS1, s2 *fakeS2) *Writer {
 	return &Writer{
-		Life:  self.Life{Name: "Tobi", Story: []string{"Tobi is 29 years old."}, Personality: []string{"Tobi is kind."}},
+		Life:  character.Character{Name: "Tobi", Story: []string{"Tobi is 29 years old."}, Personality: []string{"Tobi is kind."}},
 		Store: st, System1: s1, System2: s2,
 		Public: questions.Set{ID: "public_profile", Version: 1, Primary: "public",
 			Questions:  []system1.Question{{Name: "public", Type: decision.QuestionPredicate, Instructions: "Is {fact} fine for {agent} to share?"}},

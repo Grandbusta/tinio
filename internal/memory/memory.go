@@ -557,26 +557,26 @@ type Conversation struct {
 	LastActivity time.Time
 }
 
-// SelfVersion is one version of a section of the person (their life, how
-// they live, their owner's judgment), as YAML; the newest is the one used.
+// SelfVersion is one version of a section of the person (their character,
+// how they work, their owner's judgment), as YAML; the newest is the one used.
 type SelfVersion struct {
 	ID      ulid.ULID
-	Section string // SectionLife, SectionLiving, SectionJudgment
+	Section string // SectionCharacter, SectionWork, SectionJudgment
 	Doc     string
 	Source  string // SelfImported, SelfNew, SelfEdited, SelfRolledBack
 	At      time.Time
 }
 
 const (
-	SectionLife     = "life"
-	SectionLiving   = "living"
-	SectionJudgment = "judgment"
+	SectionCharacter = "character"
+	SectionWork      = "work"
+	SectionJudgment  = "judgment"
 )
 
-var Sections = []string{SectionLife, SectionLiving, SectionJudgment}
+var Sections = []string{SectionCharacter, SectionWork, SectionJudgment}
 
 const (
-	SelfImported   = "import" // from files: their old self/ folder, or minime self import
+	SelfImported   = "import" // from files: their old self/ folder, or minime agent import
 	SelfNew        = "new"    // minime new
 	SelfEdited     = "edit"
 	SelfRolledBack = "rollback"

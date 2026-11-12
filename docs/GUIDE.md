@@ -1,6 +1,6 @@
-# Living with them
+# Working with them
 
-How to live with your AI person day to day: talking, what they do on their own, how they
+How to work with your agent day to day: talking, what they do on their own, how they
 grow, how they learn your judgment, and what you can see. Setup and every setting is in
 [SETUP.md](SETUP.md); how it works inside is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -23,7 +23,7 @@ em dashes.
 ## Reminders, promises and check-ins
 
 - **Reminders:** "remind me tomorrow at 9 to call the bank". At that time they message you,
-  in their own words. If you don't say when, they ask. Times are in their own time zone (`timezone` in their life).
+  in their own words. If you don't say when, they ask. Times are in their own time zone (`timezone` in their character).
 - **Promises:** "can you write me a verse about Sunday mornings tonight?" If they agree,
   they promise a time, make it up to 30 minutes ahead (with anything you added since, like
   "make it funny"), and send it on time with a few words of their own. They promise only
@@ -93,7 +93,7 @@ minime day -date 2026-10-29   # another day
 ## Who they want to become
 
 - **Dreams** (years) lead to **goals** (a "done when" and a due date), and goals to
-  **projects**. You seed dreams and starting skills in `life.yaml`; after the first start
+  **projects**. You seed dreams and starting skills in `character.yaml`; after the first start
   they're theirs. Ask them to learn something ("add sales to your goals") and they take it
   on as their own goal, with a new skill and a learning plan.
 - **Skills grow from evidence.** System 1 scores each work that shows a skill, 1 to 10
@@ -122,7 +122,7 @@ minime learn    # draft learning plans for skill goals without one
 
 ## What they may do on their own
 
-Every action belongs to a class, and `autonomy:` in `living.yaml` says whether they do it on
+Every action belongs to a class, and `autonomy:` in `work.yaml` says whether they do it on
 their own (`auto`), ask you first (`ask`), or never (`forbid`):
 
 | Class | What it covers | Default |
@@ -146,7 +146,7 @@ chat change only in the config.
 
 They learn how you decide, so their choices become more like yours:
 
-- **Your judgment.** Their `judgment` (`minime self edit judgment`; [example](SETUP.md#judgmentyaml-how-you-decide)) seeds your past decisions
+- **Your judgment.** Their `judgment` (`minime agent edit judgment`; [example](SETUP.md#judgmentyaml-how-you-decide)) seeds your past decisions
   (the situation, the options, what you chose and **why**) and the principles behind them,
   all as *proposed*. In the console's **Judgment** view you approve, edit or reject each,
   and add reasons. Only what you approve goes into how they plan their day, review their
@@ -254,6 +254,7 @@ It listens on localhost only. To reach it from elsewhere, see
 | `minime review` | Run the weekly review now |
 | `minime learn` | Draft learning plans for skill goals without one |
 | `minime replay` | Check System 1's questions against your labels |
+| `minime agent edit\|export\|import\|history\|rollback` | Their character, how they work and your judgment ([SETUP.md](SETUP.md#the-files)) |
 | `minime doctor` | Check everything they need to run, and say what's wrong |
 | `minime backup [file]` | Everything about them, as they are now, to one file |
 | `minime restore <file>` | Bring them back into a new, empty database |

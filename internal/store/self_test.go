@@ -14,11 +14,11 @@ func TestAPersonInTheirDatabase(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 	at := time.Now().UTC().Truncate(time.Microsecond)
-	life := memory.SelfVersion{ID: ulid.Make(), Section: memory.SectionLife, Doc: "name: Tobi\n", Source: memory.SelfNew, At: at}
-	living := memory.SelfVersion{ID: ulid.Make(), Section: memory.SectionLiving, Doc: "# mine\n", Source: memory.SelfNew, At: at}
+	life := memory.SelfVersion{ID: ulid.Make(), Section: memory.SectionCharacter, Doc: "name: Tobi\n", Source: memory.SelfNew, At: at}
+	work := memory.SelfVersion{ID: ulid.Make(), Section: memory.SectionWork, Doc: "# mine\n", Source: memory.SelfNew, At: at}
 	skill := memory.AgentSkill{Name: "cold-email", Description: "First emails.", AddedAt: at,
 		Files: map[string][]byte{"SKILL.md": []byte("---\n"), "scripts/send.py": {0xff, 0x00}}}
-	if ok, err := s.Start(ctx, "Tobi", []memory.SelfVersion{life, living}, map[string][]byte{"OPENAI_API_KEY": {1, 2}}, []memory.AgentSkill{skill}, at); err != nil || !ok {
+	if ok, err := s.Start(ctx, "Tobi", []memory.SelfVersion{life, work}, map[string][]byte{"OPENAI_API_KEY": {1, 2}}, []memory.AgentSkill{skill}, at); err != nil || !ok {
 		t.Fatalf("start = %v, %v", ok, err)
 	}
 	if ok, err := s.Start(ctx, "Mei", []memory.SelfVersion{life}, nil, nil, at); err != nil || ok {
@@ -28,14 +28,14 @@ func TestAPersonInTheirDatabase(t *testing.T) {
 		t.Errorf("whose = %q", whose)
 	}
 
-	edited := memory.SelfVersion{ID: ulid.Make(), Section: memory.SectionLife, Doc: "name: Tobi Ade\n", Source: memory.SelfEdited, At: at.Add(time.Second)}
+	edited := memory.SelfVersion{ID: ulid.Make(), Section: memory.SectionCharacter, Doc: "name: Tobi Ade\n", Source: memory.SelfEdited, At: at.Add(time.Second)}
 	if err := s.SaveSelf(ctx, "Tobi Ade", edited); err != nil {
 		t.Fatal(err)
 	}
-	if v, ok, err := s.Self(ctx, memory.SectionLife); err != nil || !ok || v.Doc != edited.Doc || v.Source != memory.SelfEdited {
+	if v, ok, err := s.Self(ctx, memory.SectionCharacter); err != nil || !ok || v.Doc != edited.Doc || v.Source != memory.SelfEdited {
 		t.Errorf("newest life = %+v, %v", v, err)
 	}
-	if vs, _ := s.SelfHistory(ctx, memory.SectionLife, 10); len(vs) != 2 || vs[1].ID != life.ID {
+	if vs, _ := s.SelfHistory(ctx, memory.SectionCharacter, 10); len(vs) != 2 || vs[1].ID != life.ID {
 		t.Errorf("history = %+v", vs)
 	}
 	if whose, _, _ := s.Whose(ctx); whose != "Tobi Ade" {

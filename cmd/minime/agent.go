@@ -19,12 +19,12 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/minime"
+	"github.com/Grandbusta/minime/internal/agent"
 	"github.com/Grandbusta/minime/internal/agentskill"
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/config"
 	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/person"
 	"github.com/Grandbusta/minime/internal/secret"
-	"github.com/Grandbusta/minime/internal/self"
 	"github.com/Grandbusta/minime/internal/setup"
 	"github.com/Grandbusta/minime/internal/store"
 )
@@ -38,7 +38,7 @@ const oldSelf = "self"
 func openStore(ctx context.Context) (*store.Store, secret.Key, error) {
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {
-		return nil, secret.Key{}, person.ErrNoOne
+		return nil, secret.Key{}, agent.ErrNoOne
 	}
 	st, err := store.Open(ctx, url)
 	if err != nil {
@@ -61,7 +61,7 @@ func personKey(ctx context.Context, st *store.Store) (secret.Key, error) {
 	if v := os.Getenv(secret.EnvKey); v != "" {
 		return secret.ParseKey(v)
 	}
-	_, lives, err := st.Self(ctx, memory.SectionLife)
+	_, lives, err := st.Self(ctx, memory.SectionCharacter)
 	if err != nil {
 		return secret.Key{}, err
 	}
@@ -86,7 +86,7 @@ func personKey(ctx context.Context, st *store.Store) (secret.Key, error) {
 }
 
 func moveIn(ctx context.Context, st *store.Store, key secret.Key) error {
-	im, err := person.Import(ctx, st, key, oldSelf, time.Now().UTC())
+	im, err := agent.Import(ctx, st, key, oldSelf, time.Now().UTC())
 	if err != nil || im.Name == "" {
 		return err
 	}
@@ -99,11 +99,11 @@ func moveIn(ctx context.Context, st *store.Store, key secret.Key) error {
 	return nil
 }
 
-// selfCommand is `minime self`: their life, how they live and your
+// agentCommand is `minime agent`: their character, how they work and your
 // judgment, as YAML.
-func selfCommand(ctx context.Context, st *store.Store, key secret.Key, cfgPath string, args []string, out io.Writer) error {
-	const usage = "want: self export <section|folder>, import <file|folder>, edit <section>, history <section> or rollback <section> <version> " +
-		"(sections: life, living, judgment)"
+func agentCommand(ctx context.Context, st *store.Store, key secret.Key, cfgPath string, args []string, out io.Writer) error {
+	const usage = "want: agent export <section|folder>, import <file|folder>, edit <section>, history <section> or rollback <section> <version> " +
+		"(sections: character, work, judgment)"
 	if len(args) == 0 {
 		return errors.New(usage)
 	}
@@ -166,7 +166,7 @@ func selfCommand(ctx context.Context, st *store.Store, key secret.Key, cfgPath s
 		i := slices.IndexFunc(vs, func(v memory.SelfVersion) bool { return v.ID.String() == args[2] })
 		switch {
 		case i < 0:
-			return fmt.Errorf("%s has no version %s (minime self history %s lists them)", s, args[2], s)
+			return fmt.Errorf("%s has no version %s (minime agent history %s lists them)", s, args[2], s)
 		case i == 0:
 			return fmt.Errorf("%s is the version in use", args[2])
 		}
@@ -182,30 +182,30 @@ func selfCommand(ctx context.Context, st *store.Store, key secret.Key, cfgPath s
 // saveSelf checks docs (section → YAML) together, then saves them as new
 // versions in one go.
 func saveSelf(ctx context.Context, st *store.Store, key secret.Key, cfgPath, source string, docs map[string]string) error {
-	life, ok := docs[memory.SectionLife]
+	life, ok := docs[memory.SectionCharacter]
 	if !ok {
-		v, _, err := st.Self(ctx, memory.SectionLife)
+		v, _, err := st.Self(ctx, memory.SectionCharacter)
 		if err != nil {
 			return err
 		}
 		life = v.Doc
 	}
-	l, err := self.ParseLife([]byte(life))
+	l, err := character.Parse([]byte(life))
 	if err != nil {
 		return err
 	}
 	if j, ok := docs[memory.SectionJudgment]; ok {
-		if _, err := self.ParseJudgment([]byte(j)); err != nil {
+		if _, err := character.ParseJudgment([]byte(j)); err != nil {
 			return err
 		}
 	}
-	if living, ok := docs[memory.SectionLiving]; ok {
-		if err := checkLiving(ctx, st, key, cfgPath, []byte(living), l.Timezone); err != nil {
+	if work, ok := docs[memory.SectionWork]; ok {
+		if err := checkWork(ctx, st, key, cfgPath, []byte(work), l.Timezone); err != nil {
 			return err
 		}
 	}
 	now, name := time.Now().UTC(), ""
-	if _, ok := docs[memory.SectionLife]; ok {
+	if _, ok := docs[memory.SectionCharacter]; ok {
 		name = l.Name
 	}
 	var vs []memory.SelfVersion
@@ -217,12 +217,12 @@ func saveSelf(ctx context.Context, st *store.Store, key secret.Key, cfgPath, sou
 	return st.SaveSelf(ctx, name, vs...)
 }
 
-// checkLiving checks it the way they're checked when they start.
-func checkLiving(ctx context.Context, st *store.Store, key secret.Key, cfgPath string, living []byte, zone string) error {
-	if _, err := person.Env(ctx, st, key); err != nil {
+// checkWork checks it the way it's checked when they start.
+func checkWork(ctx context.Context, st *store.Store, key secret.Key, cfgPath string, work []byte, zone string) error {
+	if _, err := agent.Env(ctx, st, key); err != nil {
 		return err
 	}
-	cfg, err := config.Load(minime.Files, cfgPath, living)
+	cfg, err := config.Load(minime.Files, cfgPath, work)
 	if err != nil {
 		return err
 	}
@@ -246,7 +246,7 @@ func editSelf(ctx context.Context, st *store.Store, key secret.Key, cfgPath, sec
 		return err
 	}
 	defer os.RemoveAll(dir)
-	path := filepath.Join(dir, person.Files[section])
+	path := filepath.Join(dir, agent.Files[section])
 	if err := os.WriteFile(path, []byte(v.Doc), 0o600); err != nil {
 		return err
 	}
@@ -278,40 +278,36 @@ func editSelf(ctx context.Context, st *store.Store, key secret.Key, cfgPath, sec
 	}
 }
 
-// importFrom saves a section's file, or a folder laid out like each life
-// in lives/ (with any skills/), as new versions.
+// importFrom saves a section's file, or a folder laid out like each
+// character in characters/ (with any skills/), as new versions. Files named
+// as before v0.4.0 (life.yaml, living.yaml) still import.
 func importFrom(ctx context.Context, st *store.Store, key secret.Key, cfgPath, from string, out io.Writer) error {
 	info, err := os.Stat(from)
 	if err != nil {
 		return err
 	}
-	docs := map[string]string{}
+	var sections map[string][]byte
 	var skills []agentskill.Skill
 	if info.IsDir() {
-		for s, f := range person.Files {
-			if raw, err := os.ReadFile(filepath.Join(from, f)); err == nil {
-				docs[s] = string(raw)
-			} else if !errors.Is(err, os.ErrNotExist) {
-				return err
-			}
+		if sections, err = agent.ReadFolder(from); err != nil {
+			return err
 		}
 		var skipped []string
-		if skills, skipped = person.SkillsIn(filepath.Join(from, "skills")); len(skipped) > 0 {
+		if skills, skipped = agent.SkillsIn(filepath.Join(from, "skills")); len(skipped) > 0 {
 			return fmt.Errorf("not skills: %s", strings.Join(skipped, "; "))
 		}
 	} else {
-		for s, f := range person.Files {
-			if filepath.Base(from) == f {
-				raw, err := os.ReadFile(from)
-				if err != nil {
-					return err
-				}
-				docs[s] = string(raw)
-			}
+		raw, err := os.ReadFile(from)
+		if err != nil {
+			return err
 		}
-		if len(docs) == 0 {
-			return fmt.Errorf("%s isn't life.yaml, living.yaml or judgment.yaml", from)
+		if sections = agent.BySection(map[string][]byte{filepath.Base(from): raw}); len(sections) == 0 {
+			return fmt.Errorf("%s isn't character.yaml, work.yaml or judgment.yaml", from)
 		}
+	}
+	docs := map[string]string{}
+	for s, raw := range sections {
+		docs[s] = string(raw)
 	}
 	if len(docs) > 0 {
 		if err := saveSelf(ctx, st, key, cfgPath, memory.SelfImported, docs); err != nil {
@@ -328,7 +324,7 @@ func importFrom(ctx context.Context, st *store.Store, key secret.Key, cfgPath, f
 }
 
 // exportTo writes everything but their secrets into a new folder, laid out
-// so `minime self import` takes it back.
+// so `minime agent import` takes it back.
 func exportTo(ctx context.Context, st *store.Store, dir string, out io.Writer) error {
 	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
 		return fmt.Errorf("%s isn't empty", dir)
@@ -342,7 +338,7 @@ func exportTo(ctx context.Context, st *store.Store, dir string, out io.Writer) e
 			return err
 		}
 		if ok {
-			if err := os.WriteFile(filepath.Join(dir, person.Files[s]), []byte(v.Doc), 0o600); err != nil {
+			if err := os.WriteFile(filepath.Join(dir, agent.Files[s]), []byte(v.Doc), 0o600); err != nil {
 				return err
 			}
 		}
@@ -362,7 +358,7 @@ func exportTo(ctx context.Context, st *store.Store, dir string, out io.Writer) e
 			}
 		}
 	}
-	fmt.Fprintf(out, "Wrote their life, how they live, your judgment and their skills (%d) to %s. Their secrets stay in their database.\n", len(skills), dir)
+	fmt.Fprintf(out, "Wrote their character, how they work, your judgment and their skills (%d) to %s. Their secrets stay in their database.\n", len(skills), dir)
 	return nil
 }
 
@@ -379,7 +375,7 @@ func secretCommand(ctx context.Context, st *store.Store, key secret.Key, args []
 		if err != nil {
 			return err
 		}
-		names := slices.Clone(person.Known)
+		names := slices.Clone(agent.Known)
 		for name := range sealed {
 			if !slices.Contains(names, name) {
 				names = append(names, name)
@@ -404,7 +400,7 @@ func secretCommand(ctx context.Context, st *store.Store, key secret.Key, args []
 		return w.Flush()
 	case args[0] == "set" && len(args) == 2:
 		name := args[1]
-		if err := person.CheckName(name); err != nil {
+		if err := agent.CheckName(name); err != nil {
 			return err
 		}
 		value, err := readSecret(name)

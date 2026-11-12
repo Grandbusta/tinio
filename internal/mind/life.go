@@ -12,11 +12,11 @@ import (
 	"github.com/Grandbusta/minime/internal/ability"
 	"github.com/Grandbusta/minime/internal/ability/journal"
 	"github.com/Grandbusta/minime/internal/action"
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/decision"
 	"github.com/Grandbusta/minime/internal/memory"
 	"github.com/Grandbusta/minime/internal/perception"
 	"github.com/Grandbusta/minime/internal/providers/system2"
-	"github.com/Grandbusta/minime/internal/self"
 )
 
 // A day of its own: it plans in the morning, does things for real through
@@ -358,7 +358,7 @@ func (m *Mind) intend(ctx context.Context, i memory.Intention, now time.Time) bo
 // makes (its crafts); an ability may file the work under a kind of its own.
 // It asks too for each kind of data its works carry (data), by its name.
 // act adds what it proposes to do with tools that change things.
-func activityFormat(crafts []self.Craft, data map[string]map[string]any, act bool) *system2.Format {
+func activityFormat(crafts []character.Craft, data map[string]map[string]any, act bool) *system2.Format {
 	kinds := make([]string, len(crafts))
 	for i, c := range crafts {
 		kinds[i] = c.Kind

@@ -16,6 +16,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/Grandbusta/minime/internal/character"
 	"github.com/Grandbusta/minime/internal/decision"
 	"github.com/Grandbusta/minime/internal/decision/questions"
 	"github.com/Grandbusta/minime/internal/memory"
@@ -26,7 +27,6 @@ import (
 	"github.com/Grandbusta/minime/internal/render/midi"
 	"github.com/Grandbusta/minime/internal/render/pdf"
 	"github.com/Grandbusta/minime/internal/search"
-	"github.com/Grandbusta/minime/internal/self"
 )
 
 type fakeStore struct {
@@ -760,7 +760,7 @@ var testFollowUp = questions.Set{
 	Thresholds: questions.Thresholds{Act: 0.5, Ask: 0.5},
 }
 
-var testLife = self.Life{Name: "Tobi", Story: []string{"Tobi is 29 years old.", "Tobi is a Catholic."}}
+var testLife = character.Character{Name: "Tobi", Story: []string{"Tobi is 29 years old.", "Tobi is a Catholic."}}
 
 func newMind(r Replier, s1 system1.DecisionModel, s2 system2.Reasoner) (*Mind, *fakeStore) {
 	s := &fakeStore{seen: map[string]bool{}, people: map[string]memory.Person{}, asked: map[ulid.ULID]time.Time{},
@@ -848,7 +848,7 @@ func TestPeople(t *testing.T) {
 	t.Run("known by account, not by name", func(t *testing.T) {
 		s2 := &fakeSystem2{}
 		m, s := newMind(&fakeReplier{}, &fakeSystem1{choice: "question", confidence: 0.9}, s2)
-		m.Life.Family = []self.Relative{{Name: "Sam", Relation: "father", Account: sam}}
+		m.Life.Family = []character.Relative{{Name: "Sam", Relation: "father", Account: sam}}
 		m.bornKnowing(context.Background())
 
 		m.handle(context.Background(), percept("1", "Who am I to you?"))
@@ -870,7 +870,7 @@ func TestPeople(t *testing.T) {
 	t.Run("a claim never overwrites what it was born knowing", func(t *testing.T) {
 		s2 := &fakeSystem2{whoTheyAre: "Sam is Tobi's cousin."}
 		m, s := newMind(&fakeReplier{}, &fakeSystem1{choice: "chat", confidence: 0.9}, s2)
-		m.Life.Family = []self.Relative{{Name: "Sam", Relation: "father", Account: sam}}
+		m.Life.Family = []character.Relative{{Name: "Sam", Relation: "father", Account: sam}}
 		m.bornKnowing(context.Background())
 
 		m.handle(context.Background(), percept("1", "Actually I'm your cousin"))

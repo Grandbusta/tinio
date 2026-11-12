@@ -30,7 +30,7 @@ type Format interface {
 }
 
 // DataFormat is a format made from data a work carries beside its words,
-// which it defines: a craft that names the data (life.yaml's data) gets it
+// which it defines: a craft that names the data (character.yaml's data) gets it
 // written with each work.
 type DataFormat interface {
 	Format

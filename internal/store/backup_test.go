@@ -37,7 +37,7 @@ func TestABackupRestoresIntoANewDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	life := memory.SelfVersion{ID: ulid.Make(), Section: memory.SectionLife, Doc: "name: Tobi\n", Source: memory.SelfNew, At: at}
+	life := memory.SelfVersion{ID: ulid.Make(), Section: memory.SectionCharacter, Doc: "name: Tobi\n", Source: memory.SelfNew, At: at}
 	skill := memory.AgentSkill{Name: "cold-email", AddedAt: at, Files: map[string][]byte{"SKILL.md": []byte("---\n"), "logo.png": {0x89, 0x00, '\n', ','}}}
 	if _, err := s.Start(ctx, "Tobi", []memory.SelfVersion{life}, map[string][]byte{"OPENAI_API_KEY": {0, '"', '\n'}}, []memory.AgentSkill{skill}, at); err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestABackupRestoresIntoANewDatabase(t *testing.T) {
 	for _, read := range []func(*Store) (any, error){
 		func(s *Store) (any, error) { return s.Secrets(ctx) },
 		func(s *Store) (any, error) { return s.AgentSkills(ctx) },
-		func(s *Store) (any, error) { return s.SelfHistory(ctx, memory.SectionLife, 100) },
+		func(s *Store) (any, error) { return s.SelfHistory(ctx, memory.SectionCharacter, 100) },
 	} {
 		want, _ := read(s)
 		if got, err := read(r); err != nil || fmt.Sprint(got) != fmt.Sprint(want) {
