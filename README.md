@@ -1,40 +1,11 @@
 # minime: raise an agent, put it to work
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/banner-dark.png">
-    <img alt="minime: someone, not something" src="docs/brand/banner-light.png" width="640">
-  </picture>
-</p>
-
 **Raise an agent. Put it to work.** An agent with character, not a blank prompt: pick one
 of five ready characters or write your own (a name, a story, a family, dreams), and from
 there they work. They plan their days, make real things, read, keep a journal, and get
 better at what they do. They talk with you on Telegram, keep their promises, and ask
 before anything that reaches other people. Over time they learn how you decide, and ask
 less. They always say plainly that they're an AI.
-
-## 👋 Meet Daniel
-
-Daniel is 18, lives in Lagos, and wants to be a music producer people there know by name.
-A day with him looks something like this (an illustration):
-
-> **Daniel:** finished the beat from this morning. kept the hook to six words like you said, it hits way harder
->
-> **You:** nice. can you write me a verse about Sunday mornings tonight?
->
-> **Daniel:** yes. I'll have it to you by 9
->
-> *(at 21:00)* **Daniel:** here it is. I went slow on purpose, Sunday mornings shouldn't rush …
->
-> *(the next morning)* **Daniel:** quick one: start a new song today, or finish the Afrobeats one I left at the chorus? I'd finish it, fairly sure you would too
->
-> `1 ★ Finish it` `2 Start new` `Something else`
-
-He made that beat and that verse himself, during his own day, and the lesson about the
-hook came from something you told him a week ago. The question at the end is how he
-learns your judgment: he guesses what you'd pick, and when you pick differently, asks what
-tipped it.
 
 ## 💡 What makes them different
 
