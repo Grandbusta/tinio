@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 // Start makes the database someone's: their first versions, secrets and

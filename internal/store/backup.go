@@ -85,7 +85,7 @@ func (s *Store) Backup(ctx context.Context, w io.Writer, at time.Time) (Backup, 
 }
 
 // Restore loads a backup into the database at url, which must have nothing
-// in it yet: at the backup's version, then migrated to this minime's.
+// in it yet: at the backup's version, then migrated to this Tinio's.
 func Restore(ctx context.Context, url string, r io.ReaderAt, size int64) (Backup, error) {
 	z, err := zip.NewReader(r, size)
 	if err != nil {
@@ -98,7 +98,7 @@ func Restore(ctx context.Context, url string, r io.ReaderAt, size int64) (Backup
 		f.Close()
 	}
 	if err != nil || b.Format != backupFormat {
-		return Backup{}, fmt.Errorf("not a minime backup (%v)", err)
+		return Backup{}, fmt.Errorf("not a tinio backup (%v)", err)
 	}
 	pool, err := pgxpool.New(ctx, url)
 	if err != nil {
@@ -112,7 +112,7 @@ func Restore(ctx context.Context, url string, r io.ReaderAt, size int64) (Backup
 	defer done()
 	sources := p.ListSources()
 	if newest := sources[len(sources)-1].Version; b.Version > newest {
-		return Backup{}, fmt.Errorf("the backup is from a newer minime (migration %d; this one knows %d): restore it with that one", b.Version, newest)
+		return Backup{}, fmt.Errorf("the backup is from a newer Tinio (migration %d; this one knows %d): restore it with that one", b.Version, newest)
 	}
 	if _, err := p.UpTo(ctx, b.Version); err != nil {
 		return Backup{}, fmt.Errorf("migrate: %w", err)
@@ -197,7 +197,7 @@ func (t BackupTable) sql() string {
 	return fmt.Sprintf("%s (%s)", pgx.Identifier{t.Name}.Sanitize(), strings.Join(cols, ", "))
 }
 
-// tables are minime's, with their columns, each after the tables it refers to.
+// tables are Tinio's, with their columns, each after the tables it refers to.
 func tables(ctx context.Context, tx pgx.Tx) ([]BackupTable, error) {
 	rows, err := tx.Query(ctx, `SELECT c.relname::text, array_agg(a.attname::text ORDER BY a.attnum),
 		COALESCE((SELECT array_agg(DISTINCT p.relname::text) FROM pg_constraint f JOIN pg_class p ON p.oid = f.confrelid

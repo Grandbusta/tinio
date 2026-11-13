@@ -8,7 +8,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 type Ability interface {

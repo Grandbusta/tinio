@@ -16,7 +16,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 //go:embed page.html

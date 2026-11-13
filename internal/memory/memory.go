@@ -576,8 +576,8 @@ const (
 var Sections = []string{SectionCharacter, SectionWork, SectionJudgment}
 
 const (
-	SelfImported   = "import" // from files: their old self/ folder, or minime agent import
-	SelfNew        = "new"    // minime new
+	SelfImported   = "import" // from files: their old self/ folder, or tinio agent import
+	SelfNew        = "new"    // tinio new
 	SelfEdited     = "edit"
 	SelfRolledBack = "rollback"
 )

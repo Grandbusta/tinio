@@ -1,12 +1,12 @@
 # Architecture
 
-How minime works today: every part of an agent (inside, a person with character), what flows between them, and what
+How Tinio works today: every part of an agent (inside, a person with character), what flows between them, and what
 each model sees and returns. For what it does, see the [README](../README.md); for setting
 it up and every setting, [SETUP.md](SETUP.md).
 
 ## The whole system
 
-minime is one Go process. Two things wake the mind: a **percept** (a message from
+Tinio is one Go process. Two things wake the mind: a **percept** (a message from
 Telegram, or a tap on a button) and a **tick** (the clock, once a minute). Everything the
 mind does starts from one of the two, runs through the same few parts, and ends in the
 decision log.
@@ -55,7 +55,7 @@ flowchart TB
     DB --> PROF & CON
 ```
 
-Started by `minime run` ([cmd/minime/main.go](../cmd/minime/main.go)), which loads the
+Started by `tinio run` ([cmd/tinio/main.go](../cmd/tinio/main.go)), which loads the
 config, their character, the judgment, the question sets and the prompts, opens
 Postgres (running any new migrations), and then runs five goroutines:
 
@@ -76,9 +76,9 @@ taken on in a chat needs a learning plan.
 ## Who the person is
 
 The agent is their database; the code has nothing about them. `DATABASE_URL` says where
-it is and `MINIME_KEY` opens their secrets; nothing else about them is outside it
+it is and `TINIO_KEY` opens their secrets; nothing else about them is outside it
 ([internal/agent](../internal/agent)). Their three sections are YAML, each edit a new
-version (`self_versions`; the newest is used); `minime new` writes the first from one of
+version (`self_versions`; the newest is used); `tinio new` writes the first from one of
 the characters in [characters](../characters), all at once (`agent.Start`). Every command starts the
 same way: open the database, put their secrets in the process's
 environment where it doesn't set them already (`agent.Env`), then read the config with
@@ -102,13 +102,13 @@ their `work` over it. (Before v0.4.0 the sections were `life` and `living`; migr
   tools. Read over the config's defaults, with the same keys.
 - **Secrets** ([internal/secret](../internal/secret)): their bot token, owner ID, OpenAI key
   and model, console token, and what their tools name, each sealed with AES-GCM under
-  `MINIME_KEY` (bound to its name) before it reaches the `secrets` table. The environment
+  `TINIO_KEY` (bound to its name) before it reaches the `secrets` table. The environment
   wins over a stored one. Never in a prompt, a log, an export or the console.
-- **[configs/minime.yaml](../configs/minime.yaml)** ([internal/config](../internal/config)):
+- **[configs/tinio.yaml](../configs/tinio.yaml)** ([internal/config](../internal/config)):
   the machinery every person shares: providers, the database, Telegram, prompts,
   addresses, pricing. It, the prompts, the question sets and the characters are built into the
-  binary ([minime.go](../minime.go), `minime.Files`), a file on disk at the same path
-  winning, so one binary with `DATABASE_URL` and `MINIME_KEY` runs a person. `${VAR}` is filled from the environment, where their secrets are by
+  binary ([tinio.go](../tinio.go), `tinio.Files`), a file on disk at the same path
+  winning, so one binary with `DATABASE_URL` and `TINIO_KEY` runs a person. `${VAR}` is filled from the environment, where their secrets are by
   then.
 
 Since the database is the person, a backup is the database
@@ -118,7 +118,7 @@ whose it is, the migration it was made at and each table's columns and rows, in 
 that loads without breaking a foreign key. `Restore` takes only an empty database: it
 migrates it to the backup's version, loads every table in one transaction (checking the
 row counts), sets serial columns to follow on, then migrates the rest of the way. Secrets
-travel sealed. `minime doctor` checks each thing a run needs, in order, without starting
+travel sealed. `tinio doctor` checks each thing a run needs, in order, without starting
 the person.
 
 ## A message, step by step
@@ -332,7 +332,7 @@ System 2 with [prompts/observe.md](../prompts/observe.md), fenced as untrusted: 
 remember facts, tell the owner, or propose actions, which always ask.
 
 Skills ([internal/agentskill](../internal/agentskill)) are in the Agent Skills format, each
-stored whole in their database (`agent_skills`, every file as bytes) by `minime skill add`,
+stored whole in their database (`agent_skills`, every file as bytes) by `tinio skill add`,
 and loaded at start; one that doesn't read is logged and left out.
 Each description is embedded the first time it's needed and kept in memory; the one most
 alike (at least 0.35, `rankAlike`) to a reply's talk or an activity's text has its
@@ -401,7 +401,7 @@ Dreams → goals → projects → activities ([growth.go](../internal/mind/growt
   the skill's level and lessons, and the abilities they can study with: 3 to 5 stages
   (learn, practice, done when), up to 3 resources each. The day plan sees the current stage
   and can pick a resource, which becomes an activity with that ability.
-- **The weekly review** (`review_at`, or `minime review`): System 2's note has dreams,
+- **The weekly review** (`review_at`, or `tinio review`): System 2's note has dreams,
   goals with progress, skills with recent scores, projects, the week's works and journal
   entries, lessons, learning plans, what they can study with, the owner's approved
   judgment, and where the owner chose differently this week. It returns the review text
@@ -496,7 +496,7 @@ conversations are read from, how cost per day is counted against the budget, and
 replay re-runs.
 
 **Labels and replay** ([internal/replay](../internal/replay)): the owner's corrections of
-System 1 ("that's not what I meant", or right/wrong in the console) are labels. `minime
+System 1 ("that's not what I meant", or right/wrong in the console) are labels. `tinio
 replay` asks System 1 about every labelled message again with the question set as it is
 now, and reports accuracy then and now with the lowest act threshold that keeps 95% of
 confident answers right. It changes nothing.
@@ -509,7 +509,7 @@ confident answers right. It changes nothing.
 | System 2 | `Reasoner.Reason(instructions, history, note, message, format) → text` ([system2](../internal/providers/system2)) | OpenAI Responses API, reasoning effort `low`, structured output |
 | Search | `Searcher`, `Fetcher` ([search](../internal/search)) | OpenAI web search; the HTTPS fetcher |
 
-A provider is chosen in the config and built in `cmd/minime`; a new one is a package and a
+A provider is chosen in the config and built in `cmd/tinio`; a new one is a package and a
 `case`. The OpenAI ones use the official SDK ([openai-go](https://github.com/openai/openai-go)),
 made in one place ([openaiclient](../internal/providers/openaiclient)) with its retries
 (rate limits, server errors, `Retry-After`). A structured answer cut off by its output limit
@@ -537,12 +537,12 @@ System 2's instructions are in [prompts/](../prompts): `reply`, `plan`, `activit
 ## The profile page
 
 [internal/portfolio](../internal/portfolio) runs a writer and a read-only server on its own
-port. Daily at `update_at` (and on `minime profile`), the writer asks System 1 whether each
+port. Daily at `update_at` (and on `tinio profile`), the writer asks System 1 whether each
 fact about the person not yet decided is fine to share (`public_profile`) and each new work
 (`public_work`, one call per work; asked together, a harmless work beside a private one was
 dragged down with it). Works the gate says to ask about become `publish` approvals. Facts
 about people, the journal, reviews and anything made for someone never go on the page,
-enforced in the store's queries; the owner's `minime work show|hide` is never overridden.
+enforced in the store's queries; the owner's `tinio work show|hide` is never overridden.
 When the public facts changed, System 2 rewrites the page in their own voice
 ([prompts/profile.md](../prompts/profile.md)): a tagline, an about, interests, and what
 they're doing now. The Work section is read straight from the store.
@@ -574,7 +574,7 @@ it needs nothing; anywhere else, a token.
 ## Code layout
 
 ```
-cmd/minime/              the binary: commands, wiring, providers chosen from config
+cmd/tinio/              the binary: commands, wiring, providers chosen from config
 internal/
   perception/            percepts and their kinds
   channel/telegram/      on go-telegram/bot: one bot that hears messages and taps, and replies
@@ -604,13 +604,13 @@ internal/
   decision/              the decision record; questions/ loads question sets
   providers/             system1/, system2/, embed/ and their OpenAI providers; openaiclient/
   store/                 Postgres queries and migrations/
-  setup/                 `minime new`: questions with huh, .env with godotenv
+  setup/                 `tinio new`: questions with huh, .env with godotenv
   portfolio/             the profile page: writer and server
   console/               the mind console: API, live stream, web/
   replay/                labelled messages re-asked
   character/             reading and checking a character and a judgment
   agent/                 the agent from their database: loading and starting them
-  secret/                sealing secrets with MINIME_KEY
+  secret/                sealing secrets with TINIO_KEY
   config/ pricing/
 decisions/               System 1's question sets
 prompts/                 System 2's instructions

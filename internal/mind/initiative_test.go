@@ -9,8 +9,8 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/providers/system2"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
 )
 
 // lagos is the agent's time zone in these tests: UTC+1, so now (13:16 UTC) is 14:16 there.

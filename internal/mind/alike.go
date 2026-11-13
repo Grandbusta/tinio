@@ -5,7 +5,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/Grandbusta/minime/internal/providers/embed"
+	"github.com/Grandbusta/tinio/internal/providers/embed"
 )
 
 type alike[T any] struct {

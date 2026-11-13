@@ -86,7 +86,7 @@ function pathFor(e) {
 
 /* ---------- the brain ---------- */
 
-const COLORS = { system1: "#5be7ff", system2: "#b48cff", reflex: "#8a94a6", life: "#ffc35c", accent: "#7cff6b" };
+const COLORS = { system1: "#5be7ff", system2: "#b48cff", reflex: "#8a94a6", life: "#ffc35c", accent: "#7cadef" };
 
 // The parts of the mind, placed where a person's would roughly be (side
 // view, facing left): reasoning in the prefrontal cortex, the senses at the
@@ -117,7 +117,7 @@ const LOBES = {
   occipital: { x: 0.74, y: -0.12, r: 0.32, c: [124, 255, 107] },
   temporal:  { x: -0.06, y: 0.30, r: 0.42, c: [91, 231, 255] },
   cerebellum:{ x: 0.60, y: 0.44, r: 0.30, c: [91, 231, 255] },
-  deep:      { x: 0.10, y: -0.04, r: 0.22, c: [124, 255, 107] },
+  deep:      { x: 0.10, y: -0.04, r: 0.22, c: [124, 173, 239] },
   stem:      { x: 0.30, y: 0.70, r: 0.22, c: [255, 195, 92] },
 };
 
@@ -317,27 +317,27 @@ const brain = (() => {
     const baseY = cy + scale * 1.04, rx = scale * 0.95, ry = scale * 0.16;
     ctx.save();
     for (let i = 0; i < 3; i++) {
-      ctx.strokeStyle = `rgba(124,255,107,${0.18 - i * 0.05})`;
+      ctx.strokeStyle = `rgba(124, 173, 239,${0.18 - i * 0.05})`;
       ctx.setLineDash(i === 1 ? [3, 7] : []);
       ctx.lineDashOffset = -now / 60;
       ctx.beginPath(); ctx.ellipse(cx, baseY, rx * (1 - i * 0.22), ry * (1 - i * 0.22), 0, 0, Math.PI * 2); ctx.stroke();
     }
     ctx.setLineDash([]);
     const glow = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, rx);
-    glow.addColorStop(0, "rgba(124,255,107,0.10)"); glow.addColorStop(1, "transparent");
+    glow.addColorStop(0, "rgba(124, 173, 239,0.10)"); glow.addColorStop(1, "transparent");
     ctx.fillStyle = glow; ctx.beginPath(); ctx.ellipse(cx, baseY, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
     // ring of ticks
     const R = scale * 1.22, spin = now / 40000;
     for (let i = 0; i < 120; i++) {
       const a = spin + (i / 120) * Math.PI * 2, long = i % 10 === 0;
       const r1 = R, r2 = R + (long ? 10 : 4);
-      ctx.strokeStyle = `rgba(124,255,107,${long ? 0.35 : 0.12})`;
+      ctx.strokeStyle = `rgba(124, 173, 239,${long ? 0.35 : 0.12})`;
       ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1 * 0.86); ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2 * 0.86); ctx.stroke();
     }
     // scan line
     const sy = cy - scale * 0.95 + ((now / 4200) % 1) * scale * 2.0;
     const sg = ctx.createLinearGradient(0, sy - 30, 0, sy + 2);
-    sg.addColorStop(0, "transparent"); sg.addColorStop(1, "rgba(124,255,107,0.07)");
+    sg.addColorStop(0, "transparent"); sg.addColorStop(1, "rgba(124, 173, 239,0.07)");
     ctx.fillStyle = sg; ctx.fillRect(cx - scale * 1.1, sy - 30, scale * 2.2, 32);
     ctx.restore();
   }
@@ -393,7 +393,7 @@ const brain = (() => {
     // fibres
     for (const [a, b] of EDGES) {
       const f = fibre(a, b), h = Math.max(heat[a], heat[b]);
-      ctx.strokeStyle = `rgba(124,255,107,${0.12 + h * 0.5})`;
+      ctx.strokeStyle = `rgba(124, 173, 239,${0.12 + h * 0.5})`;
       ctx.lineWidth = 1 + h;
       ctx.beginPath(); ctx.moveTo(f.p.X, f.p.Y); ctx.quadraticCurveTo(f.c.X, f.c.Y, f.q.X, f.q.Y); ctx.stroke();
     }
@@ -427,22 +427,22 @@ const brain = (() => {
       const pulse = 0.5 + 0.5 * Math.sin(now / 900 + n.x * 5);
       const R = 18 + h * 30;
       const glow = ctx.createRadialGradient(p.X, p.Y, 0, p.X, p.Y, R);
-      glow.addColorStop(0, `rgba(124,255,107,${0.35 + h * 0.5})`); glow.addColorStop(1, "transparent");
+      glow.addColorStop(0, `rgba(124, 173, 239,${0.35 + h * 0.5})`); glow.addColorStop(1, "transparent");
       ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.X, p.Y, R, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = h > 0.25 ? "#eaffe6" : "#9dff8f";
+      ctx.fillStyle = h > 0.25 ? "#f2f7fe" : "#a9cdff";
       ctx.beginPath(); ctx.arc(p.X, p.Y, 3 + h * 2, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = `rgba(124,255,107,${0.35 + pulse * 0.25 + h * 0.4})`;
+      ctx.strokeStyle = `rgba(124, 173, 239,${0.35 + pulse * 0.25 + h * 0.4})`;
       ctx.beginPath(); ctx.arc(p.X, p.Y, 7 + pulse * 1.5 + h * 4 + (hover === k ? 3 : 0), 0, Math.PI * 2); ctx.stroke();
 
       const left = n.x < -0.05, sx = left ? -1 : 1;
       const ex = p.X + sx * 16, ey = p.Y - 12, tx = ex + sx * 16;
-      ctx.strokeStyle = `rgba(124,255,107,${0.35 + h * 0.5})`;
+      ctx.strokeStyle = `rgba(124, 173, 239,${0.35 + h * 0.5})`;
       ctx.beginPath(); ctx.moveTo(p.X + sx * 6, p.Y - 4); ctx.lineTo(ex, ey); ctx.lineTo(tx, ey); ctx.stroke();
       ctx.font = "600 10px 'JetBrains Mono', monospace";
       const label = n.label.toUpperCase(), wLabel = ctx.measureText(label).width;
       const lx = left ? tx - wLabel - 4 : tx + 4;
       ctx.fillStyle = "rgba(5,8,10,0.72)"; ctx.fillRect(lx - 4, ey - 8, wLabel + 8, 14);
-      ctx.fillStyle = h > 0.25 ? "#7cff6b" : "rgba(214,236,222,0.9)";
+      ctx.fillStyle = h > 0.25 ? "#7cadef" : "rgba(214,224,236,0.9)";
       ctx.fillText(label, lx, ey + 3.5);
     }
     requestAnimationFrame(frame);
@@ -471,9 +471,9 @@ const eeg = (() => {
   function draw(now) {
     ctx.clearRect(0, 0, W, H);
     const t = Date.now(), mid = H * 0.55;
-    ctx.strokeStyle = "rgba(124,255,107,0.12)";
+    ctx.strokeStyle = "rgba(124, 173, 239,0.12)";
     for (let m = 0; m <= 8; m++) { const x = (m / 8) * W; ctx.beginPath(); ctx.moveTo(x, 4); ctx.lineTo(x, H - 4); ctx.stroke(); }
-    ctx.lineWidth = 1.4; ctx.strokeStyle = "#7cff6b"; ctx.shadowColor = "#7cff6b"; ctx.shadowBlur = 6;
+    ctx.lineWidth = 1.4; ctx.strokeStyle = "#7cadef"; ctx.shadowColor = "#7cadef"; ctx.shadowBlur = 6;
     ctx.beginPath();
     for (let x = 0; x <= W; x += 1.5) {
       const at = t - span + (x / W) * span;
@@ -515,9 +515,9 @@ const eeg = (() => {
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
           const a = nodes[i], b = nodes[j], d = Math.hypot(a.x - b.x, a.y - b.y);
-          if (d < 150) { ctx.strokeStyle = `rgba(124,255,107,${0.07 * (1 - d / 150)})`; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+          if (d < 150) { ctx.strokeStyle = `rgba(124, 173, 239,${0.07 * (1 - d / 150)})`; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
         }
-        ctx.fillStyle = "rgba(160,255,170,0.22)"; ctx.fillRect(nodes[i].x - 1, nodes[i].y - 1, 2, 2);
+        ctx.fillStyle = "rgba(160,200,255,0.22)"; ctx.fillRect(nodes[i].x - 1, nodes[i].y - 1, 2, 2);
       }
     }
     requestAnimationFrame(frame);
@@ -530,11 +530,11 @@ const eeg = (() => {
 const FAMILY_COLOR = { system1: "var(--s1)", system2: "var(--s2)", reflex: "var(--rx)", life: "var(--lf)" };
 // Colours for kinds of work and projects: the built-in ones fixed, the ones an
 // agent makes (from its character.yaml) picked from the palette by name.
-const PALETTE = ["#7cff6b", "#ffc35c", "#ff9de2", "#5be7ff", "#8affd6", "#ff8a6b", "#c9ff5c", "#6b9dff"];
+const PALETTE = ["#7cadef", "#ffc35c", "#ff9de2", "#5be7ff", "#8affd6", "#ff8a6b", "#c9ff5c", "#7cff6b"];
 const hashColor = (s) => PALETTE[[...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % PALETTE.length];
 const KIND_FIXED = { journal: "#b48cff", notes: "#5be7ff", reading_notes: "#8affd6", writing: "#ff9de2" };
 const kindColor = (k) => KIND_FIXED[k] || hashColor(k);
-const AREA_COLORS = ["#5be7ff", "#7cff6b", "#ffc35c", "#b48cff", "#ff9de2", "#8affd6", "#ff8a6b", "#c7ff6b"];
+const AREA_COLORS = ["#5be7ff", "#7cadef", "#ffc35c", "#b48cff", "#ff9de2", "#8affd6", "#ff8a6b", "#c7ff6b"];
 const areaColor = (a) => {
   if (!a) return "#8a94a6";
   let h = 0; for (const c of a) h = (h * 31 + c.charCodeAt(0)) >>> 0;
@@ -604,9 +604,9 @@ async function loadOverview() {
   $("#costToday").textContent = money(t.cost_usd);
   $("#costPill").textContent = money(t.cost_usd) + " today";
   const c = o.counts;
-  $("#counts").innerHTML = [["facts", c.facts, "#5be7ff"], ["about self", c.self_facts, "#7cff6b"], ["people", c.people, "#ff9de2"],
+  $("#counts").innerHTML = [["facts", c.facts, "#5be7ff"], ["about self", c.self_facts, "#7cadef"], ["people", c.people, "#ff9de2"],
     ["intentions", c.intentions, "#ffc35c"], ["projects", c.projects, "#b48cff"], ["works", c.works, "#8affd6"],
-    ["percepts", c.percepts, "#8a94a6"], ["decisions", c.decisions, "#7cff6b"]]
+    ["percepts", c.percepts, "#8a94a6"], ["decisions", c.decisions, "#7cadef"]]
     .map(([k, v, col]) => `<div class="cell" style="--c:${col}"><span>${k}</span><b>${v}</b></div>`).join("");
   const days = o.cost_by_day || [], maxC = Math.max(0.0001, ...days.map((d) => d.cost_usd));
   $("#bars").innerHTML = days.length ? days.map((d) =>
@@ -756,7 +756,7 @@ const net = (() => {
     const people = m.people.map((p) => p.key), hubs = {};
     const cx = W / 2, cy = H / 2;
     const n = people.length, single = n === 1;
-    hubs.self = { x: single ? W * 0.32 : cx, y: cy, r: 20, label: info.name || "self", hub: true, color: "#7cff6b" };
+    hubs.self = { x: single ? W * 0.32 : cx, y: cy, r: 20, label: info.name || "self", hub: true, color: "#7cadef" };
     people.forEach((k, i) => {
       const a = single ? 0 : -Math.PI / 2 + (i / n) * Math.PI * 2 + 0.6, d = single ? W * 0.36 / 1.25 : Math.min(W, H) * 0.32;
       const p = m.people[i];
@@ -796,18 +796,18 @@ const net = (() => {
         n.dx = n.x + Math.sin(now / 1400 + (n.ph || 0)) * wob; n.dy = n.y + Math.cos(now / 1700 + (n.ph || 0)) * wob;
       }
       for (const [a, b, al] of links) {
-        ctx.strokeStyle = `rgba(124,255,107,${al})`; ctx.beginPath(); ctx.moveTo(a.dx, a.dy); ctx.lineTo(b.dx, b.dy); ctx.stroke();
+        ctx.strokeStyle = `rgba(124, 173, 239,${al})`; ctx.beginPath(); ctx.moveTo(a.dx, a.dy); ctx.lineTo(b.dx, b.dy); ctx.stroke();
       }
       for (const n of nodes) {
         const h = hover === n ? 1 : 0, g = ctx.createRadialGradient(n.dx, n.dy, 0, n.dx, n.dy, n.r * 3.2);
         g.addColorStop(0, n.color + (h ? "cc" : "66")); g.addColorStop(1, "transparent");
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(n.dx, n.dy, n.r * 3.2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = n.hub ? "#06110a" : n.color; ctx.strokeStyle = n.color; ctx.lineWidth = n.hub ? 2 : 1;
+        ctx.fillStyle = n.hub ? "#06162c" : n.color; ctx.strokeStyle = n.color; ctx.lineWidth = n.hub ? 2 : 1;
         ctx.beginPath(); ctx.arc(n.dx, n.dy, n.r + h * 2, 0, Math.PI * 2); ctx.fill(); if (n.hub) ctx.stroke();
         if (n.hub) {
-          ctx.font = "600 11px 'JetBrains Mono', monospace"; ctx.fillStyle = "#e6f0ea"; ctx.textAlign = "center";
+          ctx.font = "600 11px 'JetBrains Mono', monospace"; ctx.fillStyle = "#ebeff4"; ctx.textAlign = "center";
           ctx.fillText(n.label.toUpperCase(), n.dx, n.dy + n.r + 18);
-          if (n.sub) { ctx.font = "10px 'JetBrains Mono', monospace"; ctx.fillStyle = "#7a8884"; ctx.fillText(n.sub, n.dx, n.dy + n.r + 31); }
+          if (n.sub) { ctx.font = "10px 'JetBrains Mono', monospace"; ctx.fillStyle = "#7e858e"; ctx.fillText(n.sub, n.dx, n.dy + n.r + 31); }
           ctx.textAlign = "start";
         }
       }

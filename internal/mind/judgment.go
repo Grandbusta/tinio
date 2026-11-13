@@ -9,7 +9,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 // Judgment: how its owner decides. The judgment file seeds it as proposed;

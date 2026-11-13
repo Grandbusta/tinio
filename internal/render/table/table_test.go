@@ -8,7 +8,7 @@ import (
 
 	"github.com/xuri/excelize/v2"
 
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 var leads = memory.Work{Title: "Clinic leads: Lagos/Island", DataKind: "table", Data: json.RawMessage(`{"columns":["Clinic"," Area ","Fee (NGN)"],

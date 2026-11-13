@@ -9,12 +9,12 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/ability"
-	"github.com/Grandbusta/minime/internal/action"
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/perception"
-	"github.com/Grandbusta/minime/internal/providers/system2"
+	"github.com/Grandbusta/tinio/internal/ability"
+	"github.com/Grandbusta/tinio/internal/action"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/perception"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
 )
 
 // Watching: a reading tool looked at on a schedule (an inbox, a feed). Each

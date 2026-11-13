@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Tinio">
+  <title>Tinio</title>
+  <clipPath id="c"><rect width="64" height="64" rx="14"/></clipPath>
+  <g clip-path="url(#c)">
+    <rect width="64" height="64" fill="#0f4b92"/>
+    <path fill="#ffffff" fill-rule="evenodd" d="M41.8 16 Q44 16 44 18.2 L44 22 L47.8 22 Q50 22 50 24.2 L50 43.8 Q50 46 47.8 46 L44 46 L44 52 L53.8 52 Q56 52 56 54.2 L56 61.8 Q56 64 53.8 64 L10.2 64 Q8 64 8 61.8 L8 54.2 Q8 52 10.2 52 L20 52 L20 46 L16.2 46 Q14 46 14 43.8 L14 24.2 Q14 22 16.2 22 L20 22 L20 18.2 Q20 16 22.2 16 Z M44 28 L38 28 L38 34 L44 34 Z M20 28 L20 34 L26 34 L26 28 Z"/>
+  </g>
+</svg>

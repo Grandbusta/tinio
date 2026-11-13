@@ -1,10 +1,10 @@
 .env
-# A person moved aside by `minime new` (.env.daniel): their database URL and key.
+# A person moved aside by `tinio new` (.env.daniel): their database URL and key.
 .env.*
 !.env.example
 /bin/
 .DS_Store
-/minime
+/tinio
 
 # A person's files on disk, if you keep any: never committed.
 /self/life.yaml

@@ -16,8 +16,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/Grandbusta/minime/internal/action"
-	"github.com/Grandbusta/minime/internal/pricing"
+	"github.com/Grandbusta/tinio/internal/action"
+	"github.com/Grandbusta/tinio/internal/pricing"
 )
 
 type Config struct {
@@ -369,10 +369,10 @@ func Load(fsys fs.FS, path string, work []byte) (*Config, error) {
 		return nil, err
 	}
 	// The environment wins: in a container these must be all addresses, not localhost.
-	if addr, ok := os.LookupEnv("MINIME_CONSOLE_ADDR"); ok {
+	if addr, ok := os.LookupEnv("TINIO_CONSOLE_ADDR"); ok {
 		cfg.Console.Addr = addr
 	}
-	if addr, ok := os.LookupEnv("MINIME_PROFILE_ADDR"); ok {
+	if addr, ok := os.LookupEnv("TINIO_PROFILE_ADDR"); ok {
 		cfg.Portfolio.Addr = addr
 	}
 	if cfg.Database.URL == "" {

@@ -12,10 +12,10 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/action"
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/perception"
+	"github.com/Grandbusta/tinio/internal/action"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/perception"
 )
 
 // Calls: learning its owner's judgment on its own decisions. Every answer the

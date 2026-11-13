@@ -10,10 +10,10 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/action"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/perception"
-	"github.com/Grandbusta/minime/internal/providers/system2"
+	"github.com/Grandbusta/tinio/internal/action"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/perception"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
 )
 
 // fakeDoer writes a file: its args need a path.

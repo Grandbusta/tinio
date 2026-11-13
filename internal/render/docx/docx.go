@@ -10,8 +10,8 @@ import (
 	"github.com/gomutex/godocx"
 	gd "github.com/gomutex/godocx/docx"
 
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/render/markdown"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/render/markdown"
 )
 
 type Format struct{}

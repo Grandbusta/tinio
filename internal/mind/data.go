@@ -9,10 +9,10 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/providers/system2"
-	"github.com/Grandbusta/minime/internal/render"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
+	"github.com/Grandbusta/tinio/internal/render"
 )
 
 // dataOf is, for each kind of work it makes that carries data beside its

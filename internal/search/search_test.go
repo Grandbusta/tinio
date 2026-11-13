@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Grandbusta/minime/internal/pricing"
+	"github.com/Grandbusta/tinio/internal/pricing"
 )
 
 func TestOnlyPublicAddresses(t *testing.T) {

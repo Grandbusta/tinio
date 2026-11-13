@@ -14,18 +14,18 @@ import (
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
-	"github.com/Grandbusta/minime"
-	"github.com/Grandbusta/minime/internal/agent"
-	"github.com/Grandbusta/minime/internal/config"
-	"github.com/Grandbusta/minime/internal/decision/questions"
-	"github.com/Grandbusta/minime/internal/providers/openaiclient"
-	s1openai "github.com/Grandbusta/minime/internal/providers/system1/openai"
-	"github.com/Grandbusta/minime/internal/secret"
-	"github.com/Grandbusta/minime/internal/store"
-	"github.com/Grandbusta/minime/internal/tools"
+	"github.com/Grandbusta/tinio"
+	"github.com/Grandbusta/tinio/internal/agent"
+	"github.com/Grandbusta/tinio/internal/config"
+	"github.com/Grandbusta/tinio/internal/decision/questions"
+	"github.com/Grandbusta/tinio/internal/providers/openaiclient"
+	s1openai "github.com/Grandbusta/tinio/internal/providers/system1/openai"
+	"github.com/Grandbusta/tinio/internal/secret"
+	"github.com/Grandbusta/tinio/internal/store"
+	"github.com/Grandbusta/tinio/internal/tools"
 )
 
-// backup is `minime backup [file]`. The file is written whole or not at all.
+// backup is `tinio backup [file]`. The file is written whole or not at all.
 func backup(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) > 1 {
 		return errors.New("want: backup [file]")
@@ -44,11 +44,11 @@ func backup(ctx context.Context, args []string, out io.Writer) error {
 		return errors.Join(err, errors.New("no one lives in this database yet"))
 	}
 	now := time.Now().UTC()
-	path := fmt.Sprintf("minime-%s-%s.zip", strings.ToLower(strings.Join(strings.Fields(whose), "-")), now.Local().Format("2006-01-02-1504"))
+	path := fmt.Sprintf("tinio-%s-%s.zip", strings.ToLower(strings.Join(strings.Fields(whose), "-")), now.Local().Format("2006-01-02-1504"))
 	if len(args) == 1 {
 		path = args[0]
 	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".minime-backup-*")
+	f, err := os.CreateTemp(filepath.Dir(path), ".tinio-backup-*")
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func backup(ctx context.Context, args []string, out io.Writer) error {
 	return nil
 }
 
-// restore is `minime restore <file>`, into DATABASE_URL.
+// restore is `tinio restore <file>`, into DATABASE_URL.
 func restore(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) != 1 {
 		return errors.New("want: restore <file>, into a new, empty database at DATABASE_URL")
@@ -95,12 +95,12 @@ func restore(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(out, "Restored %s as they were at %s: %d rows in %d tables.\n"+
-		"Their secrets open only with the %s they had then. `minime doctor` checks it.\n",
+		"Their secrets open only with the %s they had then. `tinio doctor` checks it.\n",
 		b.Whose, b.At.Local().Format("2 Jan 2006 15:04"), b.Rows(), len(b.Tables), secret.EnvKey)
 	return nil
 }
 
-// doctor is `minime doctor`: everything a person needs to run, checked
+// doctor is `tinio doctor`: everything a person needs to run, checked
 // without changing anything but the database's migrations. It goes on past
 // a problem where it can, and fails if there was one.
 func doctor(ctx context.Context, cfgPath string, out io.Writer) error {
@@ -159,7 +159,7 @@ func doctor(ctx context.Context, cfgPath string, out io.Writer) error {
 		bad("skill", errors.New(u))
 	}
 
-	cfg, err := config.Load(minime.Files, cfgPath, p.Work)
+	cfg, err := config.Load(tinio.Files, cfgPath, p.Work)
 	if err == nil {
 		if cfg.Initiative.Timezone == "" {
 			cfg.Initiative.Timezone = p.Life.Timezone
@@ -171,7 +171,7 @@ func doctor(ctx context.Context, cfgPath string, out io.Writer) error {
 		return stop()
 	}
 	_, perr := loadPrompt(cfg.Reasoning.Prompt)
-	if _, err := questions.LoadDir(minime.Files, cfg.Decision.QuestionSets); err != nil || perr != nil {
+	if _, err := questions.LoadDir(tinio.Files, cfg.Decision.QuestionSets); err != nil || perr != nil {
 		bad("files", errors.Join(err, perr))
 	} else {
 		ok("config", "%s, with its prompts and question sets", cfgPath)

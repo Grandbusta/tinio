@@ -18,14 +18,14 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/action"
-	"github.com/Grandbusta/minime/internal/character"
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/decision/questions"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/mind"
-	"github.com/Grandbusta/minime/internal/providers/system1"
-	"github.com/Grandbusta/minime/internal/providers/system2"
+	"github.com/Grandbusta/tinio/internal/action"
+	"github.com/Grandbusta/tinio/internal/character"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/decision/questions"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/mind"
+	"github.com/Grandbusta/tinio/internal/providers/system1"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
 )
 
 type Page struct {

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/perception"
-	"github.com/Grandbusta/minime/internal/providers/system2"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/perception"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
 )
 
 // slowPlan holds the day plan until release is closed, closing started when

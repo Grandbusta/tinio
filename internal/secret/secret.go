@@ -1,5 +1,5 @@
 // Package secret seals a person's secrets before they reach their database,
-// with a key kept outside it (MINIME_KEY): a copy of the database alone
+// with a key kept outside it (TINIO_KEY): a copy of the database alone
 // holds nothing that works.
 package secret
 
@@ -14,11 +14,11 @@ import (
 )
 
 // EnvKey is where the key is: 32 bytes as 64 hex characters.
-const EnvKey = "MINIME_KEY"
+const EnvKey = "TINIO_KEY"
 
 type Key struct{ aead cipher.AEAD }
 
-var ErrWrongKey = errors.New("MINIME_KEY doesn't open this person's secrets: it isn't the key they were sealed with")
+var ErrWrongKey = errors.New("TINIO_KEY doesn't open this person's secrets: it isn't the key they were sealed with")
 
 func NewKey() string {
 	b := make([]byte, 32)

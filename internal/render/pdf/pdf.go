@@ -15,7 +15,7 @@ import (
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/sfnt"
 
-	"github.com/Grandbusta/minime/internal/render/markdown"
+	"github.com/Grandbusta/tinio/internal/render/markdown"
 )
 
 const (
@@ -62,7 +62,7 @@ type writer struct {
 func Render(d Doc) ([]byte, error) {
 	w := &writer{author: d.Author, glyphs: map[string]*sfnt.Font{}}
 	w.pdf.Start(gopdf.Config{PageSize: *gopdf.PageSizeA4, Unit: gopdf.UnitPT})
-	w.pdf.SetInfo(gopdf.PdfInfo{Title: d.Title, Author: d.Author, Creator: "minime", CreationDate: d.At})
+	w.pdf.SetInfo(gopdf.PdfInfo{Title: d.Title, Author: d.Author, Creator: "Tinio", CreationDate: d.At})
 	for _, f := range []font{regular, bold, italic, mono} {
 		if err := w.pdf.AddTTFFontData(f.name, f.ttf); err != nil {
 			return nil, fmt.Errorf("pdf: font %s: %w", f.name, err)

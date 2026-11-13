@@ -4,6 +4,6 @@
 !.env.example
 self/
 .git
-/minime
+/tinio
 /bin
 .DS_Store

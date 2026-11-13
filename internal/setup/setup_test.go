@@ -16,8 +16,8 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"github.com/Grandbusta/minime/internal/character"
-	"github.com/Grandbusta/minime/internal/secret"
+	"github.com/Grandbusta/tinio/internal/character"
+	"github.com/Grandbusta/tinio/internal/secret"
 )
 
 func fakeBotName(_ context.Context, token string) (string, error) {
@@ -90,7 +90,7 @@ func TestStartingMei(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	if res.Name != "Mei" || !res.Start || res.Env["DATABASE_URL"] != "postgres://meis" || res.Env["MINIME_KEY"] != got.key ||
+	if res.Name != "Mei" || !res.Start || res.Env["DATABASE_URL"] != "postgres://meis" || res.Env["TINIO_KEY"] != got.key ||
 		!slices.Contains(res.Dropped, "TELEGRAM_BOT_TOKEN") {
 		t.Errorf("result = %+v", res)
 	}
@@ -108,7 +108,7 @@ func TestStartingMei(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(vars) != 2 || vars["DATABASE_URL"] != "postgres://meis" || vars["MINIME_KEY"] != got.key || !strings.Contains(string(raw), "# Their Postgres, password included.") {
+	if len(vars) != 2 || vars["DATABASE_URL"] != "postgres://meis" || vars["TINIO_KEY"] != got.key || !strings.Contains(string(raw), "# Their Postgres, password included.") {
 		t.Errorf(".env =\n%s", raw)
 	}
 	if old, _ := os.ReadFile(filepath.Join(dir, ".env.elsa")); string(old) != elsas {

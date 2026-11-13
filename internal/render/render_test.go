@@ -6,10 +6,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/render"
-	"github.com/Grandbusta/minime/internal/render/midi"
-	"github.com/Grandbusta/minime/internal/render/pdf"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/render"
+	"github.com/Grandbusta/tinio/internal/render/midi"
+	"github.com/Grandbusta/tinio/internal/render/pdf"
 )
 
 func TestAWorkIsMadeOnlyIntoFilesItCarriesTheDataFor(t *testing.T) {

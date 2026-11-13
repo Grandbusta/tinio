@@ -16,7 +16,7 @@ import (
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
-	"github.com/Grandbusta/minime/internal/perception"
+	"github.com/Grandbusta/tinio/internal/perception"
 )
 
 const (

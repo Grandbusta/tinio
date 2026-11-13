@@ -12,7 +12,7 @@ CREATE TABLE self_versions (
 CREATE INDEX self_versions_section ON self_versions (section, at DESC, id DESC);
 
 -- Their keys and settings that aren't for anyone to read, sealed with
--- MINIME_KEY (AES-GCM) before they reach the database. A new value
+-- TINIO_KEY (AES-GCM) before they reach the database. A new value
 -- replaces the old: no history.
 CREATE TABLE secrets (
     name   TEXT PRIMARY KEY,

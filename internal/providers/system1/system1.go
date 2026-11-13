@@ -5,7 +5,7 @@ package system1
 import (
 	"context"
 
-	"github.com/Grandbusta/minime/internal/decision"
+	"github.com/Grandbusta/tinio/internal/decision"
 )
 
 type DecisionModel interface {

@@ -8,10 +8,10 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/ability"
-	"github.com/Grandbusta/minime/internal/ability/journal"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/perception"
+	"github.com/Grandbusta/tinio/internal/ability"
+	"github.com/Grandbusta/tinio/internal/ability/journal"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/perception"
 )
 
 func callsMind(s2 *fakeSystem2) (*Mind, *fakeStore, *fakeAsker, *fakeReplier) {

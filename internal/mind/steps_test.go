@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Grandbusta/minime/internal/ability"
+	"github.com/Grandbusta/tinio/internal/ability"
 )
 
 // chained is a tool that can be followed by its server's tools.

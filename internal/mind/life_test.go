@@ -2,18 +2,18 @@ package mind
 
 import (
 	"context"
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/decision/questions"
-	"github.com/Grandbusta/minime/internal/providers/system1"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/decision/questions"
+	"github.com/Grandbusta/tinio/internal/providers/system1"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/ability"
-	"github.com/Grandbusta/minime/internal/ability/journal"
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/ability"
+	"github.com/Grandbusta/tinio/internal/ability/journal"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 // at is a time on a day in October 2026, in the agent's zone (lagos, UTC+1).

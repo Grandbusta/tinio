@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/pricing"
-	"github.com/Grandbusta/minime/internal/providers/system1"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/pricing"
+	"github.com/Grandbusta/tinio/internal/providers/system1"
 )
 
 var questions = []system1.Question{

@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Grandbusta/minime/internal/ability"
-	"github.com/Grandbusta/minime/internal/agentskill"
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/ability"
+	"github.com/Grandbusta/tinio/internal/agentskill"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 var testSkills = []agentskill.Skill{

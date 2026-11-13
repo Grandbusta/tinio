@@ -1,8 +1,8 @@
 package mind
 
 import (
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/decision/questions"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/decision/questions"
 )
 
 type routeKind string

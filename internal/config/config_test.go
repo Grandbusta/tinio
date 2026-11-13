@@ -9,11 +9,11 @@ import (
 	"time"
 )
 
-// writeConfig is a folder with body as its minime.yaml.
+// writeConfig is a folder with body as its tinio.yaml.
 func writeConfig(t *testing.T, body string) fs.FS {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "minime.yaml"), []byte(body), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "tinio.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return os.DirFS(dir)
@@ -41,7 +41,7 @@ working_memory:
   window: 90m
 `)
 
-	cfg, err := Load(dir, "minime.yaml", nil)
+	cfg, err := Load(dir, "tinio.yaml", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,13 +89,13 @@ working_memory:
 }
 
 func TestLoadRequiresDatabaseURL(t *testing.T) {
-	if _, err := Load(writeConfig(t, "telegram:\n  token: abc\n"), "minime.yaml", nil); err == nil {
+	if _, err := Load(writeConfig(t, "telegram:\n  token: abc\n"), "tinio.yaml", nil); err == nil {
 		t.Fatal("expected error for missing database.url")
 	}
 }
 
 func TestValidateAgentRequiresToken(t *testing.T) {
-	cfg, err := Load(writeConfig(t, "database:\n  url: postgres://x\n"), "minime.yaml", nil)
+	cfg, err := Load(writeConfig(t, "database:\n  url: postgres://x\n"), "tinio.yaml", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestValidateAgentRequiresToken(t *testing.T) {
 }
 
 func TestPolicy(t *testing.T) {
-	cfg, err := Load(writeConfig(t, "database: {url: x}\ntelegram:\n  owner_ids: [42, 7]\nautonomy:\n  classes: {publish: auto}\n"), "minime.yaml", nil)
+	cfg, err := Load(writeConfig(t, "database: {url: x}\ntelegram:\n  owner_ids: [42, 7]\nautonomy:\n  classes: {publish: auto}\n"), "tinio.yaml", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestPolicy(t *testing.T) {
 	}
 	for _, body := range []string{"autonomy:\n  classes: {reply: forbid}\n", "autonomy:\n  classes: {fly: auto}\n",
 		"autonomy:\n  ask_expires: -1h\n"} {
-		cfg, err := Load(writeConfig(t, "database: {url: x}\n"+body), "minime.yaml", nil)
+		cfg, err := Load(writeConfig(t, "database: {url: x}\n"+body), "tinio.yaml", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -131,7 +131,7 @@ func TestPolicy(t *testing.T) {
 func TestShippedConfigPolicy(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
 	t.Setenv("TELEGRAM_OWNER_ID", "42")
-	cfg, err := Load(os.DirFS("../.."), "configs/minime.yaml", nil)
+	cfg, err := Load(os.DirFS("../.."), "configs/tinio.yaml", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestShippedConfigPolicy(t *testing.T) {
 func TestWork(t *testing.T) {
 	dir := writeConfig(t, "database:\n  url: postgres://x\ninitiative:\n  check_ins: [\"11:00\"]\n  quiet: 2h\n"+
 		"daily_life:\n  plan_at: \"06:00\"\n  plan_prompt: prompts/mine.md\n")
-	cfg, err := Load(dir, "minime.yaml", []byte(`initiative:
+	cfg, err := Load(dir, "tinio.yaml", []byte(`initiative:
   check_ins: ["10:00", "17:00"]
 daily_life:
   plan_at: "08:30"
@@ -164,7 +164,7 @@ judgment:
 		cfg.DailyLife.PlanPrompt != "prompts/mine.md" || cfg.Autonomy.Classes["publish"] != "auto" || cfg.Judgment.AsksPerDay != 1 {
 		t.Errorf("with living: %+v %+v %+v %+v", cfg.Initiative, cfg.DailyLife, cfg.Autonomy, cfg.Judgment)
 	}
-	if _, err := Load(dir, "minime.yaml", []byte("database:\n  url: postgres://elsewhere\n")); err == nil {
+	if _, err := Load(dir, "tinio.yaml", []byte("database:\n  url: postgres://elsewhere\n")); err == nil {
 		t.Error("work set the database; want an error")
 	}
 }

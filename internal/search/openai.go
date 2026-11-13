@@ -11,8 +11,8 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 
-	"github.com/Grandbusta/minime/internal/pricing"
-	"github.com/Grandbusta/minime/internal/providers/openaiclient"
+	"github.com/Grandbusta/tinio/internal/pricing"
+	"github.com/Grandbusta/tinio/internal/providers/openaiclient"
 )
 
 type OpenAI struct {

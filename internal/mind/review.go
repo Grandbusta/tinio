@@ -11,11 +11,11 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/action"
-	"github.com/Grandbusta/minime/internal/character"
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/providers/system2"
+	"github.com/Grandbusta/tinio/internal/action"
+	"github.com/Grandbusta/tinio/internal/character"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
 )
 
 // The weekly review: it checks its goals and skills, sets new goals for its
@@ -140,7 +140,7 @@ func (m *Mind) reviewTime(now time.Time) time.Time {
 }
 
 // Review looks back at the week, now: it is what the weekly review does, and
-// `minime review` runs it on demand.
+// `tinio review` runs it on demand.
 func (m *Mind) Review(ctx context.Context, now time.Time) error {
 	m.bornWanting(ctx) // so a review run on demand has its dreams and skills even before the agent first started
 	start := time.Now()

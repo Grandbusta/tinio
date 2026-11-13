@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Grandbusta/minime/internal/config"
+	"github.com/Grandbusta/tinio/internal/config"
 )
 
 func TestNewAbilities(t *testing.T) {

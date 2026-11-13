@@ -1,6 +1,6 @@
 package pdf
 
-import "github.com/Grandbusta/minime/internal/memory"
+import "github.com/Grandbusta/tinio/internal/memory"
 
 type Format struct{}
 

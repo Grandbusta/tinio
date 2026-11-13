@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Grandbusta/minime/internal/character"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/providers/system2"
-	"github.com/Grandbusta/minime/internal/render"
-	"github.com/Grandbusta/minime/internal/render/calendar"
-	"github.com/Grandbusta/minime/internal/render/pdf"
-	"github.com/Grandbusta/minime/internal/render/table"
+	"github.com/Grandbusta/tinio/internal/character"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
+	"github.com/Grandbusta/tinio/internal/render"
+	"github.com/Grandbusta/tinio/internal/render/calendar"
+	"github.com/Grandbusta/tinio/internal/render/pdf"
+	"github.com/Grandbusta/tinio/internal/render/table"
 )
 
 const score = `{"bpm":82,"beats_per_bar":4,"bars":1,"tracks":[{"name":"Drums","instrument":"drums","notes":[

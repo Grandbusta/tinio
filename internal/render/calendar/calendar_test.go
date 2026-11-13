@@ -9,7 +9,7 @@ import (
 	ics "github.com/arran4/golang-ical"
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 func TestRender(t *testing.T) {
@@ -35,7 +35,7 @@ func TestRender(t *testing.T) {
 	text := string(data)
 	for _, want := range []string{"DTSTART:20261102T100000", "DTEND:20261102T103000", "LOCATION:Lekki",
 		"DTSTART:20261103T090000", "DTEND:20261103T100000", // a bad end: an hour
-		"DTSTART;VALUE=DATE:20261104", "DTEND;VALUE=DATE:20261105", "UID:" + w.ID.String() + "-0@minime"} {
+		"DTSTART;VALUE=DATE:20261104", "DTEND;VALUE=DATE:20261105", "UID:" + w.ID.String() + "-0@tinio"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("calendar lacks %s:\n%s", want, text)
 		}

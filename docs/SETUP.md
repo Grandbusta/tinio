@@ -1,6 +1,6 @@
 # Setup and configuration
 
-Everything about getting an agent running, and every setting there is. For what minime is,
+Everything about getting an agent running, and every setting there is. For what Tinio is,
 see the [README](../README.md); for working with them day to day, [GUIDE.md](GUIDE.md); for how it works inside,
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -11,7 +11,7 @@ see the [README](../README.md); for working with them day to day, [GUIDE.md](GUI
 - [character.yaml: who they are](#characteryaml-who-they-are)
 - [work.yaml: how they work](#workyaml-how-they-work)
 - [judgment.yaml: how you decide](#judgmentyaml-how-you-decide)
-- [configs/minime.yaml: the machinery](#configsminimeyaml-the-machinery)
+- [configs/tinio.yaml: the machinery](#configstinioyaml-the-machinery)
 - [.env, secrets and the environment](#env-secrets-and-the-environment)
 - [Making your own character](#making-your-own-character)
 - [Developing](#developing)
@@ -19,21 +19,21 @@ see the [README](../README.md); for working with them day to day, [GUIDE.md](GUI
 ## Quick start
 
 You need a Telegram account and an OpenAI API key with access to the Decisions API. A
-Postgres database helps, but `minime new` can start one for you with Docker.
+Postgres database helps, but `tinio new` can start one for you with Docker.
 
-minime is one file: download it for your system from the
-[latest release](https://github.com/Grandbusta/minime/releases/latest), or build it with
+Tinio is one file: download it for your system from the
+[latest release](https://github.com/Grandbusta/tinio/releases/latest), or build it with
 Go 1.27+:
 
 ```bash
-go install github.com/Grandbusta/minime/cmd/minime@latest
+go install github.com/Grandbusta/tinio/cmd/tinio@latest
 ```
 
 Everything every agent shares (the config, prompts, question sets and characters) is built into
 it. Then, in a folder for them (their `.env` is written there):
 
 ```bash
-minime new
+tinio new
 ```
 
 It asks, then raises them in their own database and starts them:
@@ -49,10 +49,10 @@ It asks, then raises them in their own database and starts them:
 
 **An agent is their database.** Their character, how they work, your judgment, their skills
 and their keys (bot token, OpenAI key, console token) are all in it, the keys sealed. `.env`
-only has two lines: `DATABASE_URL`, where they live, and `MINIME_KEY`, which opens their
+only has two lines: `DATABASE_URL`, where they live, and `TINIO_KEY`, which opens their
 keys. Keep both safe and together: a copy of the database alone holds no working key.
 
-After that, `minime` starts them again. Raising a new agent when one
+After that, `tinio` starts them again. Raising a new agent when one
 already lives in the database `.env` points to leaves them as they are and moves their
 `.env` to `.env.<name>`: `cp .env.<name> .env` brings them back.
 
@@ -62,7 +62,7 @@ bot, so a second copy on the same bot gets `409 Conflict` errors.
 
 ## Setting up by hand
 
-Without `minime new`: put `DATABASE_URL` and `MINIME_KEY` (`openssl rand -hex 32`) in
+Without `tinio new`: put `DATABASE_URL` and `TINIO_KEY` (`openssl rand -hex 32`) in
 `.env`, then give them their keys and a character.
 
 1. **Create a bot.** Message [@BotFather](https://t.me/BotFather), send `/newbot`, and copy
@@ -73,7 +73,7 @@ Without `minime new`: put `DATABASE_URL` and `MINIME_KEY` (`openssl rand -hex 32
    the value without showing it:
 
    ```bash
-   minime secret set TELEGRAM_BOT_TOKEN
+   tinio secret set TELEGRAM_BOT_TOKEN
    ```
 
    and the same for `TELEGRAM_OWNER_ID`, `OPENAI_API_KEY` and `OPENAI_MODEL`.
@@ -83,16 +83,16 @@ Without `minime new`: put `DATABASE_URL` and `MINIME_KEY` (`openssl rand -hex 32
    `character.yaml`, `work.yaml`, `judgment.yaml` and `skills/` go into their database:
 
    ```bash
-   minime agent import mine/
+   tinio agent import mine/
    ```
 
 4. **Start them**, from the folder with their `.env`:
 
    ```bash
-   minime
+   tinio
    ```
 
-   You'll see `minime awake`.
+   You'll see `tinio awake`.
 5. **Talk to them** on Telegram, open the console at
    [http://127.0.0.1:8090/](http://127.0.0.1:8090/) and their profile page at
    [http://127.0.0.1:8080/](http://127.0.0.1:8080/).
@@ -100,14 +100,14 @@ Without `minime new`: put `DATABASE_URL` and `MINIME_KEY` (`openssl rand -hex 32
 ## Running with Docker
 
 One agent per container. Each release publishes an image for amd64 and arm64,
-`ghcr.io/grandbusta/minime`; the agent is their database, reached with the two lines in
+`ghcr.io/grandbusta/tinio`; the agent is their database, reached with the two lines in
 their `.env`, so nothing about them is in the image.
 
 ```bash
-docker run -d --name daniel --restart always --env-file .env -p 127.0.0.1:8090:8090 -p 8080:8080 ghcr.io/grandbusta/minime
+docker run -d --name daniel --restart always --env-file .env -p 127.0.0.1:8090:8090 -p 8080:8080 ghcr.io/grandbusta/tinio
 ```
 
-To build it yourself, from the source: `docker build -f deploy/Dockerfile -t minime .`
+To build it yourself, from the source: `docker build -f deploy/Dockerfile -t tinio .`
 
 ```bash
 docker logs -f daniel
@@ -116,34 +116,34 @@ docker logs -f daniel
 **The console needs a token in a container.** It shows everything about them (memory,
 your conversations, your judgment) and can change some of it. On your own machine it
 listens on `127.0.0.1`, which nothing else can reach. Inside a container it has to listen
-on all addresses (`MINIME_CONSOLE_ADDR`) so `-p` can reach it, and it can't tell whether
+on all addresses (`TINIO_CONSOLE_ADDR`) so `-p` can reach it, and it can't tell whether
 you published it as `-p 127.0.0.1:8090:8090` (only this machine) or `-p 8090:8090` (anyone
-who can reach it), so it won't start without a console token (16+ characters; `minime new` makes one, and
-`minime secret list` shows its start). Open it once as `http://localhost:8090/?token=<token>`
+who can reach it), so it won't start without a console token (16+ characters; `tinio new` makes one, and
+`tinio secret list` shows its start). Open it once as `http://localhost:8090/?token=<token>`
 and the browser remembers it. On a Linux server you can skip the token with
-`--network host` and `-e MINIME_CONSOLE_ADDR=127.0.0.1:8090` (instead of `-p`).
+`--network host` and `-e TINIO_CONSOLE_ADDR=127.0.0.1:8090` (instead of `-p`).
 
 **The database** comes from `DATABASE_URL`, as without Docker. Where it points depends on
 where Postgres runs:
 
-- **A managed Postgres:** as is, e.g. `postgres://user:pass@host:5432/minime?sslmode=require`.
+- **A managed Postgres:** as is, e.g. `postgres://user:pass@host:5432/tinio?sslmode=require`.
 - **Postgres on the same machine, outside Docker:** inside a container `localhost` is the
   container itself, so use `host.docker.internal`, e.g.
-  `postgres://postgres:secret@host.docker.internal:5432/minime?sslmode=disable`. Docker
+  `postgres://postgres:secret@host.docker.internal:5432/tinio?sslmode=disable`. Docker
   Desktop provides that name; on Linux add `--add-host=host.docker.internal:host-gateway`.
 - **Postgres in a container too:** put both on one network and use the database
   container's name as the host:
 
   ```bash
-  docker network create minime
+  docker network create tinio
   ```
 
   ```bash
-  docker run -d --name minime-db --network minime --restart always -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=minime -v minime-db:/var/lib/postgresql/data postgres:16-alpine
+  docker run -d --name tinio-db --network tinio --restart always -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=tinio -v tinio-db:/var/lib/postgresql/data postgres:16-alpine
   ```
 
-  Then set `DATABASE_URL=postgres://postgres:secret@minime-db:5432/minime?sslmode=disable`
-  and add `--network minime` to the `docker run` for minime. The `minime-db` volume keeps
+  Then set `DATABASE_URL=postgres://postgres:secret@tinio-db:5432/tinio?sslmode=disable`
+  and add `--network tinio` to the `docker run` for Tinio. The `tinio-db` volume keeps
   their memory when the container is replaced.
 
 ## The files
@@ -157,27 +157,27 @@ An agent has three sections, kept in their database as YAML. Each character in
 | [work](#workyaml-how-they-work) | How they work: their pace, their days, check-ins, abilities, budget, tools, what they may do without asking you, and how often they ask what you'd choose. |
 | [judgment](#judgmentyaml-how-you-decide) | How you decide (optional): your priorities, boundaries, principles and past decisions. |
 
-Change them with `minime agent`. Every change is checked the way it is when they start, and
+Change them with `tinio agent`. Every change is checked the way it is when they start, and
 kept as a new version, so you can go back:
 
 | Command | What it does |
 |---|---|
-| `minime agent edit <section>` | Opens it in `$EDITOR`; saved only if it checks out. |
-| `minime agent export <section>` | Prints it. |
-| `minime agent export <folder>` | Writes all three and their skills to a new folder, laid out like a character in `characters/`. Never their keys. Files from before v0.4.0 (`life.yaml`, `living.yaml`) still import. |
-| `minime agent import <file\|folder>` | Takes a `character.yaml`, `work.yaml` or `judgment.yaml`, or a folder of them (with `skills/`). |
-| `minime agent history <section>` | Its versions, newest (in use) first. |
-| `minime agent rollback <section> <version>` | Makes an earlier version the one in use. |
+| `tinio agent edit <section>` | Opens it in `$EDITOR`; saved only if it checks out. |
+| `tinio agent export <section>` | Prints it. |
+| `tinio agent export <folder>` | Writes all three and their skills to a new folder, laid out like a character in `characters/`. Never their keys. Files from before v0.4.0 (`life.yaml`, `living.yaml`) still import. |
+| `tinio agent import <file\|folder>` | Takes a `character.yaml`, `work.yaml` or `judgment.yaml`, or a folder of them (with `skills/`). |
+| `tinio agent history <section>` | Its versions, newest (in use) first. |
+| `tinio agent rollback <section> <version>` | Makes an earlier version the one in use. |
 
 Changes apply the next time they start.
 
-The rest is the same for everyone, and built into minime. A file or folder at the same
+The rest is the same for everyone, and built into Tinio. A file or folder at the same
 path in the folder where you run it is used instead, so you can change one without a
 rebuild (copy it from the source first); `-config` points at another config:
 
 | File | What's in it |
 |---|---|
-| [configs/minime.yaml](#configsminimeyaml-the-machinery) | Models, Telegram, prompts, addresses, pricing. |
+| [configs/tinio.yaml](#configstinioyaml-the-machinery) | Models, Telegram, prompts, addresses, pricing. |
 | [.env](#env-secrets-and-the-environment) | Where their database is, and the key to their secrets. Never committed. |
 | [prompts/](../prompts), [decisions/](../decisions) | System 2's instructions and System 1's questions, written for anyone and filled in from the agent. You shouldn't need to edit them. |
 
@@ -260,7 +260,7 @@ know unless they get real feedback.
 | `read_page` | Reads a page one of their own searches found. |
 
 A new ability is code: a package under [internal/ability](../internal/ability) and one line
-in `abilityMakers` in [cmd/minime/main.go](../cmd/minime/main.go).
+in `abilityMakers` in [cmd/tinio/main.go](../cmd/tinio/main.go).
 
 ### Speaking first
 
@@ -334,7 +334,7 @@ cases:
     reason: So we can build on it step by step.
 ```
 
-## configs/minime.yaml: the machinery
+## configs/tinio.yaml: the machinery
 
 The same for everyone; `${VAR}` is filled from the environment, or else from the agent's
 secrets.
@@ -374,10 +374,10 @@ its frontmatter, then the instructions) and any files it points to. Each agent h
 own, in their database:
 
 ```bash
-minime skill add path/to/cold-email
+tinio skill add path/to/cold-email
 ```
 
-`minime skill list` shows theirs and `minime skill remove <name>` takes one away; changes
+`tinio skill list` shows theirs and `tinio skill remove <name>` takes one away; changes
 apply when they next start. Adding a skill with a name they have replaces it. Every file in
 the folder is kept, up to 100 files, 2 MB each and 10 MB in all.
 
@@ -428,24 +428,24 @@ shown in the console and left out; they start without it. `use_tools: forbid` in
 `autonomy.classes` stops them using any.
 
 Providers are switchable: System 1, System 2, embeddings and search each pick theirs here.
-A new one is a package and a `case` in [cmd/minime/main.go](../cmd/minime/main.go).
+A new one is a package and a `case` in [cmd/tinio/main.go](../cmd/tinio/main.go).
 
 ## .env, secrets and the environment
 
-`.env` says where the agent is; everything else about them is in their database. minime
+`.env` says where the agent is; everything else about them is in their database. Tinio
 reads `.env` from the repository root itself; anything already set in the environment (or
 passed with Docker's `--env-file`) wins. Values with characters like `$`, `&` or `#` go in
-single quotes. `minime new` writes it for you.
+single quotes. `tinio new` writes it for you.
 
 | Variable | What it is |
 |---|---|
-| `DATABASE_URL` | Their Postgres, password included, e.g. `postgres://user:password@host:5432/minime?sslmode=require`. One database per agent. |
-| `MINIME_KEY` | Opens their secrets: 64 hex characters (`openssl rand -hex 32`). Keep it safe, and with `DATABASE_URL`. |
-| `MINIME_CONSOLE_ADDR` | Overrides `console.addr` (the Docker image sets `:8090`). |
-| `MINIME_PROFILE_ADDR` | Overrides `portfolio.addr` (the Docker image sets `:8080`). |
-| `MINIME_TEST_DATABASE_URL` | Only for the store tests: a disposable database. |
+| `DATABASE_URL` | Their Postgres, password included, e.g. `postgres://user:password@host:5432/tinio?sslmode=require`. One database per agent. |
+| `TINIO_KEY` | Opens their secrets: 64 hex characters (`openssl rand -hex 32`). Keep it safe, and with `DATABASE_URL`. |
+| `TINIO_CONSOLE_ADDR` | Overrides `console.addr` (the Docker image sets `:8090`). |
+| `TINIO_PROFILE_ADDR` | Overrides `portfolio.addr` (the Docker image sets `:8080`). |
+| `TINIO_TEST_DATABASE_URL` | Only for the store tests: a disposable database. |
 
-Their secrets are in their database, each sealed with `MINIME_KEY` (AES-GCM) before it's
+Their secrets are in their database, each sealed with `TINIO_KEY` (AES-GCM) before it's
 stored, so a copy of the database, a backup or a dump, holds nothing that works without
 the key. They're never shown to System 2, written to logs, or exported, and the console
 only shows that one is set.
@@ -461,13 +461,13 @@ only shows that one is set.
 
 | Command | What it does |
 |---|---|
-| `minime secret list` | Each one and whether it's set (`sk-…a1b2`), never enough to use it. |
-| `minime secret set <NAME>` | Asks for the value without showing it, or reads it from a pipe. |
-| `minime secret unset <NAME>` | Removes it. |
-| `minime secret rekey` | Seals them all with a new key, and puts it in `.env` (or shows it once, for wherever they run). The old key opens nothing after. |
+| `tinio secret list` | Each one and whether it's set (`sk-…a1b2`), never enough to use it. |
+| `tinio secret set <NAME>` | Asks for the value without showing it, or reads it from a pipe. |
+| `tinio secret unset <NAME>` | Removes it. |
+| `tinio secret rekey` | Seals them all with a new key, and puts it in `.env` (or shows it once, for wherever they run). The old key opens nothing after. |
 
 A secret set in the environment too wins over the stored one, so a container or CI can
-override one without touching the database. Lose `MINIME_KEY` and only the secrets are
+override one without touching the database. Lose `TINIO_KEY` and only the secrets are
 gone, not the agent: set them again.
 
 ## Checking and backing up
@@ -475,54 +475,54 @@ gone, not the agent: set them again.
 When something's wrong, start here:
 
 ```bash
-minime doctor
+tinio doctor
 ```
 
 It checks everything they need to run, one line each, and goes on past a problem where it
-can: the database, that `MINIME_KEY` opens their secrets, the config with its prompts and
+can: the database, that `TINIO_KEY` opens their secrets, the config with its prompts and
 question sets, that their OpenAI key reaches each model, the bot token, that each owner
 has pressed Start in the bot (so it can message you), and each tool server. It changes
 nothing but bringing the database up to date, and exits with an error if anything is
-wrong. In Docker: `docker exec daniel /minime doctor`.
+wrong. In Docker: `docker exec daniel /tinio doctor`.
 
 An agent is their database, so a backup is everything in it:
 
 ```bash
-minime backup
+tinio backup
 ```
 
-It writes `minime-<name>-<date>.zip` here (or the file you name), readable only by you,
+It writes `tinio-<name>-<date>.zip` here (or the file you name), readable only by you,
 as they are at one moment, so they can keep running while it's made. Their secrets are
-in it sealed: keep `MINIME_KEY` safe too, and apart from the backup, or they can't be
+in it sealed: keep `TINIO_KEY` safe too, and apart from the backup, or they can't be
 opened. Without the key a backup still brings back everything but the secrets.
 
 To bring them back, make a new, empty database, point `DATABASE_URL` at it and:
 
 ```bash
-minime restore minime-<name>-<date>.zip
+tinio restore tinio-<name>-<date>.zip
 ```
 
 It only restores into a database with nothing in it, so it never mixes two people or
-writes over anyone. A backup from an older minime is brought up to date after it's
-loaded; one from a newer minime needs that one. Then run `minime doctor` with the
-`MINIME_KEY` they had.
+writes over anyone. A backup from an older Tinio is brought up to date after it's
+loaded; one from a newer Tinio needs that one. Then run `tinio doctor` with the
+`TINIO_KEY` they had.
 
 ## Making your own character
 
 Each character in [characters](../characters) is a folder with `template.yaml` (who they are in a line,
 and who you may be to them) and the three files, with `{owner}`, `{relation}`, `{account}`
-and `{circle}` where you go. `minime new` fills them in. To do it by hand, copy the three
+and `{circle}` where you go. `tinio new` fills them in. To do it by hand, copy the three
 files to a folder, put in your name, who you are to them (one of the template's
 `relations`), your account (`telegram:<your user id>`) and the circle you're from
-(`family`; `friend` for a friend; `school` for a mentor), and `minime agent import` it.
-After that it's their character: `minime agent edit character` as you like.
+(`family`; `friend` for a friend; `school` for a mentor), and `tinio agent import` it.
+After that it's their character: `tinio agent edit character` as you like.
 
 To write a new character, add a folder to `characters/` the same way. The tests check that
 every character loads for every relation it allows.
 
 ## Developing
 
-From the source, `go run ./cmd/minime` is `minime`, and reads the shared files from the
+From the source, `go run ./cmd/tinio` is `tinio`, and reads the shared files from the
 checkout, so changes to a prompt or the config apply without a rebuild.
 
 ```bash
@@ -533,13 +533,13 @@ A tag like `v0.3.0` runs the release workflow: binaries for Linux, macOS and Win
 draft release, and the image on `ghcr.io` as `:v0.3.0`. Write the release's notes and
 publish it: only then does `:latest` move to it (a pre-release leaves it where it was).
 
-The store tests run only when `MINIME_TEST_DATABASE_URL` points at a disposable database:
+The store tests run only when `TINIO_TEST_DATABASE_URL` points at a disposable database:
 they write test rows, so never point it at a real one.
 
 ```bash
-docker run -d --rm --name minime-test-pg -e POSTGRES_PASSWORD=test -e POSTGRES_DB=minime_test -p 55432:5432 postgres:16-alpine
+docker run -d --rm --name tinio-test-pg -e POSTGRES_PASSWORD=test -e POSTGRES_DB=tinio_test -p 55432:5432 postgres:16-alpine
 ```
 
 ```bash
-MINIME_TEST_DATABASE_URL='postgres://postgres:test@localhost:55432/minime_test?sslmode=disable' go test ./...
+TINIO_TEST_DATABASE_URL='postgres://postgres:test@localhost:55432/tinio_test?sslmode=disable' go test ./...
 ```

@@ -8,9 +8,9 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/providers/embed"
-	"github.com/Grandbusta/minime/internal/providers/system2"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/providers/embed"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
 )
 
 // wordEmbedder embeds a text as how often it mentions each of a few words,

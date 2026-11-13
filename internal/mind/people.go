@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Grandbusta/minime/internal/character"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/perception"
-	"github.com/Grandbusta/minime/internal/providers/system1"
+	"github.com/Grandbusta/tinio/internal/character"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/perception"
+	"github.com/Grandbusta/tinio/internal/providers/system1"
 )
 
 // classifyRelation is "" if the person_circle set is not configured.

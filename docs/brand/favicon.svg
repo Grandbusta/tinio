@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="Tinio">
+  <title>Tinio</title>
+  <style>path{fill:#0f4b92}@media (prefers-color-scheme:dark){path{fill:#a9cdff}}</style>
+  <path fill-rule="evenodd" d="M11.5 0 Q12 0 12 0.5 L12 2 L13.5 2 Q14 2 14 2.5 L14 9.5 Q14 10 13.5 10 L12 10 L12 12 L15.5 12 Q16 12 16 12.5 L16 15.5 Q16 16 15.5 16 L0.5 16 Q0 16 0 15.5 L0 12.5 Q0 12 0.5 12 L4 12 L4 10 L2.5 10 Q2 10 2 9.5 L2 2.5 Q2 2 2.5 2 L4 2 L4 0.5 Q4 0 4.5 0 Z M12 4 L10 4 L10 6 L12 6 Z M4 4 L4 6 L6 6 L6 4 Z"/>
+</svg>

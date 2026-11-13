@@ -1,7 +1,7 @@
-// Package setup is `minime new`: it raises an agent from one of the
+// Package setup is `tinio new`: it raises an agent from one of the
 // characters in characters/, in their own database. Nothing is written until every answer is in;
 // then .env holds only where they live (DATABASE_URL) and the key to their
-// secrets (MINIME_KEY).
+// secrets (TINIO_KEY).
 package setup
 
 import (
@@ -19,8 +19,8 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"github.com/Grandbusta/minime/internal/character"
-	"github.com/Grandbusta/minime/internal/secret"
+	"github.com/Grandbusta/tinio/internal/character"
+	"github.com/Grandbusta/tinio/internal/secret"
 )
 
 type BotName func(ctx context.Context, token string) (string, error)

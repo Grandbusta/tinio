@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Grandbusta/minime/internal/agentskill"
+	"github.com/Grandbusta/tinio/internal/agentskill"
 )
 
 // Skills: know-how its owner gave it (Agent Skills). The one that fits

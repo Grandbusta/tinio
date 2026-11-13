@@ -13,12 +13,12 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: minime_test
+          POSTGRES_DB: tinio_test
         ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      MINIME_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/minime_test?sslmode=disable
+      TINIO_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/tinio_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -27,4 +27,4 @@ jobs:
       - run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
       - run: go test ./...
-      - run: docker build -f deploy/Dockerfile -t minime .
+      - run: docker build -f deploy/Dockerfile -t tinio .

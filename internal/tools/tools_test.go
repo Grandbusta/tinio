@@ -9,9 +9,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/Grandbusta/minime/internal/ability"
-	"github.com/Grandbusta/minime/internal/config"
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/ability"
+	"github.com/Grandbusta/tinio/internal/config"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 type fakeStore struct{ logged []string }

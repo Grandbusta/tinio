@@ -15,7 +15,7 @@ import (
 
 	"github.com/xuri/excelize/v2"
 
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 type Table struct {

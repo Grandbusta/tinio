@@ -12,13 +12,13 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 // newDatabase is a new, empty database beside the test one, dropped after.
 func newDatabase(t *testing.T, test *Store) string {
 	t.Helper()
-	name := "minime_" + strings.ToLower(ulid.Make().String())
+	name := "tinio_" + strings.ToLower(ulid.Make().String())
 	if _, err := test.pool.Exec(context.Background(), "CREATE DATABASE "+name); err != nil {
 		t.Fatal(err)
 	}

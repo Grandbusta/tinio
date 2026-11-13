@@ -2,13 +2,13 @@ package mind
 
 import (
 	"context"
-	"github.com/Grandbusta/minime/internal/providers/system2"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
 	"strings"
 	"testing"
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 const planJSON = `{"stages":[

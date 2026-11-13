@@ -10,10 +10,10 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/decision/questions"
-	"github.com/Grandbusta/minime/internal/providers/system1"
-	"github.com/Grandbusta/minime/internal/store"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/decision/questions"
+	"github.com/Grandbusta/tinio/internal/providers/system1"
+	"github.com/Grandbusta/tinio/internal/store"
 )
 
 type Store interface {

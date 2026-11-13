@@ -1,11 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="minime">
-  <title>minime</title>
-  <path d="M19 116 Q19 79 60 79 Q101 79 101 116 Z" fill="#0e7c4a"/>
-  <circle cx="60" cy="50" r="28" fill="#2fcb6b"/>
-  <path d="M57.5 23 C52 12 60.5 6 66.5 9 C72.5 12 70.5 20 63.5 19" fill="none" stroke="#2fcb6b" stroke-width="5" stroke-linecap="round"/>
-  <circle cx="50.5" cy="50" r="3.6" fill="#0b1f14"/>
-  <circle cx="69.5" cy="50" r="3.6" fill="#0b1f14"/>
-  <circle cx="44.5" cy="58.5" r="3.4" fill="#b6f5c9"/>
-  <circle cx="75.5" cy="58.5" r="3.4" fill="#b6f5c9"/>
-  <path d="M53.5 60 Q60 66 66.5 60" fill="none" stroke="#0b1f14" stroke-width="3" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="Tinio">
+  <title>Tinio</title>
+  <style>path{fill:#0f4b92}@media (prefers-color-scheme:dark){path{fill:#a9cdff}}</style>
+  <path fill-rule="evenodd" d="M11.5 0 Q12 0 12 0.5 L12 2 L13.5 2 Q14 2 14 2.5 L14 9.5 Q14 10 13.5 10 L12 10 L12 12 L15.5 12 Q16 12 16 12.5 L16 15.5 Q16 16 15.5 16 L0.5 16 Q0 16 0 15.5 L0 12.5 Q0 12 0.5 12 L4 12 L4 10 L2.5 10 Q2 10 2 9.5 L2 2.5 Q2 2 2.5 2 L4 2 L4 0.5 Q4 0 4.5 0 Z M12 4 L10 4 L10 6 L12 6 Z M4 4 L4 6 L6 6 L6 4 Z"/>
 </svg>

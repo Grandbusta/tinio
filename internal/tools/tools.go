@@ -26,10 +26,10 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/Grandbusta/minime/internal/ability"
-	"github.com/Grandbusta/minime/internal/action"
-	"github.com/Grandbusta/minime/internal/config"
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/ability"
+	"github.com/Grandbusta/tinio/internal/action"
+	"github.com/Grandbusta/tinio/internal/config"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 const (
@@ -55,7 +55,7 @@ type Server struct {
 	session   *mcp.ClientSession
 }
 
-var impl = &mcp.Implementation{Name: "minime", Version: "1"}
+var impl = &mcp.Implementation{Name: "tinio", Version: "1"}
 
 func (s *Server) connect(ctx context.Context) (*mcp.ClientSession, error) {
 	s.mu.Lock()

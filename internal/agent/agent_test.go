@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/secret"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/secret"
 )
 
 type fakeStore struct {
@@ -108,7 +108,7 @@ func TestTheirFolderMovesIntoTheirDatabaseOnce(t *testing.T) {
 }
 
 func TestSecretNames(t *testing.T) {
-	for _, name := range []string{"DATABASE_URL", "MINIME_KEY", "PATH", "openai_key", "1KEY", ""} {
+	for _, name := range []string{"DATABASE_URL", "TINIO_KEY", "PATH", "openai_key", "1KEY", ""} {
 		if CheckName(name) == nil {
 			t.Errorf("%q allowed", name)
 		}

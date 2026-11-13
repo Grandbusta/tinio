@@ -1,8 +1,8 @@
 # The machinery every person shares. The person themself (their life, how
-# they live, your judgment, their skills) is in their database: see `minime
+# they live, your judgment, their skills) is in their database: see `tinio
 # self`. ${VAR} references are filled in from the environment, and from
 # their secrets in their database where the environment doesn't set them
-# (`minime secret`).
+# (`tinio secret`).
 
 database:
   url: ${DATABASE_URL}

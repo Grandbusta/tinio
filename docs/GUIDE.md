@@ -86,8 +86,8 @@ A tool can also be watched ([SETUP](SETUP.md#tools-mcp-servers)): an inbox, a fo
 feed. When something new turns up they notice it, and tell you if you'd want to know.
 
 ```bash
-minime day                    # today's plan and what came of it
-minime day -date 2026-10-29   # another day
+tinio day                    # today's plan and what came of it
+tinio day -date 2026-10-29   # another day
 ```
 
 ## Who they want to become
@@ -115,9 +115,9 @@ minime day -date 2026-10-29   # another day
   pages at a person's pace).
 
 ```bash
-minime growth   # dreams, goals, skills
-minime review   # run the weekly review now
-minime learn    # draft learning plans for skill goals without one
+tinio growth   # dreams, goals, skills
+tinio review   # run the weekly review now
+tinio learn    # draft learning plans for skill goals without one
 ```
 
 ## What they may do on their own
@@ -146,7 +146,7 @@ chat change only in the config.
 
 They learn how you decide, so their choices become more like yours:
 
-- **Your judgment.** Their `judgment` (`minime agent edit judgment`; [example](SETUP.md#judgmentyaml-how-you-decide)) seeds your past decisions
+- **Your judgment.** Their `judgment` (`tinio agent edit judgment`; [example](SETUP.md#judgmentyaml-how-you-decide)) seeds your past decisions
   (the situation, the options, what you chose and **why**) and the principles behind them,
   all as *proposed*. In the console's **Judgment** view you approve, edit or reject each,
   and add reasons. Only what you approve goes into how they plan their day, review their
@@ -203,7 +203,7 @@ replay. It asks System 1 about every labelled message again and shows accuracy t
 now, with a suggested act threshold. It changes nothing; you apply it.
 
 ```bash
-minime replay
+tinio replay
 ```
 
 ## Their profile page
@@ -216,10 +216,10 @@ own page; their journal and anything made for someone are never public. It updat
 00:00 UTC, only when something changed. It says plainly that they're an AI.
 
 ```bash
-minime profile        # update it now (-force to rewrite anyway)
-minime work           # their newest works, and which are public
-minime work hide <id> # take one off the page, for good
-minime work show <id> # put one on it
+tinio profile        # update it now (-force to rewrite anyway)
+tinio work           # their newest works, and which are public
+tinio work hide <id> # take one off the page, for good
+tinio work show <id> # put one on it
 ```
 
 ## The mind console
@@ -245,19 +245,19 @@ It listens on localhost only. To reach it from elsewhere, see
 
 | Command | What it does |
 |---|---|
-| `minime` / `minime run` | Run them |
-| `minime decisions -n 20` | The latest decisions |
-| `minime day [-date YYYY-MM-DD]` | A day's plan and what came of it |
-| `minime work [hide\|show <id>]` | Their works, and which are public |
-| `minime profile [-force]` | Update their profile page now |
-| `minime growth` | Dreams, goals and skills |
-| `minime review` | Run the weekly review now |
-| `minime learn` | Draft learning plans for skill goals without one |
-| `minime replay` | Check System 1's questions against your labels |
-| `minime agent edit\|export\|import\|history\|rollback` | Their character, how they work and your judgment ([SETUP.md](SETUP.md#the-files)) |
-| `minime doctor` | Check everything they need to run, and say what's wrong |
-| `minime backup [file]` | Everything about them, as they are now, to one file |
-| `minime restore <file>` | Bring them back into a new, empty database |
+| `tinio` / `tinio run` | Run them |
+| `tinio decisions -n 20` | The latest decisions |
+| `tinio day [-date YYYY-MM-DD]` | A day's plan and what came of it |
+| `tinio work [hide\|show <id>]` | Their works, and which are public |
+| `tinio profile [-force]` | Update their profile page now |
+| `tinio growth` | Dreams, goals and skills |
+| `tinio review` | Run the weekly review now |
+| `tinio learn` | Draft learning plans for skill goals without one |
+| `tinio replay` | Check System 1's questions against your labels |
+| `tinio agent edit\|export\|import\|history\|rollback` | Their character, how they work and your judgment ([SETUP.md](SETUP.md#the-files)) |
+| `tinio doctor` | Check everything they need to run, and say what's wrong |
+| `tinio backup [file]` | Everything about them, as they are now, to one file |
+| `tinio restore <file>` | Bring them back into a new, empty database |
 
-Run each as `minime <command>`. Logs are JSON on
+Run each as `tinio <command>`. Logs are JSON on
 stdout; set `log.level: debug` for more.

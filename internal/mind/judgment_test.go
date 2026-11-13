@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Grandbusta/minime/internal/character"
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/character"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 func TestJudgment(t *testing.T) {

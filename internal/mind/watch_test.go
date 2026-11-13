@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Grandbusta/minime/internal/action"
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/action"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 // fakeWatcher returns looks in turn, then the last one again.

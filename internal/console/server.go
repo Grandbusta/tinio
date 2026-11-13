@@ -25,9 +25,9 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/render"
-	"github.com/Grandbusta/minime/internal/store"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/render"
+	"github.com/Grandbusta/tinio/internal/store"
 )
 
 //go:embed web
@@ -135,7 +135,7 @@ func (s *Server) Handler() http.Handler {
 	return s.auth(headers(mux))
 }
 
-const cookieName = "minime_console"
+const cookieName = "tinio_console"
 
 // auth lets a request in with the token: as a cookie, a bearer header, or
 // once as ?token= on the page, which sets the cookie.

@@ -16,17 +16,17 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/character"
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/decision/questions"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/perception"
-	"github.com/Grandbusta/minime/internal/providers/system1"
-	"github.com/Grandbusta/minime/internal/providers/system2"
-	"github.com/Grandbusta/minime/internal/render"
-	"github.com/Grandbusta/minime/internal/render/midi"
-	"github.com/Grandbusta/minime/internal/render/pdf"
-	"github.com/Grandbusta/minime/internal/search"
+	"github.com/Grandbusta/tinio/internal/character"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/decision/questions"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/perception"
+	"github.com/Grandbusta/tinio/internal/providers/system1"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
+	"github.com/Grandbusta/tinio/internal/render"
+	"github.com/Grandbusta/tinio/internal/render/midi"
+	"github.com/Grandbusta/tinio/internal/render/pdf"
+	"github.com/Grandbusta/tinio/internal/search"
 )
 
 type fakeStore struct {

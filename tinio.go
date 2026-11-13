@@ -1,7 +1,7 @@
-// Package minime is what every person shares, built into the binary: the
+// Package tinio is what every person shares, built into the binary: the
 // config, the prompts, the question sets, and the characters to start from. So
-// the binary alone, with a person's DATABASE_URL and MINIME_KEY, runs them.
-package minime
+// the binary alone, with a person's DATABASE_URL and TINIO_KEY, runs them.
+package tinio
 
 import (
 	"embed"

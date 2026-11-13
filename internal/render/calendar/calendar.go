@@ -11,7 +11,7 @@ import (
 
 	ics "github.com/arran4/golang-ical"
 
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 type Event struct {
@@ -114,10 +114,10 @@ func (Format) Render(w memory.Work, author string) ([]byte, error) {
 	}
 	cal := ics.NewCalendar()
 	cal.SetMethod(ics.MethodPublish)
-	cal.SetProductId("-//minime//" + author + "//EN")
+	cal.SetProductId("-//tinio//" + author + "//EN")
 	cal.SetName(w.Title)
 	for i, e := range es.Events {
-		ev := cal.AddEvent(fmt.Sprintf("%s-%d@minime", w.ID, i))
+		ev := cal.AddEvent(fmt.Sprintf("%s-%d@tinio", w.ID, i))
 		ev.SetDtStampTime(w.CreatedAt)
 		ev.SetSummary(e.Title)
 		if e.Location != "" {

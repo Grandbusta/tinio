@@ -1,17 +1,17 @@
-// Command minime runs the agent. The person is their database
-// (DATABASE_URL), their secrets opened with MINIME_KEY.
+// Command tinio runs the agent. The person is their database
+// (DATABASE_URL), their secrets opened with TINIO_KEY.
 //
-//	minime new                           start someone, in their own database
-//	minime [run] [-config path]          run the agent
-//	minime decisions [-n 20] [-config path]  show the latest decisions
-//	minime profile [-force] [-config path]   update the profile page now
-//	minime day [-date YYYY-MM-DD] [-config path]  what it planned and made that day
-//	minime agent export|import|edit|history|rollback  their character, work and judgment, as YAML
-//	minime secret list|set|unset|rekey   their keys, sealed in their database
-//	minime skill list|add|remove         the know-how they've been given
-//	minime doctor [-config path]         check everything they need to run
-//	minime backup [file]                 everything about them, to one file
-//	minime restore <file>                into a new, empty database
+//	tinio new                           start someone, in their own database
+//	tinio [run] [-config path]          run the agent
+//	tinio decisions [-n 20] [-config path]  show the latest decisions
+//	tinio profile [-force] [-config path]   update the profile page now
+//	tinio day [-date YYYY-MM-DD] [-config path]  what it planned and made that day
+//	tinio agent export|import|edit|history|rollback  their character, work and judgment, as YAML
+//	tinio secret list|set|unset|rekey   their keys, sealed in their database
+//	tinio skill list|add|remove         the know-how they've been given
+//	tinio doctor [-config path]         check everything they need to run
+//	tinio backup [file]                 everything about them, to one file
+//	tinio restore <file>                into a new, empty database
 package main
 
 import (
@@ -39,47 +39,47 @@ import (
 	"github.com/oklog/ulid/v2"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/Grandbusta/minime"
-	"github.com/Grandbusta/minime/internal/ability"
-	"github.com/Grandbusta/minime/internal/ability/journal"
-	"github.com/Grandbusta/minime/internal/ability/reading"
-	"github.com/Grandbusta/minime/internal/ability/web"
-	"github.com/Grandbusta/minime/internal/agent"
-	"github.com/Grandbusta/minime/internal/agentskill"
-	"github.com/Grandbusta/minime/internal/channel/telegram"
-	"github.com/Grandbusta/minime/internal/character"
-	"github.com/Grandbusta/minime/internal/config"
-	"github.com/Grandbusta/minime/internal/console"
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/decision/questions"
-	"github.com/Grandbusta/minime/internal/library"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/mind"
-	"github.com/Grandbusta/minime/internal/perception"
-	"github.com/Grandbusta/minime/internal/portfolio"
-	"github.com/Grandbusta/minime/internal/pricing"
-	"github.com/Grandbusta/minime/internal/providers/embed"
-	embedopenai "github.com/Grandbusta/minime/internal/providers/embed/openai"
-	"github.com/Grandbusta/minime/internal/providers/system1"
-	s1openai "github.com/Grandbusta/minime/internal/providers/system1/openai"
-	"github.com/Grandbusta/minime/internal/providers/system2"
-	s2openai "github.com/Grandbusta/minime/internal/providers/system2/openai"
-	"github.com/Grandbusta/minime/internal/render"
-	"github.com/Grandbusta/minime/internal/render/archive"
-	"github.com/Grandbusta/minime/internal/render/calendar"
-	"github.com/Grandbusta/minime/internal/render/docx"
-	"github.com/Grandbusta/minime/internal/render/midi"
-	"github.com/Grandbusta/minime/internal/render/pdf"
-	"github.com/Grandbusta/minime/internal/render/table"
-	"github.com/Grandbusta/minime/internal/replay"
-	"github.com/Grandbusta/minime/internal/search"
-	"github.com/Grandbusta/minime/internal/store"
-	"github.com/Grandbusta/minime/internal/tools"
+	"github.com/Grandbusta/tinio"
+	"github.com/Grandbusta/tinio/internal/ability"
+	"github.com/Grandbusta/tinio/internal/ability/journal"
+	"github.com/Grandbusta/tinio/internal/ability/reading"
+	"github.com/Grandbusta/tinio/internal/ability/web"
+	"github.com/Grandbusta/tinio/internal/agent"
+	"github.com/Grandbusta/tinio/internal/agentskill"
+	"github.com/Grandbusta/tinio/internal/channel/telegram"
+	"github.com/Grandbusta/tinio/internal/character"
+	"github.com/Grandbusta/tinio/internal/config"
+	"github.com/Grandbusta/tinio/internal/console"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/decision/questions"
+	"github.com/Grandbusta/tinio/internal/library"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/mind"
+	"github.com/Grandbusta/tinio/internal/perception"
+	"github.com/Grandbusta/tinio/internal/portfolio"
+	"github.com/Grandbusta/tinio/internal/pricing"
+	"github.com/Grandbusta/tinio/internal/providers/embed"
+	embedopenai "github.com/Grandbusta/tinio/internal/providers/embed/openai"
+	"github.com/Grandbusta/tinio/internal/providers/system1"
+	s1openai "github.com/Grandbusta/tinio/internal/providers/system1/openai"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
+	s2openai "github.com/Grandbusta/tinio/internal/providers/system2/openai"
+	"github.com/Grandbusta/tinio/internal/render"
+	"github.com/Grandbusta/tinio/internal/render/archive"
+	"github.com/Grandbusta/tinio/internal/render/calendar"
+	"github.com/Grandbusta/tinio/internal/render/docx"
+	"github.com/Grandbusta/tinio/internal/render/midi"
+	"github.com/Grandbusta/tinio/internal/render/pdf"
+	"github.com/Grandbusta/tinio/internal/render/table"
+	"github.com/Grandbusta/tinio/internal/replay"
+	"github.com/Grandbusta/tinio/internal/search"
+	"github.com/Grandbusta/tinio/internal/store"
+	"github.com/Grandbusta/tinio/internal/tools"
 )
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "minime:", err)
+		fmt.Fprintln(os.Stderr, "tinio:", err)
 		os.Exit(1)
 	}
 }
@@ -90,16 +90,35 @@ func run(args []string) error {
 		cmd, args = args[0], args[1:]
 	}
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
-	cfgPath := fs.String("config", "configs/minime.yaml", "path to the config file")
+	cfgPath := fs.String("config", "configs/tinio.yaml", "path to the config file")
 	limit := fs.Int("n", 20, "decisions: how many to show; replay: how many labelled messages")
 	force := fs.Bool("force", false, "profile: rewrite the page even if nothing changed")
 	date := fs.String("date", "", "day: the day to show, YYYY-MM-DD (default today)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	// DATABASE_URL and MINIME_KEY from .env, unless the environment already has them.
+	// DATABASE_URL and TINIO_KEY from .env, unless the environment already has them.
 	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf(".env: %w", err)
+	}
+	// Before v0.4.0 Tinio was minime. Its names in the environment and its
+	// config path keep working for one release.
+	for _, name := range []string{"KEY", "CONSOLE_ADDR", "PROFILE_ADDR"} {
+		old, ok := os.LookupEnv("MINIME_" + name)
+		if !ok {
+			continue
+		}
+		if _, set := os.LookupEnv("TINIO_" + name); !set {
+			os.Setenv("TINIO_"+name, old)
+			fmt.Fprintf(os.Stderr, "MINIME_%s is TINIO_%s now; the old name stops working in a later release.\n", name, name)
+		}
+		os.Unsetenv("MINIME_" + name)
+	}
+	if _, err := os.Stat(*cfgPath); errors.Is(err, os.ErrNotExist) && *cfgPath == "configs/tinio.yaml" {
+		if _, err := os.Stat("configs/minime.yaml"); err == nil {
+			*cfgPath = "configs/minime.yaml"
+			fmt.Fprintln(os.Stderr, "configs/minime.yaml is configs/tinio.yaml now; the old name stops working in a later release.")
+		}
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -127,7 +146,7 @@ func run(args []string) error {
 	switch cmd {
 	case "agent", "self":
 		if cmd == "self" {
-			fmt.Fprintln(os.Stderr, "`minime self` is `minime agent` now; self stops working in a later release.")
+			fmt.Fprintln(os.Stderr, "`tinio self` is `tinio agent` now; self stops working in a later release.")
 		}
 		return agentCommand(ctx, st, key, *cfgPath, fs.Args(), os.Stdout)
 	case "secret":
@@ -139,7 +158,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := config.Load(minime.Files, *cfgPath, p.Work)
+	cfg, err := config.Load(tinio.Files, *cfgPath, p.Work)
 	if err != nil {
 		return err
 	}
@@ -208,7 +227,7 @@ func runAgent(ctx context.Context, cfg *config.Config, p agent.Agent, st *store.
 	if err != nil {
 		return err
 	}
-	sets, err := questions.LoadDir(minime.Files, cfg.Decision.QuestionSets)
+	sets, err := questions.LoadDir(tinio.Files, cfg.Decision.QuestionSets)
 	if err != nil {
 		return err
 	}
@@ -373,7 +392,7 @@ func runAgent(ctx context.Context, cfg *config.Config, p agent.Agent, st *store.
 		Log:      log.With("component", "mind"),
 	})
 
-	log.Info("minime awake", "name", life.Name, "life_story_lines", len(life.Story), "owners", len(cfg.Telegram.OwnerIDs),
+	log.Info("Tinio awake", "name", life.Name, "life_story_lines", len(life.Story), "owners", len(cfg.Telegram.OwnerIDs),
 		"system1", cfg.Decision.Provider.Provider, "question_set", incoming.Ref(), "follow_up", followUp.Ref(),
 		"life_area", lifeArea.Ref(), "person_circle", personCircle.Ref(), "fact_relevance", factRelevance.Ref(),
 		"open_threads", openThreads.Ref(), "timezone", zone.String(), "check_ins", cfg.Initiative.CheckIns,
@@ -402,7 +421,7 @@ func runAgent(ctx context.Context, cfg *config.Config, p agent.Agent, st *store.
 		})
 	}
 	err = g.Wait()
-	log.Info("minime asleep")
+	log.Info("Tinio asleep")
 	return err
 }
 
@@ -437,7 +456,7 @@ func updateProfile(ctx context.Context, cfg *config.Config, life character.Chara
 	if err != nil {
 		return err
 	}
-	sets, err := questions.LoadDir(minime.Files, cfg.Decision.QuestionSets)
+	sets, err := questions.LoadDir(tinio.Files, cfg.Decision.QuestionSets)
 	if err != nil {
 		return err
 	}
@@ -547,7 +566,7 @@ func runReview(ctx context.Context, cfg *config.Config, life character.Character
 	if err := m.Review(ctx, time.Now()); err != nil {
 		return err
 	}
-	fmt.Println("Reviewed the week. Run `minime growth`, or open the console's Growth view, to see where it stands.")
+	fmt.Println("Reviewed the week. Run `tinio growth`, or open the console's Growth view, to see where it stands.")
 	return nil
 }
 
@@ -608,7 +627,7 @@ func runReplay(ctx context.Context, cfg *config.Config, st *store.Store, n int, 
 	if err != nil {
 		return err
 	}
-	sets, err := questions.LoadDir(minime.Files, cfg.Decision.QuestionSets)
+	sets, err := questions.LoadDir(tinio.Files, cfg.Decision.QuestionSets)
 	if err != nil {
 		return err
 	}
@@ -639,7 +658,7 @@ func replayHint(ctx context.Context, st *store.Store, set questions.Set, log *sl
 		}
 	}
 	if older > 0 {
-		log.Info("labelled messages were read by an older question set; run `minime replay` to check this one",
+		log.Info("labelled messages were read by an older question set; run `tinio replay` to check this one",
 			"set", set.Ref(), "older", older, "labelled", len(examples))
 	}
 }
@@ -669,7 +688,7 @@ func works(ctx context.Context, st worksStore, args []string, n int, out io.Writ
 		return w.Flush()
 	}
 	if len(args) != 2 || (args[0] != "show" && args[0] != "hide") {
-		return errors.New("usage: minime work [show|hide <id>]")
+		return errors.New("usage: tinio work [show|hide <id>]")
 	}
 	id, err := ulid.Parse(args[1])
 	if err != nil {
@@ -784,7 +803,7 @@ func checkLifeAreaSet(s questions.Set) error {
 // loadPrompt's ref is the file name plus a short hash of the text, so every
 // edit shows up as a new version in the decision log.
 func loadPrompt(path string) (mind.Prompt, error) {
-	text, err := fs.ReadFile(minime.Files, path)
+	text, err := fs.ReadFile(tinio.Files, path)
 	if err != nil {
 		return mind.Prompt{}, fmt.Errorf("read prompt: %w", err)
 	}

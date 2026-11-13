@@ -11,19 +11,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Grandbusta/minime"
-	"github.com/Grandbusta/minime/internal/agent"
-	"github.com/Grandbusta/minime/internal/channel/telegram"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/secret"
-	"github.com/Grandbusta/minime/internal/setup"
-	"github.com/Grandbusta/minime/internal/store"
+	"github.com/Grandbusta/tinio"
+	"github.com/Grandbusta/tinio/internal/agent"
+	"github.com/Grandbusta/tinio/internal/channel/telegram"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/secret"
+	"github.com/Grandbusta/tinio/internal/setup"
+	"github.com/Grandbusta/tinio/internal/store"
 )
 
 // newPerson returns whether to run the person now. This process's
 // environment then has the new .env, and nothing from the one before.
 func newPerson(ctx context.Context) (bool, error) {
-	s := &setup.Setup{Ask: setup.Terminal{}, Out: os.Stdout, Files: minime.Files, Characters: "characters", Example: ".env.example", Env: ".env",
+	s := &setup.Setup{Ask: setup.Terminal{}, Out: os.Stdout, Files: tinio.Files, Characters: "characters", Example: ".env.example", Env: ".env",
 		BotName: telegram.BotName, FirstMessage: telegram.FirstMessage, Database: databaseWhose, Save: saveNew}
 	if _, err := exec.LookPath("docker"); err == nil {
 		s.Postgres = dockerPostgres
@@ -43,7 +43,7 @@ func newPerson(ctx context.Context) (bool, error) {
 		os.Setenv(k, v)
 	}
 	if !res.Start {
-		fmt.Printf("\nStart %s whenever you like with: minime\n", res.Name)
+		fmt.Printf("\nStart %s whenever you like with: tinio\n", res.Name)
 	}
 	return res.Start, nil
 }
@@ -87,18 +87,18 @@ func dockerPostgres(ctx context.Context, name string) (string, error) {
 	b := make([]byte, 12)
 	rand.Read(b)
 	password := hex.EncodeToString(b)
-	container := "minime-" + name + "-db"
+	container := "tinio-" + name + "-db"
 	out, err := exec.CommandContext(ctx, "docker", "run", "-d", "--name", container, "--restart", "unless-stopped",
-		"-e", "POSTGRES_PASSWORD="+password, "-e", "POSTGRES_DB=minime", "-v", container+":/var/lib/postgresql/data",
+		"-e", "POSTGRES_PASSWORD="+password, "-e", "POSTGRES_DB=tinio", "-v", container+":/var/lib/postgresql/data",
 		"-p", fmt.Sprintf("127.0.0.1:%d:5432", port), "postgres:16-alpine").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("docker run: %s", strings.TrimSpace(string(out)))
 	}
 	for i := 0; i < 60; i++ {
-		if exec.CommandContext(ctx, "docker", "exec", container, "pg_isready", "-U", "postgres", "-d", "minime").Run() == nil {
+		if exec.CommandContext(ctx, "docker", "exec", container, "pg_isready", "-U", "postgres", "-d", "tinio").Run() == nil {
 			time.Sleep(time.Second) // it restarts once after its first setup
-			if exec.CommandContext(ctx, "docker", "exec", container, "pg_isready", "-U", "postgres", "-d", "minime").Run() == nil {
-				return fmt.Sprintf("postgres://postgres:%s@127.0.0.1:%d/minime?sslmode=disable", password, port), nil
+			if exec.CommandContext(ctx, "docker", "exec", container, "pg_isready", "-U", "postgres", "-d", "tinio").Run() == nil {
+				return fmt.Sprintf("postgres://postgres:%s@127.0.0.1:%d/tinio?sslmode=disable", password, port), nil
 			}
 		}
 		time.Sleep(time.Second)

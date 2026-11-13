@@ -6,7 +6,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/Grandbusta/minime/internal/config"
+	"github.com/Grandbusta/tinio/internal/config"
 )
 
 func TestCharacters(t *testing.T) {
@@ -64,7 +64,7 @@ func TestCharacters(t *testing.T) {
 // work checks a character's work.yaml is read over the config.
 func work(t *testing.T, doc []byte, l Character) {
 	t.Helper()
-	cfg, err := config.Load(fstest.MapFS{"minime.yaml": {Data: []byte("database:\n  url: postgres://x\n")}}, "minime.yaml", doc)
+	cfg, err := config.Load(fstest.MapFS{"tinio.yaml": {Data: []byte("database:\n  url: postgres://x\n")}}, "tinio.yaml", doc)
 	if err != nil {
 		t.Fatalf("%s: %v", l.Name, err)
 	}

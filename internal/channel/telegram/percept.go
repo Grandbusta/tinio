@@ -10,7 +10,7 @@ import (
 	"github.com/go-telegram/bot/models"
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/perception"
+	"github.com/Grandbusta/tinio/internal/perception"
 )
 
 const Source = "telegram"

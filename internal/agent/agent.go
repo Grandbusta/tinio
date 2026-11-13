@@ -1,7 +1,7 @@
 // Package person is someone as their database holds them: their life, how
 // they live, their owner's judgment, their skills and their secrets. Only
-// DATABASE_URL and MINIME_KEY are outside it. Files only come in (minime
-// new, their old self/ folder, minime self import) and go out (export).
+// DATABASE_URL and TINIO_KEY are outside it. Files only come in (tinio
+// new, their old self/ folder, tinio self import) and go out (export).
 package agent
 
 import (
@@ -19,10 +19,10 @@ import (
 	"github.com/oklog/ulid/v2"
 	"gopkg.in/yaml.v3"
 
-	"github.com/Grandbusta/minime/internal/agentskill"
-	"github.com/Grandbusta/minime/internal/character"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/secret"
+	"github.com/Grandbusta/tinio/internal/agentskill"
+	"github.com/Grandbusta/tinio/internal/character"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/secret"
 )
 
 type Store interface {
@@ -32,11 +32,11 @@ type Store interface {
 	AgentSkills(ctx context.Context) ([]memory.AgentSkill, error)
 }
 
-// Known are the secrets every person has: what minime new asks for.
+// Known are the secrets every person has: what tinio new asks for.
 var Known = []string{"TELEGRAM_BOT_TOKEN", "TELEGRAM_OWNER_ID", "OPENAI_API_KEY", "OPENAI_MODEL", "CONSOLE_TOKEN"}
 
 // machine are settings of where they run, not of who they are.
-var machine = []string{"DATABASE_URL", secret.EnvKey, "MINIME_CONSOLE_ADDR", "MINIME_PROFILE_ADDR", "PATH", "HOME"}
+var machine = []string{"DATABASE_URL", secret.EnvKey, "TINIO_CONSOLE_ADDR", "TINIO_PROFILE_ADDR", "PATH", "HOME"}
 
 var secretName = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
@@ -89,7 +89,7 @@ func ReadFolder(dir string) (map[string][]byte, error) {
 	return BySection(files), nil
 }
 
-var ErrNoOne = errors.New("no one lives here yet: start someone with `minime new`")
+var ErrNoOne = errors.New("no one lives here yet: start someone with `tinio new`")
 
 type Agent struct {
 	Life     character.Character // their character

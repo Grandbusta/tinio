@@ -11,17 +11,17 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/perception"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/perception"
 )
 
-// openTestStore runs only when MINIME_TEST_DATABASE_URL points at a disposable database.
+// openTestStore runs only when TINIO_TEST_DATABASE_URL points at a disposable database.
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
-	url := os.Getenv("MINIME_TEST_DATABASE_URL")
+	url := os.Getenv("TINIO_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("MINIME_TEST_DATABASE_URL not set")
+		t.Skip("TINIO_TEST_DATABASE_URL not set")
 	}
 	s, err := Open(context.Background(), url)
 	if err != nil {

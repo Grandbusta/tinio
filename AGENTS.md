@@ -1,13 +1,13 @@
 # AGENTS.md
 
-How to work on minime: what it is, where things are, and the rules every change is
+How to work on Tinio: what it is, where things are, and the rules every change is
 reviewed against. Read this before changing code. For users' docs, see
 [README.md](README.md), [docs/SETUP.md](docs/SETUP.md), [docs/GUIDE.md](docs/GUIDE.md)
 and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## What minime is
+## What Tinio is
 
-minime raises an agent with character: inside, a person with a life of their own (a
+Tinio raises an agent with character: inside, a person with a life of their own (a
 story, a family, dreams), who plans their days, makes things in writing (and music, as
 MIDI), reads, keeps a journal, grows skills from evidence, talks with their owner on
 Telegram, and learns how the owner decides. What reaches other people waits for the
@@ -15,7 +15,7 @@ owner's approval. They always say plainly that they're an AI.
 
 **The words.** What people see and type says *agent* and *character*: "Raise an agent.
 Put it to work." The sections are `character`, `work` and `judgment`; the ready ones are
-in `characters/`; the command is `minime agent`; the packages are `agent` and `character`.
+in `characters/`; the command is `tinio agent`; the packages are `agent` and `character`.
 Only the prompts stay a *person*, and they must: their person framing is what makes the
 character. The mind keeps its own words for how they live (the life loop, `Life` on its
 config). Never call them an "AI
@@ -23,19 +23,20 @@ person", "assistant", "companion" or "clone" in what users read.
 
 It is one Go process: Postgres for memory, OpenAI for the models (System 1, a fast
 decision model that answers typed questions; System 2, a reasoning model that writes),
-Telegram for talking. Always write the name as **minime**, never "mini-me".
+Telegram for talking. Always write the name as **Tinio**, and `tinio` for the command and
+in code. Until v0.4.0 it was minime.
 
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `cmd/minime` | The binary: wiring, `minime new`, and the commands (`day`, `growth`, `work`, `replay`, ...). |
-| `configs/minime.yaml` | The machinery every agent shares: models, prompts, ports. `${VAR}`s come from the environment and the agent's secrets. |
+| `cmd/tinio` | The binary: wiring, `tinio new`, and the commands (`day`, `growth`, `work`, `replay`, ...). |
+| `configs/tinio.yaml` | The machinery every agent shares: models, prompts, ports. `${VAR}`s come from the environment and the agent's secrets. |
 | `characters/<name>/` | The five ready characters: `character.yaml` (who), `work.yaml` (how they work), `judgment.yaml` (how the owner decides). |
 | `prompts/*.md` | Everything System 2 is told, as templates. |
 | `decisions/*.yaml` | System 1's question sets, versioned (`incoming_message@1`). |
 | `docs/` | Users' docs, the brand, screenshots. |
-| `minime.go` | Builds `configs/`, `prompts/`, `decisions/`, `characters/` and `.env.example` into the binary (`minime.Files`); a file on disk at the same path wins. Read them only through it. |
+| `tinio.go` | Builds `configs/`, `prompts/`, `decisions/`, `characters/` and `.env.example` into the binary (`tinio.Files`); a file on disk at the same path wins. Read them only through it. |
 | `deploy/Dockerfile` | One person in one container (no compose). |
 | `.github/workflows/release.yml` | A `v*` tag: binaries on a draft release, the image on `ghcr.io` as that tag; publishing the release moves `:latest` to it. |
 
@@ -55,9 +56,9 @@ Telegram for talking. Always write the name as **minime**, never "mini-me".
 | `agentskill` | Skills in the Agent Skills format (`SKILL.md`), stored in the person's database and given when they fit. |
 | `render` (`pdf`, `docx`, `table`, `calendar`, `midi`, `archive`; `markdown`) | A work made into a file. Each kind is a `render.Format` (a `render.DataFormat` if it's made from data the work carries, like MIDI from a score); a new one is a type plus a line in main. Formats that lay out words read them with `render/markdown`. |
 | `action` | Autonomy: every action is `auto`, `ask` or `forbid`. |
-| `agent` | The agent as their database holds them: loading them, and starting someone (`minime new`). Only `DATABASE_URL` and `MINIME_KEY` are outside it. |
-| `secret` | Sealing their secrets with `MINIME_KEY` (AES-GCM). |
-| `character`, `config`, `setup` | Reading and checking a character and a judgment, the config, and `minime new`. |
+| `agent` | The agent as their database holds them: loading them, and starting someone (`tinio new`). Only `DATABASE_URL` and `TINIO_KEY` are outside it. |
+| `secret` | Sealing their secrets with `TINIO_KEY` (AES-GCM). |
+| `character`, `config`, `setup` | Reading and checking a character and a judgment, the config, and `tinio new`. |
 | `console` | The private mind console (localhost unless a token is set). |
 | `portfolio` | The public profile page they write themselves. |
 | `replay`, `pricing`, `perception` | Replaying labelled reads, model prices, the percept type. |
@@ -89,9 +90,9 @@ The store tests need a disposable Postgres, never a real one. Start a fresh one 
 each run (the tests leave rows behind and expect to be the newest):
 
 ```bash
-docker run -d --rm --name minime-test-pg -e POSTGRES_PASSWORD=test -e POSTGRES_DB=minime_test -p 55432:5432 postgres:16-alpine
-MINIME_TEST_DATABASE_URL='postgres://postgres:test@localhost:55432/minime_test?sslmode=disable' go test -race ./...
-docker rm -f minime-test-pg
+docker run -d --rm --name tinio-test-pg -e POSTGRES_PASSWORD=test -e POSTGRES_DB=tinio_test -p 55432:5432 postgres:16-alpine
+TINIO_TEST_DATABASE_URL='postgres://postgres:test@localhost:55432/tinio_test?sslmode=disable' go test -race ./...
+docker rm -f tinio-test-pg
 ```
 
 `gofmt -l .` must print nothing. CI runs vet, the tests with Postgres, and the Docker build.
@@ -197,7 +198,7 @@ safe for concurrent use; a test of both loops orders every step through channels
 - The console listens on localhost unless a token of 16+ characters is set.
 - Everything particular to a person is in their own database, never in files or the
   code: their character, work, judgment, skills and secrets. Secrets are sealed with
-  `MINIME_KEY` before they're stored, and never reach System 2, a log, an export or the
+  `TINIO_KEY` before they're stored, and never reach System 2, a log, an export or the
   console (which shows only that one is set).
 
 ## Docs to keep in step

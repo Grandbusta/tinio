@@ -11,7 +11,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 type File struct {

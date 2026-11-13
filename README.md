@@ -1,4 +1,4 @@
-# minime: raise an agent, put it to work
+# Tinio: raise an agent, put it to work
 
 **Raise an agent. Put it to work.** An agent with character, not a blank prompt: pick one
 of five ready characters or write your own (a name, a story, a family, dreams), and from
@@ -6,6 +6,8 @@ there they work. They plan their days, make real things, read, keep a journal, a
 better at what they do. They talk with you on Telegram, keep their promises, and ask
 before anything that reaches other people. Over time they learn how you decide, and ask
 less. They always say plainly that they're an AI.
+
+Tinio was called minime until v0.4.0.
 
 ## 💡 What makes them different
 
@@ -25,17 +27,17 @@ less. They always say plainly that they're an AI.
 ## 🌱 Quick start
 
 You need a Telegram bot token from [@BotFather](https://t.me/BotFather), an OpenAI API key,
-and Postgres (or Docker, and it starts one for you). Download minime for your system from
-the [latest release](https://github.com/Grandbusta/minime/releases/latest), or with Go:
+and Postgres (or Docker, and it starts one for you). Download Tinio for your system from
+the [latest release](https://github.com/Grandbusta/tinio/releases/latest), or with Go:
 
 ```bash
-go install github.com/Grandbusta/minime/cmd/minime@latest
+go install github.com/Grandbusta/tinio/cmd/tinio@latest
 ```
 
 Then, in a folder for them (their `.env` is written there):
 
 ```bash
-minime new
+tinio new
 ```
 
 Pick a character, paste your token and key, message your bot once so it knows it's you, and say
@@ -43,10 +45,10 @@ who you are to them. It puts them in their own database (`.env` only says where,
 the key to their secrets) and starts them. After that:
 
 ```bash
-minime
+tinio
 ```
 
-If something's wrong, `minime doctor` says what; `minime backup` keeps everything about
+If something's wrong, `tinio doctor` says what; `tinio backup` keeps everything about
 them in one file. Every setting, Docker, and setting things up by hand: [docs/SETUP.md](docs/SETUP.md).
 
 **What it costs:** only your OpenAI usage. Their own day is capped by `budget_usd` in
@@ -107,7 +109,7 @@ Or write your own: an agent is a folder of three files. `character.yaml` is who 
 
 - [Working with them](docs/GUIDE.md): talking, promises, their day, growth, judgment, the
   console and every command.
-- [Setup and every setting](docs/SETUP.md): `minime new`, Docker, the agent's files, the
+- [Setup and every setting](docs/SETUP.md): `tinio new`, Docker, the agent's files, the
   config, developing.
 - [How it works inside](docs/ARCHITECTURE.md): the two-system mind, memory, the parts and
   how they fit.

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Grandbusta/minime/internal/memory"
+	"github.com/Grandbusta/tinio/internal/memory"
 )
 
 func TestRender(t *testing.T) {

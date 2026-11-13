@@ -18,15 +18,15 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime"
-	"github.com/Grandbusta/minime/internal/agent"
-	"github.com/Grandbusta/minime/internal/agentskill"
-	"github.com/Grandbusta/minime/internal/character"
-	"github.com/Grandbusta/minime/internal/config"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/secret"
-	"github.com/Grandbusta/minime/internal/setup"
-	"github.com/Grandbusta/minime/internal/store"
+	"github.com/Grandbusta/tinio"
+	"github.com/Grandbusta/tinio/internal/agent"
+	"github.com/Grandbusta/tinio/internal/agentskill"
+	"github.com/Grandbusta/tinio/internal/character"
+	"github.com/Grandbusta/tinio/internal/config"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/secret"
+	"github.com/Grandbusta/tinio/internal/setup"
+	"github.com/Grandbusta/tinio/internal/store"
 )
 
 // oldSelf is the person's folder from before they lived in their database:
@@ -55,7 +55,7 @@ func openStore(ctx context.Context) (*store.Store, secret.Key, error) {
 	return st, key, nil
 }
 
-// personKey is MINIME_KEY. Someone moving in from their old folder is given
+// personKey is TINIO_KEY. Someone moving in from their old folder is given
 // one, kept in .env beside DATABASE_URL.
 func personKey(ctx context.Context, st *store.Store) (secret.Key, error) {
 	if v := os.Getenv(secret.EnvKey); v != "" {
@@ -99,7 +99,7 @@ func moveIn(ctx context.Context, st *store.Store, key secret.Key) error {
 	return nil
 }
 
-// agentCommand is `minime agent`: their character, how they work and your
+// agentCommand is `tinio agent`: their character, how they work and your
 // judgment, as YAML.
 func agentCommand(ctx context.Context, st *store.Store, key secret.Key, cfgPath string, args []string, out io.Writer) error {
 	const usage = "want: agent export <section|folder>, import <file|folder>, edit <section>, history <section> or rollback <section> <version> " +
@@ -166,7 +166,7 @@ func agentCommand(ctx context.Context, st *store.Store, key secret.Key, cfgPath 
 		i := slices.IndexFunc(vs, func(v memory.SelfVersion) bool { return v.ID.String() == args[2] })
 		switch {
 		case i < 0:
-			return fmt.Errorf("%s has no version %s (minime agent history %s lists them)", s, args[2], s)
+			return fmt.Errorf("%s has no version %s (tinio agent history %s lists them)", s, args[2], s)
 		case i == 0:
 			return fmt.Errorf("%s is the version in use", args[2])
 		}
@@ -222,7 +222,7 @@ func checkWork(ctx context.Context, st *store.Store, key secret.Key, cfgPath str
 	if _, err := agent.Env(ctx, st, key); err != nil {
 		return err
 	}
-	cfg, err := config.Load(minime.Files, cfgPath, work)
+	cfg, err := config.Load(tinio.Files, cfgPath, work)
 	if err != nil {
 		return err
 	}
@@ -241,7 +241,7 @@ func editSelf(ctx context.Context, st *store.Store, key secret.Key, cfgPath, sec
 	if err != nil {
 		return err
 	}
-	dir, err := os.MkdirTemp("", "minime-")
+	dir, err := os.MkdirTemp("", "tinio-")
 	if err != nil {
 		return err
 	}
@@ -324,7 +324,7 @@ func importFrom(ctx context.Context, st *store.Store, key secret.Key, cfgPath, f
 }
 
 // exportTo writes everything but their secrets into a new folder, laid out
-// so `minime agent import` takes it back.
+// so `tinio agent import` takes it back.
 func exportTo(ctx context.Context, st *store.Store, dir string, out io.Writer) error {
 	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
 		return fmt.Errorf("%s isn't empty", dir)
@@ -362,7 +362,7 @@ func exportTo(ctx context.Context, st *store.Store, dir string, out io.Writer) e
 	return nil
 }
 
-// secretCommand is `minime secret`. Values are only ever written: list shows
+// secretCommand is `tinio secret`. Values are only ever written: list shows
 // enough to tell which one is set, never enough to use it.
 func secretCommand(ctx context.Context, st *store.Store, key secret.Key, args []string, out io.Writer) error {
 	const usage = "want: secret list, set <NAME>, unset <NAME> or rekey"
@@ -483,7 +483,7 @@ func rekey(ctx context.Context, st *store.Store, key secret.Key, out io.Writer) 
 	return nil
 }
 
-// skillCommand is `minime skill`: the know-how they've been given.
+// skillCommand is `tinio skill`: the know-how they've been given.
 func skillCommand(ctx context.Context, st *store.Store, args []string, out io.Writer) error {
 	const usage = "want: skill list, add <folder> or remove <name>"
 	if len(args) == 0 {
@@ -496,7 +496,7 @@ func skillCommand(ctx context.Context, st *store.Store, args []string, out io.Wr
 			return err
 		}
 		if len(skills) == 0 {
-			fmt.Fprintln(out, "No skills yet: minime skill add <folder> gives them one.")
+			fmt.Fprintln(out, "No skills yet: tinio skill add <folder> gives them one.")
 		}
 		for _, s := range skills {
 			fmt.Fprintf(out, "%s (%d files): %s\n", s.Name, len(s.Files), s.Description)

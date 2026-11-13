@@ -15,12 +15,12 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/minime/internal/decision"
-	"github.com/Grandbusta/minime/internal/memory"
-	"github.com/Grandbusta/minime/internal/render"
-	"github.com/Grandbusta/minime/internal/render/midi"
-	"github.com/Grandbusta/minime/internal/render/pdf"
-	"github.com/Grandbusta/minime/internal/store"
+	"github.com/Grandbusta/tinio/internal/decision"
+	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/render"
+	"github.com/Grandbusta/tinio/internal/render/midi"
+	"github.com/Grandbusta/tinio/internal/render/pdf"
+	"github.com/Grandbusta/tinio/internal/store"
 )
 
 // fakeStore implements what the tests reach; anything else panics through the nil Store.

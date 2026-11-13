@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+**minime is Tinio**
+- The command is `tinio`, the repository `github.com/Grandbusta/tinio`, the image
+  `ghcr.io/grandbusta/tinio`, and the config `configs/tinio.yaml`.
+- The settings are `TINIO_KEY`, `TINIO_CONSOLE_ADDR` and `TINIO_PROFILE_ADDR`. The
+  `MINIME_` names, and a `configs/minime.yaml` on disk, still work for this release, with
+  a note each time; rename them before the next one. Their database, secrets and backups
+  don't change.
+- The image under the old name stays at v0.3.1. Pull the new one to upgrade.
+
 ## v0.3.1: doctor, backup and restore
 
 - **`minime doctor`** checks everything a person needs to run, one line each, and says

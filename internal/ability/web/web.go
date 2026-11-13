@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Grandbusta/minime/internal/ability"
-	"github.com/Grandbusta/minime/internal/library"
-	"github.com/Grandbusta/minime/internal/search"
+	"github.com/Grandbusta/tinio/internal/ability"
+	"github.com/Grandbusta/tinio/internal/library"
+	"github.com/Grandbusta/tinio/internal/search"
 )
 
 const (

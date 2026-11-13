@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Grandbusta/minime/internal/ability"
+	"github.com/Grandbusta/tinio/internal/ability"
 )
 
 // Use reads a skill, or one of its files, as material for an activity: its

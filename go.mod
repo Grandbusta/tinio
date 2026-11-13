@@ -1,4 +1,4 @@
-module github.com/Grandbusta/minime
+module github.com/Grandbusta/tinio
 
 go 1.27.2
 

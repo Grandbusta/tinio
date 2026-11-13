@@ -2,53 +2,50 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Minime Banner</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600&family=Inter:wght@500&display=block">
+<title>Tinio Banner</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;800&display=block">
 <style>
   /* Rendered to banner-dark.png and banner-light.png at 1280x358; ?light for the light one.
      ?social renders social.png, GitHub's 1280x640 social preview; ?header renders
-     x-header.png (1500x500, X's header) and ?avatar x-avatar.png (400x400, X's profile picture). */
-  :root { --bg: #0c0f0d; --ink: #f2f5f2; --sub: #9aa69e; --green: #2fcb6b; --glow: rgba(47, 203, 107, .35); }
-  :root.light { --bg: #f5f8f4; --ink: #0b1f14; --sub: #5b6b61; --green: #19a956; --glow: rgba(47, 203, 107, .28); }
+     x-header.png (1500x500, X's header) and ?avatar x-avatar.png (400x400, X's profile picture).
+     The logo is one colour: --brand, for the mark and the word together. */
+  :root { --bg: #0e1114; --brand: #ffffff; --sub: #abb2bb; --accent: #a9cdff; }
+  :root.light { --bg: #f8fafc; --brand: #0f4b92; --sub: #565e69; --accent: #0f4b92; }
   * { margin: 0; box-sizing: border-box; }
   html, body { width: 1280px; height: 358px; overflow: hidden; background: var(--bg); }
-  body { display: flex; align-items: center; gap: 64px; padding: 0 0 0 150px; font-family: Inter, sans-serif; }
-  .mark { width: 250px; height: 250px; filter: drop-shadow(0 0 28px var(--glow)); flex: none; }
-  .word { font: 600 120px/1 Fredoka, sans-serif; letter-spacing: -2px; color: var(--ink); }
-  .word b { color: var(--green); font-weight: 600; }
-  .tag { margin-top: 18px; font: 600 26px/1 Fredoka, sans-serif; letter-spacing: 5px; text-transform: uppercase; color: var(--green); }
-  .sub { margin-top: 18px; font-size: 25px; color: var(--sub); }
+  body { display: flex; align-items: center; gap: 64px; padding: 0 0 0 150px; font-family: Manrope, sans-serif; }
+  .mark { width: 230px; height: 230px; flex: none; color: var(--brand); }
+  .word { font: 800 132px/1 Manrope, sans-serif; letter-spacing: -6px; color: var(--brand); }
+  .tag { margin-top: 18px; font: 800 24px/1 Manrope, sans-serif; letter-spacing: 5px; text-transform: uppercase; color: var(--accent); }
+  .sub { margin-top: 16px; font: 600 26px/1.3 Manrope, sans-serif; color: var(--sub); }
   :root.social, :root.social body { height: 640px; }
-  :root.social body { background: radial-gradient(circle at 26% 50%, var(--glow), transparent 34%), var(--bg); }
   :root.social body { padding-left: 130px; gap: 72px; }
-  :root.social .mark { width: 300px; height: 300px; }
-  :root.social .word { font-size: 136px; }
-  :root.social .tag { margin-top: 24px; font-size: 28px; }
-  :root.social .sub { margin-top: 22px; max-width: 560px; font-size: 27px; line-height: 1.4; }
+  :root.social .mark { width: 280px; height: 280px; }
+  :root.social .word { font-size: 150px; letter-spacing: -7px; }
+  :root.social .tag { margin-top: 24px; font-size: 26px; }
+  :root.social .sub { margin-top: 20px; max-width: 560px; font-size: 28px; line-height: 1.4; }
   /* X's header: the profile picture covers the bottom left, so the words sit right of centre. */
   :root.header, :root.header body { width: 1500px; height: 500px; }
-  :root.header body { justify-content: center; padding: 0 0 0 330px;
-    background: radial-gradient(ellipse at 62% 50%, var(--glow), transparent 45%), var(--bg); }
+  :root.header body { justify-content: center; padding: 0 0 0 330px; }
   :root.header .mark { display: none; }
-  :root.header .word { font-size: 132px; }
-  :root.header .tag { margin-top: 22px; font-size: 28px; }
-  :root.header .sub { margin-top: 20px; font-size: 27px; }
-  /* X's profile picture: shown as a circle, so Mini sits in it, shoulders at the bottom. */
-  :root.avatar, :root.avatar body { width: 400px; height: 400px; }
-  :root.avatar body { padding: 0; justify-content: center; align-items: flex-end;
-    background: radial-gradient(circle at 50% 42%, var(--glow), transparent 62%), var(--bg); }
-  :root.avatar .mark { width: 330px; height: 330px; margin-bottom: -24px; filter: drop-shadow(0 0 22px var(--glow)); }
+  :root.header .word { font-size: 140px; letter-spacing: -6px; }
+  :root.header .tag { margin-top: 22px; font-size: 26px; }
+  :root.header .sub { margin-top: 18px; font-size: 28px; }
+  /* X's profile picture: shown as a circle, so the bust sits in the middle of it, on Ink. */
+  :root.avatar, :root.avatar body { width: 400px; height: 400px; background: #0f4b92; }
+  :root.avatar body { padding: 0; justify-content: center; align-items: center; }
+  :root.avatar .mark { width: 270px; height: 270px; color: #ffffff; }
   :root.avatar .text { display: none; }
 </style>
 <script>if (location.search.includes("light")) document.documentElement.classList.add("light");
 for (const m of ["social", "header", "avatar"]) if (location.search.includes(m)) document.documentElement.classList.add(m);</script>
 </head>
 <body>
-  <img class="mark" src="mark.svg" alt="">
+  <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M43.4 4 Q46 4 46 6.6 L46 11 L50.4 11 Q53 11 53 13.6 L53 36.4 Q53 39 50.4 39 L46 39 L46 46 L57.4 46 Q60 46 60 48.6 L60 57.4 Q60 60 57.4 60 L6.6 60 Q4 60 4 57.4 L4 48.6 Q4 46 6.6 46 L18 46 L18 39 L13.6 39 Q11 39 11 36.4 L11 13.6 Q11 11 13.6 11 L18 11 L18 6.6 Q18 4 20.6 4 Z M46 18 L39 18 L39 25 L46 25 Z M18 18 L18 25 L25 25 L25 18 Z"/></svg>
   <div class="text">
-    <div class="word">mini<b>me</b></div>
-    <div class="tag">Someone, not something</div>
-    <div class="sub">An AI person with a life of their own, who learns how you decide.</div>
+    <div class="word">tinio</div>
+    <div class="tag">Agents with character</div>
+    <div class="sub">Raise an agent. Put it to work.</div>
   </div>
 </body>
 </html>
