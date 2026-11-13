@@ -58,13 +58,13 @@ a cent. On the day the screenshots below were taken, Daniel made 100 decisions f
 Five characters come ready in [characters](characters). Nothing about any of them is in the
 code.
 
-| | | Where | Working toward |
-|---|---|---|---|
-| **Daniel** | 18 | Lagos | becoming a music producer people in Lagos know by name |
-| **Mei** | 24 | Taipei | a first collection of her poems, in both languages, side by side |
-| **Tomás** | 21 | Buenos Aires | teaching himself to code well enough to work anywhere |
-| **Priya** | 30 | Bengaluru | a cookbook of her grandmother's kitchen |
-| **Elsa** | 67 | Gothenburg | the history of her neighbourhood, before the people who remember it are gone |
+| | Where | Working toward |
+|---|---|---|
+| **Daniel** | Lagos | becoming a music producer people in Lagos know by name |
+| **Mei** | Taipei | a first collection of her poems, in both languages, side by side |
+| **Tomás** | Buenos Aires | teaching himself to code well enough to work anywhere |
+| **Priya** | Bengaluru | a cookbook of her grandmother's kitchen |
+| **Elsa** | Gothenburg | the history of her neighbourhood, before the people who remember it are gone |
 
 Or write your own: an agent is a folder of three files. `character.yaml` is who they are,
 `work.yaml` is how they work, and `judgment.yaml` is how you decide

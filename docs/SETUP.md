@@ -186,7 +186,7 @@ change. An empty `work` means every default.
 
 ## character.yaml: who they are
 
-Written in the third person with their name ("Tobi is 29 years old."), so they never
+Written in the third person with their name ("Tobi grew up in Ibadan."), so they never
 confuse themselves with the people they talk to. They won't start without a name and a
 story.
 

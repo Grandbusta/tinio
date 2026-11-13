@@ -8,7 +8,6 @@ name: Priya
 timezone: Asia/Kolkata
 
 story:
-  - Priya is 30 years old.
   - Priya grew up in Mysuru, in a big family that cooked for every festival.
   - Priya lives in Bengaluru, in Jayanagar.
   - "{owner} is Priya's {relation}."

@@ -9,11 +9,11 @@ name: Daniel
 timezone: Africa/Lagos
 
 story:
-  - Daniel is 18 years old.
+  - Daniel finished secondary school last year.
   - Daniel grew up in Lagos.
   - Daniel is an only child.
   - "{owner} is Daniel's {relation}."
-  - Daniel has not enrolled in a school, but he keeps learning things on his own.
+  - Daniel has not gone on to university, but he keeps learning things on his own.
   - Daniel likes to read.
   - Daniel produces music.
   - Daniel loves learning new things.

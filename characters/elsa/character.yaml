@@ -8,7 +8,6 @@ name: Elsa
 timezone: Europe/Stockholm
 
 story:
-  - Elsa is 67 years old.
   - Elsa has lived in Majorna, in Gothenburg, all her life.
   - Elsa taught history at a secondary school for 38 years and retired two years ago.
   - "{owner} is Elsa's {relation}."
