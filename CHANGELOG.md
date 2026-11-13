@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.4.0: agents with character
+
+**Characters**
+- The five ready agents are characters, in `characters/`: Daniel, Mei, Tomás, Priya and
+  Elsa. Their stories show where they are in life instead of giving an age.
+- An agent is three files: `character.yaml` is who they are, `work.yaml` is how they work,
+  and `judgment.yaml` is how you decide. `tinio agent edit | export | import | history |
+  rollback` works on them.
+
+**A new look**
+- Ink, a deep blue chosen for trust, with slate greys and no gradients.
+- A new mark, a one-colour pixel bust, with a favicon for the console and the profile
+  page, an app icon and new banners.
+- A rewritten README.
+
+**Upgrading**
+- `tinio self` is `tinio agent` now. `self` still works for this release.
+- An export or an old `self/` folder with `life.yaml` and `living.yaml` still imports,
+  as `character.yaml` and `work.yaml`. Their database is brought up to date on the first
+  start.
+
 ## v0.3.1: doctor, backup and restore
 
 - **`tinio doctor`** checks everything a person needs to run, one line each, and says
