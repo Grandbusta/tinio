@@ -24,7 +24,7 @@ person", "assistant", "companion" or "clone" in what users read.
 It is one Go process: Postgres for memory, OpenAI for the models (System 1, a fast
 decision model that answers typed questions; System 2, a reasoning model that writes),
 Telegram for talking. Always write the name as **Tinio**, and `tinio` for the command and
-in code. Until v0.4.0 it was minime.
+in code.
 
 ## Layout
 

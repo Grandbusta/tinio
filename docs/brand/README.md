@@ -16,7 +16,6 @@ dark or on Ink. The eyes are holes, never filled in.
 | [x-avatar.png](x-avatar.png) | The X (Twitter) profile picture, 800 by 800; X shows it as a circle. |
 | [x-header.png](x-header.png) | The X header, 1500 by 500, with the words clear of the profile picture. |
 | [banner.html](banner.html) | The source of the banners and the X images: open it, or render it with `?light`, `?social`, `?header` or `?avatar`. |
-| [concepts.html](concepts.html) | The concepts for the first mark, Mini, kept for the record. |
 
 The wordmark is "tinio" in Manrope ExtraBold, lowercase, set tight. Mark and word are one
 colour together: Ink on light, white on dark. The line under them is in Ink, or `#a9cdff` on

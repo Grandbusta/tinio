@@ -1,54 +1,43 @@
 # Changelog
 
-## Unreleased
-
-**minime is Tinio**
-- The command is `tinio`, the repository `github.com/Grandbusta/tinio`, the image
-  `ghcr.io/grandbusta/tinio`, and the config `configs/tinio.yaml`.
-- The settings are `TINIO_KEY`, `TINIO_CONSOLE_ADDR` and `TINIO_PROFILE_ADDR`. The
-  `MINIME_` names, and a `configs/minime.yaml` on disk, still work for this release, with
-  a note each time; rename them before the next one. Their database, secrets and backups
-  don't change.
-- The image under the old name stays at v0.3.1. Pull the new one to upgrade.
-
 ## v0.3.1: doctor, backup and restore
 
-- **`minime doctor`** checks everything a person needs to run, one line each, and says
+- **`tinio doctor`** checks everything a person needs to run, one line each, and says
   what's wrong:
   - the database;
-  - that `MINIME_KEY` opens their secrets;
+  - that `TINIO_KEY` opens their secrets;
   - the config with its prompts and question sets;
   - that their OpenAI key reaches each model;
   - the bot token, and that each owner has pressed Start;
   - each tool server.
 
   It changes nothing but bringing the database up to date. In Docker:
-  `docker exec <name> /minime doctor`.
-- **`minime backup [file]`** writes everything about them to one file, readable only by
+  `docker exec <name> /tinio doctor`.
+- **`tinio backup [file]`** writes everything about them to one file, readable only by
   you. It's taken at one moment, so they keep running while it's made. Their secrets are
-  in it sealed: keep `MINIME_KEY` safe too, apart from the backup.
-- **`minime restore <file>`** brings them back into a new, empty database. It never writes
-  over anyone. A backup from an older minime is brought up to date once it's loaded.
+  in it sealed: keep `TINIO_KEY` safe too, apart from the backup.
+- **`tinio restore <file>`** brings them back into a new, empty database. It never writes
+  over anyone. A backup from an older Tinio is brought up to date once it's loaded.
 
 ## v0.3.0: a person is their own database
 
 A person now lives entirely in their own database. Outside it, all they need is two
-lines: `DATABASE_URL` says where they are, and `MINIME_KEY` unlocks their keys. minime
+lines: `DATABASE_URL` says where they are, and `TINIO_KEY` unlocks their keys. Tinio
 is also one binary now, with releases you can download.
 
 **A person is their own database**
 - Their life, how they live, your judgment, their skills and their keys are all kept in
   their database. Two people never share a key, a database or an OpenAI account.
-- Each part of them is versioned: `minime self edit life` opens it in your editor and
-  refuses an edit that doesn't read. `minime self history` and `minime self rollback`
-  take you back. `minime self export` and `minime self import` move them in and out as files.
-- Keys and tokens are sealed with `MINIME_KEY` (AES-GCM) and are never stored as plain
-  text. `minime secret list | set | unset | rekey` manages them. A value already set in
+- Each part of them is versioned: `tinio self edit life` opens it in your editor and
+  refuses an edit that doesn't read. `tinio self history` and `tinio self rollback`
+  take you back. `tinio self export` and `tinio self import` move them in and out as files.
+- Keys and tokens are sealed with `TINIO_KEY` (AES-GCM) and are never stored as plain
+  text. `tinio secret list | set | unset | rekey` manages them. A value already set in
   the environment still wins.
-- Skills live in the database, every file of them, under `minime skill list | add | remove`.
+- Skills live in the database, every file of them, under `tinio skill list | add | remove`.
   Images and other files that aren't text are described rather than read as words. A
   skill can be up to 10 MB, and its scripts are never run.
-- `minime new` writes a new person straight into their database. It moves an existing
+- `tinio new` writes a new person straight into their database. It moves an existing
   `.env` aside to `.env.<name>` and never takes over a database that belongs to someone else.
 
 **One binary**
@@ -56,14 +45,14 @@ is also one binary now, with releases you can download.
   alone runs a person. A file on disk at the same path still wins, so you can change
   them without a rebuild.
 - Download it from the release (Linux, macOS and Windows), or install it with
-  `go install github.com/Grandbusta/minime/cmd/minime@latest`.
-- The image is `ghcr.io/grandbusta/minime:v0.3.0`, for amd64 and arm64. `:latest` follows
+  `go install github.com/Grandbusta/tinio/cmd/tinio@latest`.
+- The image is `ghcr.io/grandbusta/tinio:v0.3.0`, for amd64 and arm64. `:latest` follows
   the newest published release.
 
 **Upgrading**
 - Someone in `self/` moves into their database once, on their first start. If `.env` has
-  no `MINIME_KEY`, one is made and written there.
-- **Back up `MINIME_KEY`.** Without it, their keys can't be opened again. Keep it
+  no `TINIO_KEY`, one is made and written there.
+- **Back up `TINIO_KEY`.** Without it, their keys can't be opened again. Keep it
   somewhere safe and apart from the database.
 - After the move, `self/` is no longer read. Keep it as a backup or delete it.
 
@@ -74,7 +63,7 @@ watch them live their own life. They make real things, use the tools you connect
 what changes, and learn how you decide, asking you before anything that matters.
 
 **A person of their own**
-- **Five lives, ready to start:** Daniel, Mei, Tomás, Priya and Elsa. `minime new` picks
+- **Five lives, ready to start:** Daniel, Mei, Tomás, Priya and Elsa. `tinio new` picks
   one, sets up `.env`, finds your Telegram ID, can start a Postgres in Docker, and starts
   them. Your own person stays private in `self/`.
 - **Talking:** a fast decision model reads each message (System 1) and a reasoning model

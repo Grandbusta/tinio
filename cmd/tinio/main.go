@@ -101,25 +101,6 @@ func run(args []string) error {
 	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf(".env: %w", err)
 	}
-	// Before v0.4.0 Tinio was minime. Its names in the environment and its
-	// config path keep working for one release.
-	for _, name := range []string{"KEY", "CONSOLE_ADDR", "PROFILE_ADDR"} {
-		old, ok := os.LookupEnv("MINIME_" + name)
-		if !ok {
-			continue
-		}
-		if _, set := os.LookupEnv("TINIO_" + name); !set {
-			os.Setenv("TINIO_"+name, old)
-			fmt.Fprintf(os.Stderr, "MINIME_%s is TINIO_%s now; the old name stops working in a later release.\n", name, name)
-		}
-		os.Unsetenv("MINIME_" + name)
-	}
-	if _, err := os.Stat(*cfgPath); errors.Is(err, os.ErrNotExist) && *cfgPath == "configs/tinio.yaml" {
-		if _, err := os.Stat("configs/minime.yaml"); err == nil {
-			*cfgPath = "configs/minime.yaml"
-			fmt.Fprintln(os.Stderr, "configs/minime.yaml is configs/tinio.yaml now; the old name stops working in a later release.")
-		}
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if cmd == "new" {

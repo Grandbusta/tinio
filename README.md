@@ -7,8 +7,6 @@ better at what they do. They talk with you on Telegram, keep their promises, and
 before anything that reaches other people. Over time they learn how you decide, and ask
 less. They always say plainly that they're an AI.
 
-Tinio was called minime until v0.4.0.
-
 ## 💡 What makes them different
 
 - **Character.** The same agent every day, with a consistent voice and taste: a story they
