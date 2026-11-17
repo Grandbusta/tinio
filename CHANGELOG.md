@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.4.1: a cheaper life
+
+**Their own day costs less**
+- `daily_life.model`: a model of its own for their day (planning, their own activities,
+  learning, the weekly review, what they watch). Replies and what they make for someone
+  keep System 2's.
+- `daily_life.service_tier: flex`: OpenAI's cheaper, slower tier for their day, falling
+  back to the standard tier when flex has no room.
+- At a faster pace one plan covers up to three rounds, and no new plan is made while what
+  they planned is still to do.
+- No journal on a day they made nothing and talked with no one.
+- Past works and the last journal are quoted up to 1,500 characters in their day's notes.
+
+**Replies cost less**
+- System 2's instructions stay the same from call to call: the people they know, their
+  dreams, skill levels and goals moved to the note after the conversation, so OpenAI's
+  prompt cache holds. Each request carries a cache key, and cached tokens are logged.
+- A test holds every System 2 instruction to its recorded size.
+
+**Embeddings**
+- Switching the embedding model no longer spoils what was saved: what the old model
+  embedded is embedded again as it comes up.
+
 ## v0.4.0: agents with character
 
 **Characters**

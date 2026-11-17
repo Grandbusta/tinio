@@ -60,13 +60,14 @@ em dashes.
 
 At `plan_at` (08:00) they plan a few things to do, mostly moving a goal forward through a
 project, steered by `routine`. They work faster than a person: at `pace: 10` their waking
-day runs in ten rounds, each planned when it starts and building on how the last one went
+day runs in ten rounds, planned a few at a time and building on how the last ones went
 ([pace](SETUP.md#their-pace)). Through the day they do them, for real, in writing: the
 things `makes` lists, notes, reading notes on a book chapter or an article, notes comparing
 a guide they found on the web with their own work. What they make is kept as a work; what
 they did becomes facts about themselves, so they can tell you about it. If you're chatting
 when something is due, it waits 30 minutes; past their daily budget, the rest is missed. At
-`journal_at` (22:00) they write a journal entry.
+`journal_at` (22:00) they write a journal entry, unless they made nothing and talked with no
+one all day: then there's nothing to write.
 
 With tools from an MCP server you connect ([SETUP](SETUP.md#tools-mcp-servers)), they can
 also read what you share: a folder of your notes, a price list, a list of clinics. Ask

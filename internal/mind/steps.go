@@ -48,7 +48,7 @@ func (m *Mind) followUp(ctx context.Context, i memory.Intention, note string, ch
 	var added strings.Builder
 	var cost float64
 	for step := 1; step < maxSteps; step++ {
-		resp, err := m.System2.Reason(ctx, system2.Request{
+		resp, err := m.thinker(i).Reason(ctx, system2.Request{
 			Instructions: fmt.Sprintf(stepInstructions, m.Life.Name),
 			Note:         note + added.String() + "\n\nYour tools:" + list.String(),
 			Format:       format,

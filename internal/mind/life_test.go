@@ -167,35 +167,40 @@ func TestRounds(t *testing.T) {
 	}
 
 	m.planDay(ctx, at(29, 8, 1))
-	if got := due(at(29, 0, 0), at(29, 23, 59)); len(got) != 2 || got[0] != "Study customer discovery" || got[1] != journalText {
-		t.Fatalf("first round = %q; want only what's before 11:30, and the journal", got)
+	if got := due(at(29, 0, 0), at(29, 23, 59)); len(got) != 4 || got[3] != journalText {
+		t.Fatalf("first plan = %q; want rounds 1 to 3 (before 18:30) in one plan, and the journal", got)
+	}
+	if !strings.Contains(s2.requests[0].Note, "rounds 1 to 3 of 4") {
+		t.Errorf("note doesn't say which rounds:\n%s", s2.requests[0].Note)
 	}
 	if len(s.calls) != 1 {
 		t.Errorf("calls = %d", len(s.calls))
 	}
 
-	m.planDay(ctx, at(29, 9, 0)) // still the first round
+	m.planDay(ctx, at(29, 11, 31)) // round 2: the first plan has it
 	if len(s2.requests) != 1 {
-		t.Fatal("planned the same round again")
-	}
-
-	m.planDay(ctx, at(29, 11, 31))
-	if got := due(at(29, 11, 30), at(29, 15, 0)); len(got) != 1 || got[0] != "Write outreach email" {
-		t.Errorf("round 2 = %q", got)
-	}
-	if len(s.calls) != 1 {
-		t.Error("a later round made calls")
+		t.Fatal("planned a round the first plan covered")
 	}
 
 	m2, _ := lifeMind(s2)
 	m2.Store, m2.Day.Pace = s, 4
 	m2.planDay(ctx, at(29, 12, 0))
-	if len(s2.requests) != 2 {
-		t.Fatal("planned again after a restart")
-	}
 	m2.planDay(ctx, at(29, 15, 1))
-	if len(s2.requests) != 3 || !strings.Contains(s2.requests[2].Note, "round 3 of 4") {
-		t.Errorf("after a restart, round 3 wasn't planned: %d requests", len(s2.requests))
+	if len(s2.requests) != 1 {
+		t.Fatal("planned again after a restart, with what it planned still to do")
+	}
+
+	for _, i := range s.intentions {
+		if i.Ability != journal.Name {
+			s.FinishIntention(ctx, i.ID, memory.IntentionDone, "done", at(29, 17, 0))
+		}
+	}
+	m.planDay(ctx, at(29, 18, 31))
+	if len(s2.requests) != 2 || !strings.Contains(s2.requests[1].Note, "round 4 of 4") {
+		t.Errorf("round 4 wasn't planned once the rest was done: %d requests", len(s2.requests))
+	}
+	if len(s.calls) != 1 {
+		t.Error("a later plan made calls")
 	}
 }
 
@@ -223,5 +228,56 @@ func TestAStageMovesOnOnlyWhenTheCheckAgrees(t *testing.T) {
 		if len(s1.stageCalls) != 1 {
 			t.Fatalf("%s: checked %d times", name, len(s1.stageCalls))
 		}
+	}
+}
+
+// Its own day thinks on the day's model; what it makes for someone, like a
+// promise, keeps the reply's.
+func TestItsOwnDayUsesTheDaysModel(t *testing.T) {
+	m, _, day, _, _ := activityMind()
+	main := &fakeSystem2{}
+	m.System2, m.DaySystem2 = main, day
+	m.tick(context.Background(), at(29, 10, 0))
+	if len(day.requests) != 1 || len(main.requests) != 0 {
+		t.Errorf("its own activity: day model %d requests, reply's %d; want it on the day's", len(day.requests), len(main.requests))
+	}
+
+	s2 := &fakeSystem2{formats: map[string]string{"activity": verseJSON}}
+	pm, s := promiseMind(&fakeReplier{}, s2)
+	pm.DaySystem2 = &fakeSystem2{}
+	s.intentions = []memory.Intention{promised("Tobi writes Sam a verse about Sunday mornings", "", "", now.Add(-time.Minute))}
+	pm.tick(context.Background(), now)
+	if len(s2.requests) != 2 || len(pm.DaySystem2.(*fakeSystem2).requests) != 0 {
+		t.Errorf("a promise to Sam: reply's model %d requests, day's %d; want both on the reply's",
+			len(s2.requests), len(pm.DaySystem2.(*fakeSystem2).requests))
+	}
+}
+
+// On a day when it made nothing and talked with no one, the journal isn't
+// written: there's nothing to say, so nothing is paid for.
+func TestNoJournalOnAQuietDay(t *testing.T) {
+	ctx := context.Background()
+	s2 := &fakeSystem2{formats: map[string]string{"activity": activityJSON}}
+	m, s := lifeMind(s2)
+	m.planned = "2026-10-29"
+	journalFor := func(day int) memory.Intention {
+		i := memory.Intention{ID: ulid.Make(), Subject: memory.SubjectSelf, Kind: memory.IntentionActivity, Ability: journal.Name,
+			Text: journalText, DueAt: at(day, 22, 0), Status: memory.IntentionPending, CreatedAt: at(day, 8, 0)}
+		s.intentions = append(s.intentions, i)
+		return i
+	}
+
+	quiet := journalFor(29)
+	m.tick(ctx, at(29, 22, 0))
+	if len(s2.requests) != 0 || s.intention(quiet.ID).Status != memory.IntentionCancelled {
+		t.Fatalf("a quiet day's journal: %d requests, status %s", len(s2.requests), s.intention(quiet.ID).Status)
+	}
+
+	m.planned = "2026-10-30"
+	s.works = append(s.works, memory.Work{ID: ulid.Make(), Kind: "lyrics", Title: "Lagos Rain, verse 3", CreatedAt: at(30, 15, 0).UTC()})
+	journalFor(30)
+	m.tick(ctx, at(30, 22, 0))
+	if len(s2.requests) != 1 {
+		t.Errorf("a day it made something: %d requests, want its journal written", len(s2.requests))
 	}
 }

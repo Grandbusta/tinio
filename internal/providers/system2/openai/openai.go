@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -33,10 +34,13 @@ type Client struct {
 	model  string
 	price  pricing.Price
 	effort string // reasoning effort; "" leaves the model's default
+	// tier is the service tier asked for: "" the standard one; "flex" cheaper
+	// but slower, falling back to the standard tier when flex has no room.
+	tier string
 }
 
-func New(apiKey, model, baseURL string, price pricing.Price, effort string) *Client {
-	return &Client{api: openaiclient.New(apiKey, baseURL, requestTimeout), model: model, price: price, effort: effort}
+func New(apiKey, model, baseURL string, price pricing.Price, effort, tier string) *Client {
+	return &Client{api: openaiclient.New(apiKey, baseURL, requestTimeout), model: model, price: price, effort: effort, tier: tier}
 }
 
 // replyWithFacts is the Structured Outputs schema used with CollectFacts:
@@ -193,13 +197,23 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 	if c.effort != "" {
 		params.Reasoning = shared.ReasoningParam{Effort: shared.ReasoningEffort(c.effort)}
 	}
+	if c.tier != "" {
+		params.ServiceTier = responses.ResponseNewParamsServiceTier(c.tier)
+	}
 	// Cut-off structured output is broken JSON, so it's no answer. Out of
 	// room, it tries once more with twice as much.
 	structured := req.CollectFacts || req.Format != nil
 	var w *responses.Response
 	for attempt := 1; ; attempt++ {
 		var err error
-		if w, err = c.api.Responses.New(ctx, params); err != nil {
+		w, err = c.api.Responses.New(ctx, params)
+		var apiErr *openai.Error
+		if err != nil && params.ServiceTier == responses.ResponseNewParamsServiceTierFlex &&
+			errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusTooManyRequests {
+			params.ServiceTier = "" // flex had no room, even after the SDK's retries: the standard tier
+			w, err = c.api.Responses.New(ctx, params)
+		}
+		if err != nil {
 			return system2.Response{}, fmt.Errorf("openai responses: %w", err)
 		}
 		if w.Error.Code != "" {

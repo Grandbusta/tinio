@@ -23,7 +23,7 @@ func newTestClient(t *testing.T, price pricing.Price, h http.HandlerFunc) *Clien
 		h(w, r)
 	}))
 	t.Cleanup(srv.Close)
-	return New("sk-test", "gpt-test", srv.URL, price, "")
+	return New("sk-test", "gpt-test", srv.URL, price, "", "")
 }
 
 func TestReasonSendsRequestAndJoinsText(t *testing.T) {
@@ -166,5 +166,34 @@ func TestACutOffAnswerIsAnError(t *testing.T) {
 	_, err := c.Reason(context.Background(), system2.Request{Message: "x", Format: &system2.Format{Name: "work", Schema: map[string]any{"type": "object"}}})
 	if !errors.Is(err, system2.ErrCutOff) || !strings.Contains(err.Error(), "max_output_tokens") || calls != 2 {
 		t.Errorf("err = %v after %d calls; want it cut off after trying twice", err, calls)
+	}
+}
+
+// Flex costs less but may have no room: then the call goes through at the
+// standard tier rather than failing its day.
+func TestFlexWithNoRoomFallsBackToTheStandardTier(t *testing.T) {
+	var tiers []string
+	c := newTestClient(t, pricing.Price{}, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			ServiceTier string `json:"service_tier"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		tiers = append(tiers, body.ServiceTier)
+		if body.ServiceTier == "flex" {
+			w.WriteHeader(http.StatusTooManyRequests)
+			io.WriteString(w, `{"error":{"message":"Resource unavailable","type":"resource_unavailable"}}`)
+			return
+		}
+		io.WriteString(w, `{"model":"gpt-test","status":"completed","output":[
+			{"type":"message","content":[{"type":"output_text","text":"done"}]}],"usage":{"input_tokens":1,"output_tokens":1}}`)
+	})
+	c.tier = "flex"
+
+	resp, err := c.Reason(context.Background(), system2.Request{Instructions: "plan", Message: "go"})
+	if err != nil || resp.Text != "done" {
+		t.Fatalf("resp = %+v, err = %v", resp, err)
+	}
+	if last := tiers[len(tiers)-1]; tiers[0] != "flex" || last != "" {
+		t.Errorf("tiers asked for = %q, want flex first and the standard tier last", tiers)
 	}
 }

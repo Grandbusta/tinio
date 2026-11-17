@@ -166,8 +166,12 @@ type Config struct {
 	Replier  Replier
 	System1  system1.DecisionModel
 	System2  system2.Reasoner
-	Incoming questions.Set
-	FollowUp questions.Set // zero value: never checked
+	// DaySystem2 thinks for its own day: planning, its own activities,
+	// learning, the weekly review, what it watches. nil: System2. Replies, and
+	// what it makes or says for someone, always use System2.
+	DaySystem2 system2.Reasoner
+	Incoming   questions.Set
+	FollowUp   questions.Set // zero value: never checked
 	// LifeArea zero value: nothing is labelled and every reply searches memory.
 	LifeArea     questions.Set
 	PersonCircle questions.Set

@@ -220,9 +220,10 @@ daily_life:
 
 How much faster than a person they work and learn. At pace 1 (the default) they plan their
 day once in the morning. At a higher pace their waking day, from `plan_at` to `journal_at`,
-runs in that many **rounds**, each planned when it starts: plan a few things, do them, see
-how they went, plan the next few. At pace 10 with a 06:00–22:00 day, that's a round every 1
-hour 36 minutes, about 40 activities a day. The day's first plan is the one that also adds
+runs in that many **rounds**: plan a few things, do them, see how they went, plan the next
+few. One plan covers up to three rounds, and no new plan is made while what they planned is
+still to do. At pace 10 with a 06:00–22:00 day, that's a round every 1 hour 36 minutes,
+about 40 activities a day from four plans. The day's first plan is the one that also adds
 the journal and makes the day's calls to you.
 
 Their progress keeps up. After each practice piece they check it against their learning
@@ -248,6 +249,8 @@ know unless they get real feedback.
 | `daily_life.review_at` | `Sun 20:00` | Their weekly review: goals, dreams, lessons, how calls turned out. |
 | `daily_life.activities` | `4` | Things they plan a round (a day, at pace 1), besides the journal. |
 | `daily_life.budget_usd` | `0.05` | Most their own day may cost, per person-paced day; past it, the rest is missed. Multiplied by pace. |
+| `daily_life.model` | System 2's | The model for their own day: planning, their own activities, learning, the weekly review, what they watch. A cheaper one (`gpt-6-luna` is a twentieth of `gpt-6.1-sol`) makes their day cost about a cent. Replies, and what they make or say for someone, always use System 2's. |
+| `daily_life.service_tier` | standard | `flex` for their own day: OpenAI's cheaper, slower tier, where the model offers it. When flex has no room, the call goes through at the standard tier. While it waits, the rest of their day (reminders too) waits with it. Costs are recorded at the standard price. |
 | `daily_life.abilities` | all four | What they can do beyond writing; `[]` for none. See below. |
 | `daily_life.web.searches_per_day` | `10` | Web searches a day, multiplied by pace. |
 | `daily_life.web.pages_per_day` | `15` | Web pages read a day, multiplied by pace. |

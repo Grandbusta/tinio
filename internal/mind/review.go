@@ -209,7 +209,7 @@ func (m *Mind) Review(ctx context.Context, now time.Time) error {
 		}
 	}
 
-	resp, err := m.System2.Reason(ctx, system2.Request{
+	resp, err := m.ownDay().Reason(ctx, system2.Request{
 		Instructions: m.lifeInstructions(m.Day.ReviewPrompt),
 		Note:         note.String(),
 		Format:       reviewFormat,

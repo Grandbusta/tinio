@@ -109,7 +109,7 @@ func (m *Mind) observe(ctx context.Context, from string, p perception.Percept, c
 	if acts {
 		note += "\n\n" + m.actionsHelp(owner)
 	}
-	resp, err := m.System2.Reason(ctx, system2.Request{
+	resp, err := m.ownDay().Reason(ctx, system2.Request{
 		Instructions: m.lifeInstructions(m.Day.ObservePrompt),
 		Note:         note,
 		Format:       observeFormat(acts),

@@ -127,7 +127,7 @@ func (m *Mind) writeData(ctx context.Context, w memory.Work) (json.RawMessage, e
 	start := time.Now()
 	d := &decision.Decision{ID: ulid.Make(), At: start.UTC(), Tier: decision.TierSystem2, SetID: m.Day.DataPrompt.Ref,
 		Action: "write_data", Gate: decision.GateAuto}
-	resp, err := m.System2.Reason(ctx, system2.Request{
+	resp, err := m.ownDay().Reason(ctx, system2.Request{
 		Instructions: m.lifeInstructions(m.Day.DataPrompt),
 		Note: fmt.Sprintf("What you made, a %s, on %s:\n\n%s\n\nWrite its %s: %s", strings.ReplaceAll(w.Kind, "_", " "),
 			w.CreatedAt.In(m.Zone).Format("Monday 2 January"), titled(w), f.Needs(), f.DataHelp()),

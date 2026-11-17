@@ -204,7 +204,8 @@ the slow work of its own day:
 2. **Calls:** expire the ones unanswered for 24 hours; ask the ones due today.
 3. **Due reminders and promises** whose time has come.
 4. **Check-ins**, when a `check_ins` time passed since the last tick.
-5. **Plan the day**, once, at the first tick after `plan_at`, and each round at its pace.
+5. **Plan the day**, once, at the first tick after `plan_at`, and at a faster pace up to
+   three rounds a plan, never while what it planned is still to do.
 6. **Due activities** of its own day.
 7. **Make promises ahead**, up to 30 minutes before they're due.
 8. **The weekly review**, once, at the first tick after `review_at`.
@@ -253,7 +254,8 @@ At `plan_at`, System 2 plans the day ([prompts/plan.md](../prompts/plan.md),
 - the abilities they can use, each with its description;
 - dreams, goals and skill levels; active learning plans with their current stage and
   resources; pages their searches found but they haven't read;
-- last night's journal;
+- last night's journal (its first 1,500 characters; what it made before is quoted the same
+  way in an activity's note);
 - the owner's approved judgment for planning (see [Judgment](#judgment)).
 
 It returns up to `activities` things to do (time, what, project or a new one, ability and
@@ -284,7 +286,13 @@ When an activity is due (`doActivity`, `makeWork`):
    - **ask for review**, at most once a day, by sending it to the owner with a question.
 
 A promise is made the same way (action `task`), from what was said around it. The journal
-is an activity whose material is what the day held.
+is an activity whose material is what the day held; on a day it made nothing and talked
+with no one it's cancelled, with no call.
+
+Its own day (the plan, its own activities, learning plans, the weekly review, what it
+watches) uses `daily_life.model` and `service_tier` when they're set
+(`DaySystem2`). Replies, promises and anything said or made for someone always use System 2's
+model.
 
 ### Abilities
 

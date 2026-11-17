@@ -51,11 +51,33 @@ const (
 	projectsInPlan = 8
 	factsInPlan    = 20
 	worksInContext = 3
+	// What it made before and its last journal are quoted up to this many
+	// characters each: enough to go on from, without paying for all of it on
+	// every plan and activity.
+	quotedChars = 1500
+	// roundsPerPlan: at a fast pace one plan covers this many rounds, so a day
+	// of ten rounds is planned in four calls, not ten.
+	roundsPerPlan = 3
 )
 
 // lifeActions are the decisions its own day is made of, for the budget:
 // promises count, though they are kept even past it.
 var lifeActions = []string{"plan_day", "activity", "task", "weekly_review", "plan_learning"}
+
+func (m *Mind) ownDay() system2.Reasoner {
+	if m.DaySystem2 != nil {
+		return m.DaySystem2
+	}
+	return m.System2
+}
+
+// thinker is System 2 for doing i: its own day's, unless i is for someone.
+func (m *Mind) thinker(i memory.Intention) system2.Reasoner {
+	if i.Subject == memory.SubjectSelf {
+		return m.ownDay()
+	}
+	return m.System2
+}
 
 func (m *Mind) dayOn() bool { return m.Day.PlanPrompt.Text != "" && m.Day.ActivityPrompt.Text != "" }
 
@@ -64,8 +86,9 @@ func (m *Mind) startOfDay(t time.Time) time.Time {
 	return time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, m.Zone)
 }
 
-// planDay plans nothing past journal time, and never a round already planned
-// (e.g. before a restart).
+// planDay plans nothing past journal time, never a round already planned
+// (e.g. before a restart), and no new rounds while what it planned is still
+// to do (it was busy, or restarted): the plan still holds, so nothing is asked.
 func (m *Mind) planDay(ctx context.Context, now time.Time) {
 	if !m.dayOn() {
 		return
@@ -97,12 +120,33 @@ func (m *Mind) planDay(ctx context.Context, now time.Time) {
 			}
 		}
 	}
-	m.planned, m.round = today, max(round, m.round)
+	last := min(round+roundsPerPlan-1, m.pace()-1)
+	m.planned, m.round = today, max(last, m.round)
+	if !first && m.stillToDo(ctx, midnight, m.roundEnd(last, midnight)) {
+		m.Log.Info("what it planned is still to do; no new plan", "round", round+1)
+		return
+	}
 	if m.overBudget(ctx, now) {
 		m.Log.Warn("over today's budget; no plan", "round", round)
 		return
 	}
-	m.writePlan(ctx, now, midnight, round, first)
+	m.writePlan(ctx, now, midnight, round, last, first)
+}
+
+// stillToDo reports whether any of its own activities due before until is
+// still pending.
+func (m *Mind) stillToDo(ctx context.Context, midnight, until time.Time) bool {
+	is, err := m.Store.IntentionsDue(ctx, midnight, until)
+	if err != nil {
+		return false
+	}
+	for _, i := range is {
+		if i.Subject == memory.SubjectSelf && i.Kind == memory.IntentionActivity && i.Ability != journal.Name &&
+			i.Status == memory.IntentionPending {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Mind) roundAt(now, midnight time.Time) int {
@@ -151,9 +195,11 @@ func planFormat(abilities []ability.Ability) *system2.Format {
 	}}
 }
 
-// writePlan: only the day's first plan has the journal and its calls for its owner.
-func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round int, first bool) {
-	until := m.roundEnd(round, midnight)
+// writePlan plans rounds round to last. Only the day's first plan has the
+// journal and its calls for its owner.
+func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round, last int, first bool) {
+	until := m.roundEnd(last, midnight)
+	most := m.Day.MaxActivities * (last - round + 1)
 	start := time.Now()
 	d := &decision.Decision{ID: ulid.Make(), At: start.UTC(), Tier: decision.TierSystem2, SetID: m.Day.PlanPrompt.Ref,
 		Action: "plan_day", Gate: decision.GateAuto}
@@ -170,8 +216,12 @@ func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round int
 	note.WriteString(m.now(now))
 	fmt.Fprintf(&note, " You write your journal at %s.", midnight.Add(m.Day.JournalAt).Format("15:04"))
 	if m.Day.Pace > 1 {
-		fmt.Fprintf(&note, " You work fast, in rounds: this is round %d of %d today. Plan what you'll do from now until %s; "+
-			"the next round picks up from how these went.", round+1, m.Day.Pace, until.Format("15:04"))
+		rounds := fmt.Sprintf("round %d", round+1)
+		if last > round {
+			rounds = fmt.Sprintf("rounds %d to %d", round+1, last+1)
+		}
+		fmt.Fprintf(&note, " You work fast, in rounds: these are %s of %d today. Plan what you'll do from now until %s, "+
+			"up to %d things in all; the next plan picks up from how these went.", rounds, m.Day.Pace, until.Format("15:04"), most)
 		if !first {
 			note.WriteString(" Leave calls empty: today's are made.")
 			if ws, err := m.Store.WorksBetween(ctx, midnight, now); err == nil && len(ws) > 0 {
@@ -221,10 +271,10 @@ func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round int
 	note.WriteString(m.foundNote(ctx))
 	note.WriteString(m.judgmentNote(ctx, planJudgment, m.dayAbout(ctx, projects)))
 	if j, ok, err := m.Store.LatestWork(ctx, "journal"); err == nil && ok {
-		fmt.Fprintf(&note, "\n\nYour last journal entry (%s):\n%s", j.CreatedAt.In(m.Zone).Format("Monday 2 Jan"), j.Text)
+		fmt.Fprintf(&note, "\n\nYour last journal entry (%s):\n%s", j.CreatedAt.In(m.Zone).Format("Monday 2 Jan"), cutRunes(j.Text, quotedChars))
 	}
 
-	resp, err := m.System2.Reason(ctx, system2.Request{
+	resp, err := m.ownDay().Reason(ctx, system2.Request{
 		Instructions: m.lifeInstructions(m.Day.PlanPrompt),
 		Note:         note.String(),
 		Format:       planFormat(abilities),
@@ -267,7 +317,7 @@ func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round int
 	journalAt := midnight.Add(m.Day.JournalAt)
 	var lines []string
 	for _, a := range plan.Activities {
-		if len(lines) >= m.Day.MaxActivities {
+		if len(lines) >= most {
 			break
 		}
 		at, err := time.ParseInLocation("15:04", strings.TrimSpace(a.At), m.Zone)
@@ -326,7 +376,7 @@ func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round int
 		detail += fmt.Sprintf("; %d calls for its owner", n)
 	}
 	m.finishLife(ctx, d, start, decision.OutcomeOK, detail)
-	m.Log.Info("planned the day", "round", round+1, "of", max(1, m.Day.Pace), "things", len(lines), "cost_usd", resp.CostUSD)
+	m.Log.Info("planned the day", "rounds", fmt.Sprintf("%d-%d", round+1, last+1), "of", m.pace(), "things", len(lines), "cost_usd", resp.CostUSD)
 }
 
 func (m *Mind) linkGoal(ctx context.Context, project, goal ulid.ULID) {
@@ -393,7 +443,8 @@ func activityFormat(crafts []character.Craft, data map[string]map[string]any, ac
 }
 
 // doActivity does one thing of its own day, unless it is busy talking with
-// someone (it waits), too late (missed), or over today's budget (missed).
+// someone (it waits), too late (missed), or over today's budget (missed). A
+// journal on a day when nothing happened isn't written: there's nothing to say.
 func (m *Mind) doActivity(ctx context.Context, i memory.Intention, now time.Time) {
 	log := m.Log.With("intention", i.ID.String())
 	if now.Sub(i.DueAt) > activityGiveUp {
@@ -405,6 +456,10 @@ func (m *Mind) doActivity(ctx context.Context, i memory.Intention, now time.Time
 			log.Error("postpone intention", "err", err)
 		}
 		log.Info("busy talking; activity postponed", "until", now.Add(postponeBy).In(m.Zone).Format("15:04"))
+		return
+	}
+	if i.Ability == journal.Name && m.quietDay(ctx, now) {
+		m.finish(ctx, i, memory.IntentionCancelled, "a quiet day: nothing to write", now)
 		return
 	}
 	if m.overBudget(ctx, now) {
@@ -486,7 +541,7 @@ func (m *Mind) makeWork(ctx context.Context, i memory.Intention, action, what st
 		more, stepsCost = m.followUp(ctx, i, note, ch, project, now)
 		note += more
 	}
-	resp, err := m.System2.Reason(ctx, system2.Request{
+	resp, err := m.thinker(i).Reason(ctx, system2.Request{
 		Instructions: m.lifeInstructions(m.Day.ActivityPrompt),
 		Note:         note,
 		Format:       activityFormat(m.Life.Crafts(), m.dataSchemas(), acts),
@@ -604,10 +659,28 @@ func (m *Mind) activityNote(ctx context.Context, i memory.Intention, what string
 	if err == nil && len(works) > 0 {
 		b.WriteString("\n\nWhat you made for it last:")
 		for _, w := range works {
-			fmt.Fprintf(&b, "\n\n[%s, %s: %s]\n%s", w.CreatedAt.In(m.Zone).Format("2 Jan"), w.Kind, w.Title, w.Text)
+			fmt.Fprintf(&b, "\n\n[%s, %s: %s]\n%s", w.CreatedAt.In(m.Zone).Format("2 Jan"), w.Kind, w.Title, cutRunes(w.Text, quotedChars))
 		}
 	}
 	return b.String(), &p, true
+}
+
+// quietDay: it made nothing today and talked with no one.
+func (m *Mind) quietDay(ctx context.Context, now time.Time) bool {
+	midnight := m.startOfDay(now)
+	if ws, err := m.Store.WorksBetween(ctx, midnight, now); err != nil || len(ws) > 0 {
+		return false
+	}
+	convs, err := m.Store.Conversations(ctx)
+	if err != nil {
+		return false
+	}
+	for _, c := range convs {
+		if c.LastActivity.After(midnight) {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *Mind) busy(ctx context.Context, now time.Time) bool {

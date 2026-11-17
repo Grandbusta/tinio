@@ -260,7 +260,11 @@ func runAgent(ctx context.Context, cfg *config.Config, p agent.Agent, st *store.
 	} else if err := checkFactTemplate(openThreads); err != nil {
 		return err
 	}
-	s2, err := newReasoner(cfg.Reasoning, cfg.Pricing, log)
+	s2, err := newReasoner(cfg.Reasoning, "", cfg.Pricing, log)
+	if err != nil {
+		return err
+	}
+	dayS2, err := dayReasoner(cfg, log)
 	if err != nil {
 		return err
 	}
@@ -355,7 +359,7 @@ func runAgent(ctx context.Context, cfg *config.Config, p agent.Agent, st *store.
 		Life:     life,
 		Judgment: p.Judgment,
 		Percepts: percepts, Store: st, Replier: tg,
-		System1: s1, System2: s2, Incoming: incoming, FollowUp: followUp, LifeArea: lifeArea, ReplyPrompt: replyPrompt,
+		System1: s1, System2: s2, DaySystem2: dayS2, Incoming: incoming, FollowUp: followUp, LifeArea: lifeArea, ReplyPrompt: replyPrompt,
 		PersonCircle:  personCircle,
 		FactRelevance: factRelevance, OpenThreads: openThreads, RecallCandidates: cfg.Memory.RecallCandidates,
 		Working: mind.WorkingMemory{Turns: cfg.WorkingMemory.Turns, Window: cfg.WorkingMemory.Window},
@@ -391,7 +395,8 @@ func runAgent(ctx context.Context, cfg *config.Config, p agent.Agent, st *store.
 		con := &console.Server{Store: st, Formats: formats, Token: cfg.Console.Token, Log: log.With("component", "console"), Info: console.Info{
 			Name: life.Name, Zone: zone, Started: started, Sets: sets, Tools: toolInfo, Skills: skillInfo,
 			System1: cfg.Decision.Provider.Provider + "/" + orDefault(cfg.Decision.Model, s1openai.DefaultModel),
-			System2: fmt.Sprintf("%s/%s (effort %s)", cfg.Reasoning.Provider.Provider, cfg.Reasoning.Model, orDefault(cfg.Reasoning.Effort, "default")),
+			System2: fmt.Sprintf("%s/%s (effort %s)", cfg.Reasoning.Provider.Provider, cfg.Reasoning.Model, orDefault(cfg.Reasoning.Effort, "default")) +
+				ownDayModel(cfg),
 		}}
 		g.Go(func() error { return console.Serve(ctx, cfg.Console.Addr, con.Handler(), con.Log) })
 	}
@@ -433,7 +438,7 @@ func updateProfile(ctx context.Context, cfg *config.Config, life character.Chara
 	if err != nil {
 		return err
 	}
-	s2, err := newReasoner(cfg.Reasoning, cfg.Pricing, log)
+	s2, err := newReasoner(cfg.Reasoning, "", cfg.Pricing, log)
 	if err != nil {
 		return err
 	}
@@ -488,7 +493,11 @@ func newDay(cfg *config.Config) (mind.Day, error) {
 // growthMind talks to no one: changes to its dreams are saved for the owner's
 // approval, and the running agent asks them.
 func growthMind(cfg *config.Config, life character.Character, st *store.Store, log *slog.Logger) (*mind.Mind, error) {
-	s2, err := newReasoner(cfg.Reasoning, cfg.Pricing, log)
+	s2, err := newReasoner(cfg.Reasoning, "", cfg.Pricing, log)
+	if err != nil {
+		return nil, err
+	}
+	dayS2, err := dayReasoner(cfg, log)
 	if err != nil {
 		return nil, err
 	}
@@ -511,7 +520,7 @@ func growthMind(cfg *config.Config, life character.Character, st *store.Store, l
 	if err != nil {
 		return nil, err
 	}
-	return mind.New(mind.Config{Life: life, Store: st, System2: s2, Zone: zone, Day: day, Autonomy: policy, Abilities: abilities,
+	return mind.New(mind.Config{Life: life, Store: st, System2: s2, DaySystem2: dayS2, Zone: zone, Day: day, Autonomy: policy, Abilities: abilities,
 		Calls: calls(cfg), Embedder: newEmbedder(cfg, log), Log: log.With("component", "mind")}), nil
 }
 
@@ -739,13 +748,38 @@ func newDecisionModel(c config.Provider, prices map[string]pricing.Price, log *s
 	}
 }
 
-func newReasoner(c config.Reasoning, prices map[string]pricing.Price, log *slog.Logger) (system2.Reasoner, error) {
+func newReasoner(c config.Reasoning, tier string, prices map[string]pricing.Price, log *slog.Logger) (system2.Reasoner, error) {
 	switch c.Provider.Provider {
 	case "openai":
-		return system2.WithoutEmDashes(s2openai.New(c.APIKey, c.Model, c.BaseURL, priceFor(c.Model, prices, log), c.Effort)), nil
+		return system2.WithoutEmDashes(s2openai.New(c.APIKey, c.Model, c.BaseURL, priceFor(c.Model, prices, log), c.Effort, tier)), nil
 	default:
 		return nil, fmt.Errorf("unknown reasoning provider %q (want openai)", c.Provider.Provider)
 	}
+}
+
+// dayReasoner is System 2 for its own day, with the day's model and service
+// tier; nil when the day has neither, so it uses the reply's.
+func dayReasoner(cfg *config.Config, log *slog.Logger) (system2.Reasoner, error) {
+	d := cfg.DailyLife
+	if d.Model == "" && d.ServiceTier == "" {
+		return nil, nil
+	}
+	c := cfg.Reasoning
+	c.Model = orDefault(d.Model, c.Model)
+	return newReasoner(c, d.ServiceTier, cfg.Pricing, log)
+}
+
+// ownDayModel is what its own day uses, for the console, if not the reply's.
+func ownDayModel(cfg *config.Config) string {
+	d := cfg.DailyLife
+	if d.Model == "" && d.ServiceTier == "" {
+		return ""
+	}
+	s := "; its own day: " + orDefault(d.Model, cfg.Reasoning.Model)
+	if d.ServiceTier != "" {
+		s += " (" + d.ServiceTier + ")"
+	}
+	return s
 }
 
 // A model missing from the pricing table still runs, but its decisions are

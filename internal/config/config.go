@@ -114,15 +114,19 @@ type DailyLife struct {
 	Activities int    `yaml:"activities"`
 	// Pace is the rounds in its waking day; BudgetUSD and Web are per pace-1
 	// day and are multiplied by it.
-	Pace           int     `yaml:"pace"`
-	BudgetUSD      float64 `yaml:"budget_usd"`
-	PlanPrompt     string  `yaml:"plan_prompt"`
-	ActivityPrompt string  `yaml:"activity_prompt"`
-	ReviewPrompt   string  `yaml:"review_prompt"`
-	LearnPrompt    string  `yaml:"learn_prompt"`
-	DataPrompt     string  `yaml:"data_prompt"`
-	ObservePrompt  string  `yaml:"observe_prompt"`
-	Web            Web     `yaml:"web"`
+	Pace      int     `yaml:"pace"`
+	BudgetUSD float64 `yaml:"budget_usd"`
+	// Model is System 2's model for its own day; "": reasoning's. ServiceTier
+	// is asked for its own day only: "" or "flex".
+	Model          string `yaml:"model"`
+	ServiceTier    string `yaml:"service_tier"`
+	PlanPrompt     string `yaml:"plan_prompt"`
+	ActivityPrompt string `yaml:"activity_prompt"`
+	ReviewPrompt   string `yaml:"review_prompt"`
+	LearnPrompt    string `yaml:"learn_prompt"`
+	DataPrompt     string `yaml:"data_prompt"`
+	ObservePrompt  string `yaml:"observe_prompt"`
+	Web            Web    `yaml:"web"`
 }
 
 type Web struct {
@@ -437,6 +441,9 @@ func (c *Config) ValidateAgent() error {
 		}
 		if c.DailyLife.Activities < 1 || c.DailyLife.BudgetUSD < 0 {
 			return errors.New("config: daily_life.activities must be at least 1 and budget_usd not negative")
+		}
+		if t := c.DailyLife.ServiceTier; t != "" && t != "flex" {
+			return fmt.Errorf("config: daily_life.service_tier %q isn't one (want flex, or nothing for the standard tier)", t)
 		}
 	}
 	return c.Tools.Validate()
