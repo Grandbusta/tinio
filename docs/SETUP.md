@@ -354,7 +354,7 @@ secrets.
 | `working_memory.window` | `30m` | Older exchanges are left out. |
 | `memory.recall_candidates` | `30` | Facts System 1 checks for relevance before a reply. |
 | `daily_life.*_prompt` | `prompts/…` | The prompts for planning, activities, the review and learning plans. |
-| `embedding.provider`, `model` | `openai`, `text-embedding-3-small` | Finds your past decisions most like the one at hand. Remove it to use the newest instead. |
+| `embedding.provider`, `model` | `openai`, `text-embedding-3-small` | Finds what's alike in meaning: your past decisions most like the one at hand, the work someone means, the skill that fits. Change it freely: what the old model embedded is embedded again as it comes up. Remove it to use the newest decisions instead. |
 | `search.provider`, `model` | `openai`, the System 2 model | What web searches use. |
 | `tools.servers` | none | MCP servers whose tools they may use: [below](#tools-mcp-servers). Usually in their `work`. |
 | `tools.calls_per_day` | `50` | Reading tool calls a day across all servers, times their pace. |

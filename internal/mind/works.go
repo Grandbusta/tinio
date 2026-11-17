@@ -89,7 +89,7 @@ func (m *Mind) meantWorks(ctx context.Context, about string, ws []memory.Work) (
 		return nil, false, 0
 	}
 	ranked, out, err := rankAlike(ctx, m, about, ws, minWorkSimilarity, worksMeant,
-		func(w *memory.Work) *[]float32 { return &w.Embedding }, workText,
+		func(w *memory.Work) (*[]float32, string) { return &w.Embedding, w.EmbeddedWith }, workText,
 		func(w memory.Work, model string) error {
 			return m.Store.SaveWorkEmbedding(ctx, w.ID, w.Embedding, model)
 		})

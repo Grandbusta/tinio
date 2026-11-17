@@ -36,7 +36,8 @@ func (m *Mind) skillNote(ctx context.Context, about string) (string, float64) {
 	}
 	m.skillMu.Unlock()
 	ranked, out, err := rankAlike(ctx, m, about, items, minSkillSimilarity, 1,
-		func(it *skillItem) *[]float32 { return &it.vec },
+		// The vectors are kept only in memory, so they're from this embedder.
+		func(it *skillItem) (*[]float32, string) { return &it.vec, m.Embedder.Model() },
 		func(it skillItem) string { return it.skill.Name + ": " + it.skill.Description },
 		func(it skillItem, _ string) error {
 			m.skillMu.Lock()

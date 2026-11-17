@@ -10,6 +10,9 @@ import (
 // Embedder turns texts into vectors, one each, in order.
 type Embedder interface {
 	Embed(ctx context.Context, texts []string) (Embedded, error)
+	// Model names the vectors it makes, as Embedded.Model does. Vectors from
+	// two models can't be compared.
+	Model() string
 }
 
 type Embedded struct {

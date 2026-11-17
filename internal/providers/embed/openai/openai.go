@@ -25,6 +25,8 @@ func New(apiKey, model, baseURL string, price pricing.Price) *Client {
 	return &Client{api: openaiclient.New(apiKey, baseURL, requestTimeout), model: model, price: price}
 }
 
+func (c *Client) Model() string { return "openai/" + c.model }
+
 func (c *Client) Embed(ctx context.Context, texts []string) (embed.Embedded, error) {
 	if len(texts) == 0 {
 		return embed.Embedded{}, nil
@@ -34,7 +36,7 @@ func (c *Client) Embed(ctx context.Context, texts []string) (embed.Embedded, err
 	if err != nil {
 		return embed.Embedded{}, fmt.Errorf("openai embeddings: %w", err)
 	}
-	out := embed.Embedded{Vectors: make([][]float32, len(texts)), Model: "openai/" + c.model,
+	out := embed.Embedded{Vectors: make([][]float32, len(texts)), Model: c.Model(),
 		CostUSD: c.price.Cost(pricing.Usage{InputTokens: int(resp.Usage.PromptTokens)})}
 	for _, d := range resp.Data {
 		if d.Index < 0 || int(d.Index) >= len(texts) {

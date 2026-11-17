@@ -17,9 +17,11 @@ import (
 // so texts about the same thing are alike.
 type wordEmbedder struct{}
 
+func (wordEmbedder) Model() string { return "fake/words" }
+
 func (wordEmbedder) Embed(_ context.Context, texts []string) (embed.Embedded, error) {
 	words := []string{"song", "beat", "rest", "tired", "money", "publish"}
-	out := embed.Embedded{Model: "fake/words"}
+	out := embed.Embedded{Model: wordEmbedder{}.Model()}
 	for _, t := range texts {
 		v := make([]float32, len(words))
 		for i, w := range words {
@@ -28,6 +30,24 @@ func (wordEmbedder) Embed(_ context.Context, texts []string) (embed.Embedded, er
 		out.Vectors = append(out.Vectors, v)
 	}
 	return out, nil
+}
+
+// A work embedded by another model (the embedder was changed) is embedded
+// again, since vectors from two models can't be compared.
+func TestReembedsWorksFromAnotherModel(t *testing.T) {
+	s2 := &fakeSystem2{}
+	m, s := promiseMind(&fakeReplier{}, s2)
+	m.Embedder = wordEmbedder{}
+	addWork(s, "Lagos After Rain", "beat_idea", "82 BPM, D minor. A soft beat, kick on one.", "", now.Add(-time.Hour))
+	s.works[0].Embedding, s.works[0].EmbeddedWith = []float32{0, 0, 0, 0, 1, 0}, "old/model"
+
+	m.handle(context.Background(), percept("1", "Can you send me that beat you made?"))
+	if note := s2.requests[0].Note; !strings.Contains(note, "<<<WORK\n82 BPM") {
+		t.Errorf("didn't find the work it meant:\n%s", note)
+	}
+	if got := s.works[0].EmbeddedWith; got != "fake/words" {
+		t.Errorf("embedded with %q, want it embedded again with the current model", got)
+	}
 }
 
 func addWork(s *fakeStore, title, kind, text, subject string, at time.Time) memory.Work {

@@ -170,7 +170,7 @@ func (m *Mind) similarCases(ctx context.Context, about string) ([]memory.Judgmen
 		return nil, false
 	}
 	ranked, out, err := rankAlike(ctx, m, about, cs, minSimilarity, judgmentCases,
-		func(c *memory.JudgmentCase) *[]float32 { return &c.Embedding }, memory.JudgmentCase.Text,
+		func(c *memory.JudgmentCase) (*[]float32, string) { return &c.Embedding, c.EmbeddedWith }, memory.JudgmentCase.Text,
 		func(c memory.JudgmentCase, model string) error {
 			return m.Store.SaveCaseEmbedding(ctx, c.ID, c.Embedding, model)
 		})
