@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tinio X header</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;800&display=block">
+<style>
+  /* X's header, rendered to x-header.png at 1500 by 500. A field of blank busts, with the
+     five characters lit up among them in their own colours, one white bust come to life
+     (the agent you raise), and a clear window for the name. X puts the profile picture
+     over the bottom left, so nothing there needs reading. Every bust lands on whole
+     pixels, so it stays sharp. */
+  html, body { margin: 0; width: 1500px; height: 500px; overflow: hidden; background: #0f4b92; }
+  svg { display: block; }
+  text { font-family: Manrope, sans-serif; }
+</style>
+</head>
+<body>
+<svg width="1500" height="500" viewBox="0 0 1500 500">
+  <defs>
+    <symbol id="alive" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.5 0 Q12 0 12 0.5 L12 2 L13.5 2 Q14 2 14 2.5 L14 9.5 Q14 10 13.5 10 L12 10 L12 12 L15.5 12 Q16 12 16 12.5 L16 15.5 Q16 16 15.5 16 L0.5 16 Q0 16 0 15.5 L0 12.5 Q0 12 0.5 12 L4 12 L4 10 L2.5 10 Q2 10 2 9.5 L2 2.5 Q2 2 2.5 2 L4 2 L4 0.5 Q4 0 4.5 0 Z M12 4 L10 4 L10 6 L12 6 Z M4 4 L4 6 L6 6 L6 4 Z"/></symbol>
+    <symbol id="blank" viewBox="0 0 16 16"><path d="M11.5 0 Q12 0 12 0.5 L12 2 L13.5 2 Q14 2 14 2.5 L14 9.5 Q14 10 13.5 10 L12 10 L12 12 L15.5 12 Q16 12 16 12.5 L16 15.5 Q16 16 15.5 16 L0.5 16 Q0 16 0 15.5 L0 12.5 Q0 12 0.5 12 L4 12 L4 10 L2.5 10 Q2 10 2 9.5 L2 2.5 Q2 2 2.5 2 L4 2 L4 0.5 Q4 0 4.5 0 Z"/></symbol>
+  </defs>
+  <g id="field"></g>
+  <text x="900" y="268" font-size="128" font-weight="800" letter-spacing="-5.76" fill="#ffffff">tinio</text>
+  <text x="904" y="330" font-size="32" font-weight="600" fill="#cce2ff">Raise an agent. Put it to work.</text>
+</svg>
+<script>
+// The characters lit up in the field, at a column and row, with the one white bust that has
+// come to life on its own: the agent you raise. Each portrait is 12 by 12 pixels of 4.
+const cast = {"daniel":{"map":["...aaaaaa...","..a.hhhh.a..","..ahhhhhha..",".aassssssaa.",".aasessesaa.",".aassssssaa.","...ssmmss...","....ssss....",".....ss.....","...cccccc...","..cccccccc..",".cccccccccc."],"pal":{".":"#EEEDFF","h":"#1B1B1B","s":"#7A4B2A","e":"#1B1B1B","m":"#4A2A17","c":"#3A36E0","a":"#0E0F12"}},"mei":{"map":["....hhhh....","...hhhhhh...","..hhhhhhhh..","..hhhhhhah..","..hsessesh..","..hssssssh..","..hssmmssh..","..hhsssshh..","..hh.ss.hh..","..hcccccch..",".cccccccccc.","cccccccccccc"],"pal":{".":"#EEEDFF","h":"#141414","s":"#F1C9A5","e":"#141414","m":"#C2655A","c":"#C8423B","a":"#F2C94C"}},"tomas":{"map":["...h.hh.h...","..hhhhhhhh..",".hhhhhhhhhh.",".hhsssssshh.","..gegssgeg..","..ssssssss..","..sssmmsss..","...ssssss...",".....ss.....","...cccccc...","..cccccccc..",".ccccaacccc."],"pal":{".":"#DDF3E6","h":"#3B2416","s":"#D9A27A","e":"#1B1B1B","m":"#8A4B2E","c":"#2F7D5B","a":"#FFFFFF","g":"#0E0F12"}},"priya":{"map":[".....hh.....","....hhhh....","...hhhhhh...","..hhhhhhhh..","..hsessesh..","..hssssssh..","..assmmssa..","...ssssss...",".....ss.....","...cccccc...","..cccccccc..",".cccccccccc."],"pal":{".":"#FFF4C2","h":"#20140E","s":"#B9774E","e":"#20140E","m":"#7A3B22","c":"#E3A21A","a":"#F2C94C"}},"elsa":{"map":["............","...hhhhhh...","..hhhhhhhh..",".hhhsssshhh.",".hgegssgegh.","..ssssssss..","..sssmmsss..","...ssssss...",".....ss.....","...caaaac...","..cccccccc..",".cccccccccc."],"pal":{".":"#E6EEF9","h":"#C9CACF","s":"#F3D2BF","e":"#1B1B1B","m":"#B5655A","c":"#3B5BA5","a":"#C8423B","g":"#5A5D6B"}}};
+const lit = [["daniel", 2, 3], ["mei", 8, 1], ["priya", 5, 6], ["tomas", 12, 5], ["elsa", 21, 8]];
+const own = [26, 1];
+const pitch = 50, size = 32, cols = 30, rows = 10, blank = "#1a58a2";
+const clear = { left: 840, top: 120, right: 1440, bottom: 380 };
+const ox = (1500 - (cols - 1) * pitch - size) / 2, oy = (500 - (rows - 1) * pitch - size) / 2;
+const ns = "http://www.w3.org/2000/svg", field = document.getElementById("field");
+const el = (tag, attrs, parent = field) => {
+  const e = document.createElementNS(ns, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  parent.appendChild(e);
+  return e;
+};
+for (let r = 0; r < rows; r++) {
+  for (let c = 0; c < cols; c++) {
+    const x = ox + c * pitch, y = oy + r * pitch;
+    if (x + size > clear.left && x < clear.right && y + size > clear.top && y < clear.bottom) continue;
+    const who = lit.find(([, lc, lr]) => lc === c && lr === r);
+    if (who) {
+      const { map, pal } = cast[who[0]], px = x - 8, py = y - 8;
+      el("clipPath", { id: "c-" + who[0] }).appendChild(document.createElementNS(ns, "circle"));
+      const circle = document.querySelector("#c-" + who[0] + " circle");
+      for (const [k, v] of Object.entries({ cx: px + 24, cy: py + 24, r: 24 })) circle.setAttribute(k, v);
+      const g = el("g", { "clip-path": "url(#c-" + who[0] + ")" });
+      map.forEach((row, ry) => [...row].forEach((ch, rx) =>
+        el("rect", { x: px + rx * 4, y: py + ry * 4, width: 4, height: 4, fill: pal[ch] || pal["."] }, g)));
+      continue;
+    }
+    const mine = own[0] === c && own[1] === r;
+    el("use", { href: mine ? "#alive" : "#blank", x, y, width: size, height: size, fill: mine ? "#ffffff" : blank });
+  }
+}
+</script>
+</body>
+</html>
