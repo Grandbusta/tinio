@@ -37,9 +37,10 @@ func TestReasonSendsRequestAndJoinsText(t *testing.T) {
 			Input           []wireMessage `json:"input"`
 			MaxOutputTokens int           `json:"max_output_tokens"`
 			Store           *bool         `json:"store"`
+			PromptCacheKey  string        `json:"prompt_cache_key"`
 		}
 		json.NewDecoder(r.Body).Decode(&body)
-		if body.Model != "gpt-test" || body.Instructions != "be brief" ||
+		if body.Model != "gpt-test" || body.Instructions != "be brief" || body.PromptCacheKey != cacheKey("be brief") ||
 			body.MaxOutputTokens != defaultMaxOutputTokens || body.Store == nil || *body.Store {
 			t.Errorf("body = %+v", body)
 		}
@@ -70,7 +71,7 @@ func TestReasonSendsRequestAndJoinsText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.Text != "Hello there." || resp.Provider != "openai/gpt-test-2026" || resp.Usage.ReasoningTokens != 100 {
+	if resp.Text != "Hello there." || resp.Provider != "openai/gpt-test-2026" || resp.Usage.ReasoningTokens != 100 || resp.Usage.CachedTokens != 200 {
 		t.Errorf("resp = %+v", resp)
 	}
 	if want := (800*1.0 + 200*0.1 + 500*4.0) / 1e6; resp.CostUSD < want-1e-12 || resp.CostUSD > want+1e-12 {

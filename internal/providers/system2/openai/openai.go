@@ -3,6 +3,8 @@ package openai
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -163,6 +165,14 @@ func jsonFormat(name string, schema map[string]any) responses.ResponseTextConfig
 		OfJSONSchema: &responses.ResponseFormatTextJSONSchemaConfigParam{Name: name, Schema: schema, Strict: param.NewOpt(true)}}}
 }
 
+// cacheKey names the instructions, so requests that start with the same ones
+// reach the same machines and find their prefix in OpenAI's prompt cache. Its
+// own key per prompt, speaker and agent, without naming any of them.
+func cacheKey(instructions string) string {
+	sum := sha256.Sum256([]byte(instructions))
+	return "tinio-" + hex.EncodeToString(sum[:8])
+}
+
 func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Response, error) {
 	max := req.MaxOutputTokens
 	if max == 0 {
@@ -172,6 +182,7 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 		MaxOutputTokens: param.NewOpt(int64(max)), Store: param.NewOpt(false)} // false: OpenAI keeps no copy for later retrieval
 	if req.Instructions != "" {
 		params.Instructions = param.NewOpt(req.Instructions)
+		params.PromptCacheKey = param.NewOpt(cacheKey(req.Instructions))
 	}
 	switch {
 	case req.CollectFacts:
@@ -401,8 +412,8 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 		Send:        send,
 		Moves:       moves,
 		Acts:        acts,
-		Usage: system2.Usage{InputTokens: int(u.InputTokens), OutputTokens: int(u.OutputTokens),
-			ReasoningTokens: int(u.OutputTokensDetails.ReasoningTokens)},
+		Usage: system2.Usage{InputTokens: int(u.InputTokens), CachedTokens: int(u.InputTokensDetails.CachedTokens),
+			OutputTokens: int(u.OutputTokens), ReasoningTokens: int(u.OutputTokensDetails.ReasoningTokens)},
 		CostUSD: c.price.Cost(pricing.Usage{
 			InputTokens: int(u.InputTokens), CachedTokens: int(u.InputTokensDetails.CachedTokens),
 			CacheWriteTokens: int(u.InputTokensDetails.CacheWriteTokens), OutputTokens: int(u.OutputTokens),

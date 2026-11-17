@@ -97,6 +97,10 @@ docker rm -f tinio-test-pg
 
 `gofmt -l .` must print nothing. CI runs vet, the tests with Postgres, and the Docker build.
 
+System 2's instructions are held to a size in bytes (`TestPromptBudget`, sizes in
+`internal/mind/testdata/prompt_budget.json`): a prompt that grows or shrinks fails until its
+new size is recorded on purpose with `go test ./internal/mind -run TestPromptBudget -update`.
+
 ## How code is written here
 
 Every change is reviewed against these. They come from real reviews of this codebase.
@@ -128,6 +132,9 @@ Every change is reviewed against these. They come from real reviews of this code
 - Parse and clean once (`midi.Render` takes the JSON and parses it once).
 - No maps or other allocations built on every call in a loop; make them package-level.
 - Work out what never changes once (`m.dataOf()` with `sync.Once`).
+- Keep System 2's instructions the same from call to call, so the provider's prompt cache
+  holds: whatever changes (the time, people met, skill levels, goals, what was recalled) goes
+  in the note, which comes after the conversation.
 
 **The person, not the code, holds the life.**
 - Nothing about any person is in the code: characters are YAML, prompts are `prompts/*.md`,

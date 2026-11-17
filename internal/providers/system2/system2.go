@@ -161,6 +161,7 @@ type Response struct {
 
 type Usage struct {
 	InputTokens     int
+	CachedTokens    int // part of InputTokens: read from the provider's prompt cache, at a lower price
 	OutputTokens    int
 	ReasoningTokens int // part of OutputTokens
 }

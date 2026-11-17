@@ -389,7 +389,7 @@ func (m *Mind) speakFirst(ctx context.Context, p perception.Percept, person memo
 	resp, err := m.System2.Reason(ctx, system2.Request{
 		Instructions: m.instructions(ctx, person, n),
 		History:      turns(recent),
-		Note:         m.now(p.At) + "\n\n" + s.note + nameNote(recent, n.speaker),
+		Note:         m.now(p.At) + m.peopleNote(ctx) + m.goalsNote(ctx, person) + "\n\n" + s.note + nameNote(recent, n.speaker),
 		CollectFacts: true, // the format the reply prompt describes; nothing new was said, so nothing is kept
 
 	})

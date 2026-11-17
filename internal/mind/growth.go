@@ -263,38 +263,44 @@ func (m *Mind) growthNote(ctx context.Context, now time.Time) string {
 	return b.String()
 }
 
-func (m *Mind) goalsHelp(ctx context.Context, person memory.Person) string {
+func (m *Mind) goalsHelp(person memory.Person) string {
 	if person.Key == "" || person.Key != m.policy().Owner {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString("\nGoals they ask you to take on:\n- If they ask you to learn something or take on a goal (\"add that to your goals\", " +
+	return "\nGoals they ask you to take on:\n- If they ask you to learn something or take on a goal (\"add that to your goals\", " +
 		"\"you should learn sales\") and you agree, put it in `goals`, so it really becomes yours: you'll plan how to learn it and " +
 		"practise it in your days. The skill it grows (one of yours by its exact name, or a new one, with level your honest starting " +
 		"level 1-10: a beginner is 1-2), the goal, done_when (a concrete test from what you'll make), due (YYYY-MM-DD, " + m.goalDue() + "), and " +
 		"the dream it serves (dream_id), or new_dream (third person with your name) if none fits. Only say you've added it if you " +
-		"put it in `goals`. The goal is to learn it yourself, not to make them a plan.\n")
+		"put it in `goals`. The goal is to learn it yourself, not to make them a plan. Your dreams, skills and goals now are in " +
+		"the note: a goal there is already yours, so never add it again.\n"
+}
+
+// goalsNote is its dreams, skills and goals now, for a reply to its owner. In
+// the note, not the instructions: skill levels move with every piece of
+// feedback, and the instructions stay the same so the prompt cache holds.
+func (m *Mind) goalsNote(ctx context.Context, person memory.Person) string {
+	if person.Key == "" || person.Key != m.policy().Owner {
+		return ""
+	}
+	var b strings.Builder
 	if dreams, err := m.Store.Dreams(ctx, true); err == nil && len(dreams) > 0 {
-		b.WriteString("  Your dreams:")
+		b.WriteString("\n\nYour dreams:")
 		for _, d := range dreams {
 			fmt.Fprintf(&b, " [%s] %s;", d.ID, d.Text)
 		}
-		b.WriteString("\n")
 	}
 	if skills, err := m.Store.Skills(ctx); err == nil && len(skills) > 0 {
 		names := make([]string, len(skills))
 		for i, sk := range skills {
 			names[i] = fmt.Sprintf("%s (%.1f)", sk.Name, sk.Level)
 		}
-		fmt.Fprintf(&b, "  Your skills: %s.\n", strings.Join(names, ", "))
+		fmt.Fprintf(&b, "\n\nYour skills: %s.", strings.Join(names, ", "))
 	}
-	if goals, err := m.Store.Goals(ctx, true); err == nil {
-		if len(goals) > 0 {
-			b.WriteString("  Your goals now (already yours: never add one again):")
-			for _, g := range goals {
-				fmt.Fprintf(&b, " %s (%s);", g.Text, orDefault(g.Skill, "no skill"))
-			}
-			b.WriteString("\n")
+	if goals, err := m.Store.Goals(ctx, true); err == nil && len(goals) > 0 {
+		b.WriteString("\n\nYour goals now (already yours: never add one again):")
+		for _, g := range goals {
+			fmt.Fprintf(&b, " %s (%s);", g.Text, orDefault(g.Skill, "no skill"))
 		}
 	}
 	return b.String()

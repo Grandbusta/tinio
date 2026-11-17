@@ -663,8 +663,8 @@ func (m *Mind) reason(ctx context.Context, p perception.Percept, person memory.P
 	resp, err := m.System2.Reason(ctx, system2.Request{
 		Instructions: m.instructions(ctx, person, n),
 		History:      turns(recent),
-		Note: m.now(p.At) + "\n\n" + note + works + skill + promises + m.permissionsNote(p) +
-			nameNote(recent, n.speaker),
+		Note: m.now(p.At) + m.peopleNote(ctx) + m.goalsNote(ctx, person) + "\n\n" + note + works + skill + promises +
+			m.permissionsNote(p) + nameNote(recent, n.speaker),
 		Message:      p.Text,
 		CollectFacts: true,
 	})
@@ -674,7 +674,7 @@ func (m *Mind) reason(ctx context.Context, p perception.Percept, person memory.P
 		return "Sorry, I couldn't think that through just now.", nil, nil
 	}
 	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD+embedCost
-	m.Log.Debug("system 2 usage", "input_tokens", resp.Usage.InputTokens,
+	m.Log.Debug("system 2 usage", "input_tokens", resp.Usage.InputTokens, "cached_tokens", resp.Usage.CachedTokens,
 		"output_tokens", resp.Usage.OutputTokens, "reasoning_tokens", resp.Usage.ReasoningTokens)
 
 	for _, mem := range resp.Remember {
@@ -872,10 +872,10 @@ func (m *Mind) instructions(ctx context.Context, person memory.Person, n names) 
 		personality = "- " + strings.Join(m.Life.Personality, "\n- ")
 	}
 	return strings.NewReplacer("{name}", n.agent, "{speaker}", n.speaker, "{life_story}", story,
-		"{personality}", personality, "{who_they_are}", m.whoTheyAre(ctx, person, n),
+		"{personality}", personality, "{who_they_are}", m.whoTheyAre(person, n),
 		"{makes}", m.makesList(), "{abilities}", m.abilitiesList(), "{files}", m.filesHelp(n), "{actions}", m.actionsFor(person, n), "{intents}", strings.Join(m.intents(), ", "),
 		"{correct_self}", m.correctSelf(person), "{permissions_help}", m.permissionsHelp(person, n),
-		"{feedback_help}", m.feedbackHelp(ctx, person)+m.goalsHelp(ctx, person)).Replace(m.ReplyPrompt.Text)
+		"{feedback_help}", m.feedbackHelp(ctx, person)+m.goalsHelp(person)).Replace(m.ReplyPrompt.Text)
 }
 
 // talkAbout is what a reply to message is about: it and the exchanges just

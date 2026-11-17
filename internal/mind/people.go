@@ -120,7 +120,7 @@ func (m *Mind) learnRelation(ctx context.Context, p perception.Percept, person m
 }
 
 // whoTheyAre states only what the agent was born knowing as certain.
-func (m *Mind) whoTheyAre(ctx context.Context, person memory.Person, n names) string {
+func (m *Mind) whoTheyAre(person memory.Person, n names) string {
 	var b strings.Builder
 	switch {
 	case person.Relation != "" && person.Source == memory.KnownFromBirth:
@@ -131,20 +131,29 @@ func (m *Mind) whoTheyAre(ctx context.Context, person memory.Person, n names) st
 		fmt.Fprintf(&b, "You first met %s on %s and don't know yet who they are to you. Don't assume more than they tell you.",
 			n.speaker, person.FirstSeen.Format("2 Jan 2006"))
 	}
+	return b.String()
+}
+
+// peopleNote lists the people it knows, by circle. It's in the note, not the
+// instructions: it changes as it meets people, and the instructions stay the
+// same between replies so the provider's prompt cache holds.
+func (m *Mind) peopleNote(ctx context.Context) string {
 	known, err := m.Store.KnownPeople(ctx, 50)
 	if err != nil {
 		m.Log.Warn("loading known people failed", "err", err)
-		return b.String()
+		return ""
 	}
-	if len(known) > 0 {
-		b.WriteString("\n\nPeople you know, by circle:")
-		for _, k := range known {
-			name := k.Name
-			if name == "" {
-				name = "(name not known yet)"
-			}
-			fmt.Fprintf(&b, "\n- %s, %s: %s", name, orUnknown(k.Circle), k.Relation)
+	if len(known) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n\nPeople you know, by circle:")
+	for _, k := range known {
+		name := k.Name
+		if name == "" {
+			name = "(name not known yet)"
 		}
+		fmt.Fprintf(&b, "\n- %s, %s: %s", name, orUnknown(k.Circle), k.Relation)
 	}
 	return b.String()
 }
