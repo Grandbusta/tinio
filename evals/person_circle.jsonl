@@ -1,0 +1,24 @@
+# Which circle of the agent's life someone belongs to (person_circle's circle),
+# from how they were described. Mei is the agent.
+{"state":{"relation":"Wei is Mei's younger brother."},"fill":{"agent":"Mei"},"label":"family"}
+{"state":{"relation":"Lin is Mei's grandmother."},"fill":{"agent":"Mei"},"label":"family"}
+{"state":{"relation":"Bao is Mei's cousin."},"fill":{"agent":"Mei"},"label":"family"}
+{"state":{"relation":"Ana is Mei's mother-in-law."},"fill":{"agent":"Mei"},"label":"family"}
+{"state":{"relation":"Chen is Mei's boyfriend."},"fill":{"agent":"Mei"},"label":"partner"}
+{"state":{"relation":"Yu is Mei's wife."},"fill":{"agent":"Mei"},"label":"partner"}
+{"state":{"relation":"Diego is Mei's fiancé."},"fill":{"agent":"Mei"},"label":"partner"}
+{"state":{"relation":"Hui is Mei's best friend."},"fill":{"agent":"Mei"},"label":"friend"}
+{"state":{"relation":"Jun is an old friend of Mei's from university."},"fill":{"agent":"Mei"},"label":"friend"}
+{"state":{"relation":"Ada is Mei's mentor."},"fill":{"agent":"Mei"},"label":"school"}
+{"state":{"relation":"Ms Liao was Mei's English teacher."},"fill":{"agent":"Mei"},"label":"school"}
+{"state":{"relation":"Kai is Mei's classmate in her Japanese course."},"fill":{"agent":"Mei"},"label":"school"}
+{"state":{"relation":"Tony is Mei's boss at the bookshop."},"fill":{"agent":"Mei"},"label":"work"}
+{"state":{"relation":"Rita is a client who orders translations from Mei."},"fill":{"agent":"Mei"},"label":"work"}
+{"state":{"relation":"Zoe is a colleague of Mei's at the translation agency."},"fill":{"agent":"Mei"},"label":"work"}
+{"state":{"relation":"Mr Huang lives next door to Mei."},"fill":{"agent":"Mei"},"label":"community"}
+{"state":{"relation":"Grace sings in Mei's church choir."},"fill":{"agent":"Mei"},"label":"community"}
+{"state":{"relation":"Pei is on Mei's badminton team."},"fill":{"agent":"Mei"},"label":"community"}
+{"state":{"relation":"Mei met Leo once at a book fair."},"fill":{"agent":"Mei"},"label":"acquaintance"}
+{"state":{"relation":"Mei sometimes chats with the man who runs the tea stall."},"fill":{"agent":"Mei"},"label":"acquaintance"}
+{"state":{"relation":"Sam has just messaged Mei for the first time."},"fill":{"agent":"Mei"},"label":"stranger"}
+{"state":{"relation":"Mei doesn't know Kofi yet."},"fill":{"agent":"Mei"},"label":"stranger"}

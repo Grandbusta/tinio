@@ -4,7 +4,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -25,8 +24,5 @@ func TestFilesOnDiskWinOverTheBuiltIn(t *testing.T) {
 	}
 	if raw, err := fs.ReadFile(Files, filepath.Join(dir, "prompts", "reply.md")); err != nil || string(raw) != "mine" {
 		t.Errorf("an absolute path = %q, %v", raw, err)
-	}
-	if raw, _ := fs.ReadFile(Files, "configs/tinio.yaml"); !strings.Contains(string(raw), "DATABASE_URL") {
-		t.Error("the built-in config is missing")
 	}
 }

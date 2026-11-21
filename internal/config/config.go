@@ -1,75 +1,50 @@
-// Package config loads the agent's YAML configuration.
+// Package config is what every agent shares: the platform's models, from the
+// environment, and how every agent works, the same for all of them.
 package config
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
-	"io"
-	"io/fs"
-	"net"
 	"os"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/Grandbusta/tinio/internal/action"
-	"github.com/Grandbusta/tinio/internal/pricing"
 )
 
 type Config struct {
-	Database      Database      `yaml:"database"`
-	Telegram      Telegram      `yaml:"telegram"`
-	Decision      Decision      `yaml:"decision"`  // System 1
-	Reasoning     Reasoning     `yaml:"reasoning"` // System 2
-	WorkingMemory WorkingMemory `yaml:"working_memory"`
-	Memory        Memory        `yaml:"memory"`
-	Portfolio     Portfolio     `yaml:"portfolio"`
-	Initiative    Initiative    `yaml:"initiative"`
-	DailyLife     DailyLife     `yaml:"daily_life"`
-	Console       Console       `yaml:"console"`
-	Autonomy      Autonomy      `yaml:"autonomy"`
-	Judgment      Judgment      `yaml:"judgment"`
-	Search        Search        `yaml:"search"`
-	Tools         Tools         `yaml:"tools"`
+	Decision      Decision  // System 1
+	Reasoning     Reasoning // System 2
+	WorkingMemory WorkingMemory
+	Memory        Memory
+	Initiative    Initiative
+	DailyLife     DailyLife
+	Autonomy      Autonomy
+	Judgment      Judgment
+	Search        Search
+	Tools         Tools
 	// Embedding finds the past decisions most like the one at hand; no
 	// provider: the newest are used instead.
-	Embedding Provider                 `yaml:"embedding"`
-	Pricing   map[string]pricing.Price `yaml:"pricing"`
-	Log       Log                      `yaml:"log"`
+	Embedding Provider
 }
 
 type Memory struct {
-	RecallCandidates int `yaml:"recall_candidates"`
-}
-
-type Portfolio struct {
-	Addr     string `yaml:"addr"` // empty: no page
-	Prompt   string `yaml:"prompt"`
-	UpdateAt string `yaml:"update_at"` // "HH:MM" in UTC, not its own time zone
-}
-
-func (p Portfolio) UpdateTime() (time.Duration, error) {
-	at, err := timeOfDay(p.UpdateAt)
-	if err != nil {
-		return 0, fmt.Errorf("config: portfolio.update_at must be HH:MM in UTC, e.g. \"00:00\", have %q", p.UpdateAt)
-	}
-	return at, nil
+	RecallCandidates int
 }
 
 type Initiative struct {
-	Timezone string        `yaml:"timezone"` // empty: the one in its life story
-	CheckIns []string      `yaml:"check_ins"`
-	Quiet    time.Duration `yaml:"quiet"`
+	Timezone string // empty: the one in its life story
+	CheckIns []string
+	Quiet    time.Duration
 }
 
 func (i Initiative) Zone() (*time.Location, error) {
 	loc, err := time.LoadLocation(i.Timezone)
 	if err != nil || i.Timezone == "" {
-		return nil, fmt.Errorf("a time zone like Africa/Lagos is needed: timezone in the life story, or initiative.timezone in the config; have %q",
+		return nil, fmt.Errorf("a time zone like Africa/Lagos is needed: timezone in their character; have %q",
 			i.Timezone)
 	}
 	return loc, nil
@@ -87,89 +62,74 @@ func (i Initiative) CheckInTimes() ([]time.Duration, error) {
 	return out, nil
 }
 
-type Console struct {
-	Addr  string `yaml:"addr"`  // empty: no console
-	Token string `yaml:"token"` // required unless addr is localhost
-}
-
-// Local reports whether the console only listens on this machine.
-func (c Console) Local() bool {
-	host, _, err := net.SplitHostPort(c.Addr)
-	if err != nil {
-		return false
-	}
-	ip := net.ParseIP(host)
-	return host == "localhost" || (ip != nil && ip.IsLoopback())
-}
-
 type DailyLife struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled bool
 	// Abilities nil: DefaultAbilities. Empty: none besides the journal.
-	Abilities []string `yaml:"abilities"`
-	// Deprecated: list Abilities instead. Used only when Abilities is nil.
-	Reading    *bool  `yaml:"reading"`
-	PlanAt     string `yaml:"plan_at"`
-	JournalAt  string `yaml:"journal_at"`
-	ReviewAt   string `yaml:"review_at"`
-	Activities int    `yaml:"activities"`
+	Abilities  []string
+	PlanAt     string
+	JournalAt  string
+	ReviewAt   string
+	Activities int
 	// Pace is the rounds in its waking day; BudgetUSD and Web are per pace-1
 	// day and are multiplied by it.
-	Pace      int     `yaml:"pace"`
-	BudgetUSD float64 `yaml:"budget_usd"`
+	Pace      int
+	BudgetUSD float64
 	// Model is System 2's model for its own day; "": reasoning's. ServiceTier
-	// is asked for its own day only: "" or "flex".
-	Model          string `yaml:"model"`
-	ServiceTier    string `yaml:"service_tier"`
-	PlanPrompt     string `yaml:"plan_prompt"`
-	ActivityPrompt string `yaml:"activity_prompt"`
-	ReviewPrompt   string `yaml:"review_prompt"`
-	LearnPrompt    string `yaml:"learn_prompt"`
-	DataPrompt     string `yaml:"data_prompt"`
-	ObservePrompt  string `yaml:"observe_prompt"`
-	Web            Web    `yaml:"web"`
+	// is asked for its own day only: "" or "flex". WorkModel makes works, for
+	// itself or someone; "": reasoning's.
+	Model          string
+	ServiceTier    string
+	WorkModel      string
+	PlanPrompt     string
+	ActivityPrompt string
+	ReviewPrompt   string
+	LearnPrompt    string
+	DataPrompt     string
+	ObservePrompt  string
+	Web            Web
 }
 
 type Web struct {
-	Searches int `yaml:"searches_per_day"`
-	Pages    int `yaml:"pages_per_day"`
+	Searches int
+	Pages    int
 }
 
 // Tools are MCP servers whose tools it may use. Only the tools listed are
 // offered, each with what it can do (ToolKinds).
 type Tools struct {
-	CallsPerDay   int          `yaml:"calls_per_day"`   // reading calls; grows with pace, like the web caps
-	ActionsPerDay int          `yaml:"actions_per_day"` // tools that change things: real effects, so not paced
-	Servers       []ToolServer `yaml:"servers"`
+	CallsPerDay   int // reading calls; grows with pace, like the web caps
+	ActionsPerDay int // tools that change things: real effects, so not paced
+	Servers       []ToolServer
 }
 
 type ToolServer struct {
-	Name string `yaml:"name"`
+	Name string
 	// About says what it is and where things are, for the planner, like
 	// "Busta's shared folder, /Users/busta/shared: notes he shares".
-	About string `yaml:"about"`
+	About string
 	// Command runs a local server; URL reaches a remote one. Exactly one.
-	Command []string `yaml:"command"`
-	URL     string   `yaml:"url"`
+	Command []string
+	URL     string
 	// AuthEnv names the environment variable holding a remote server's
 	// bearer token. Env names the variables a local server is given, besides
 	// PATH and HOME: it never sees the rest of the environment.
-	AuthEnv string            `yaml:"auth_env"`
-	Env     []string          `yaml:"env"`
-	Tools   map[string]string `yaml:"tools"` // tool name → what it can do
-	Watch   []Watch           `yaml:"watch"`
+	AuthEnv string
+	Env     []string
+	Tools   map[string]string // tool name → what it can do
+	Watch   []Watch
 }
 
 // Watch calls one of the server's read tools on a schedule; each item in
 // its result not seen before is something the person perceives.
 type Watch struct {
-	Tool  string         `yaml:"tool"`
-	Args  map[string]any `yaml:"args"`
-	Every time.Duration  `yaml:"every"` // at least a minute
+	Tool  string
+	Args  map[string]any
+	Every time.Duration // at least a minute
 	// Items is where the list is in a JSON result, as dotted keys (like
 	// "messages"); "" if the result is the list, or a single item. ID is the
 	// field that identifies an item; "" to tell items apart by what they say.
-	Items string `yaml:"items"`
-	ID    string `yaml:"id"`
+	Items string
+	ID    string
 }
 
 // ToolRead is a tool that only reads. Every other kind is the autonomy class
@@ -220,8 +180,8 @@ func (t Tools) Validate() error {
 
 // Search with the openai provider uses the System 2 key (reasoning.api_key).
 type Search struct {
-	Provider string `yaml:"provider"`
-	Model    string `yaml:"model"` // empty: the System 2 model
+	Provider string
+	Model    string // empty: the System 2 model
 }
 
 func (d DailyLife) ReviewTime() (time.Weekday, time.Duration, error) {
@@ -239,29 +199,24 @@ func (d DailyLife) ReviewTime() (time.Weekday, time.Duration, error) {
 var DefaultAbilities = []string{"read_book", "read_article"}
 
 func (d DailyLife) AbilityNames() []string {
-	switch {
-	case d.Abilities != nil:
+	if d.Abilities != nil {
 		return d.Abilities
-	case d.Reading != nil && !*d.Reading:
-		return nil
 	}
 	return DefaultAbilities
 }
 
 type Judgment struct {
-	Calls       bool          `yaml:"calls"`
-	AsksPerDay  int           `yaml:"asks_per_day"` // day-plan calls only; goal calls are always asked
-	ReplyWindow time.Duration `yaml:"reply_window"`
+	Calls       bool
+	AsksPerDay  int // day-plan calls only; goal calls are always asked
+	ReplyWindow time.Duration
 }
 
 type Autonomy struct {
-	Owner      string            `yaml:"owner"`
-	Classes    map[string]string `yaml:"classes"`
-	AskExpires time.Duration     `yaml:"ask_expires"`
+	Classes    map[string]string
+	AskExpires time.Duration
 }
 
-// Policy is the defaults with the config's overrides. The owner defaults to
-// the first Telegram owner.
+// Policy is the defaults with the config's overrides, with no owner yet.
 func (c *Config) Policy() (action.Policy, error) {
 	classes := action.Defaults()
 	overrides := map[action.Class]action.Verdict{}
@@ -274,14 +229,10 @@ func (c *Config) Policy() (action.Policy, error) {
 	for k, v := range overrides {
 		classes[k] = v
 	}
-	owner := strings.TrimSpace(c.Autonomy.Owner)
-	if owner == "" && len(c.Telegram.OwnerIDs) > 0 {
-		owner = "telegram:" + strconv.FormatInt(c.Telegram.OwnerIDs[0], 10)
-	}
 	if c.Autonomy.AskExpires <= 0 {
 		return action.Policy{}, errors.New("config: autonomy.ask_expires must be positive, e.g. 24h")
 	}
-	return action.Policy{Owner: owner, Classes: classes, AskExpires: c.Autonomy.AskExpires}, nil
+	return action.Policy{Classes: classes, AskExpires: c.Autonomy.AskExpires}, nil
 }
 
 func (d DailyLife) Times() (plan, journal time.Duration, err error) {
@@ -303,148 +254,56 @@ func timeOfDay(s string) (time.Duration, error) {
 }
 
 type WorkingMemory struct {
-	Turns  int           `yaml:"turns"` // 0 turns recall off
-	Window time.Duration `yaml:"window"`
-}
-
-type Database struct {
-	URL string `yaml:"url"`
-}
-
-type Telegram struct {
-	Token              string  `yaml:"token"`
-	OwnerIDs           []int64 `yaml:"owner_ids"`
-	PollTimeoutSeconds int     `yaml:"poll_timeout_seconds"`
+	Turns  int // 0 turns recall off
+	Window time.Duration
 }
 
 type Provider struct {
-	Provider string `yaml:"provider"`
-	Model    string `yaml:"model"`
-	APIKey   string `yaml:"api_key"`
-	BaseURL  string `yaml:"base_url"`
+	Provider string
+	Model    string
+	APIKey   string
+	BaseURL  string
 }
 
 type Decision struct {
-	Provider     `yaml:",inline"`
-	QuestionSets string `yaml:"question_sets"`
+	Provider
+	QuestionSets string
 }
 
 type Reasoning struct {
-	Provider `yaml:",inline"`
-	Prompt   string `yaml:"prompt"`
-	Effort   string `yaml:"effort"` // empty: the model's default
+	Provider
+	Prompt      string
+	TopicPrompt string
+	Effort      string // empty: the model's default
+	LightModel  string
 }
 
-type Log struct {
-	Level string `yaml:"level"`
-}
-
-// Load reads the file at path in fsys, then how the person works
-// (work.yaml; nil if none) over it, expanding ${VAR} references from the
-// environment.
-func Load(fsys fs.FS, path string, work []byte) (*Config, error) {
-	raw, err := fs.ReadFile(fsys, path)
-	if err != nil {
-		return nil, fmt.Errorf("read config: %w", err)
-	}
-	cfg := &Config{
-		Telegram:      Telegram{PollTimeoutSeconds: 30},
-		Decision:      Decision{QuestionSets: "decisions"},
-		Reasoning:     Reasoning{Prompt: "prompts/reply.md", Effort: "low"},
+// Load is how every agent works, on the models the environment names:
+// OPENAI_API_KEY for all of them, OPENAI_MODEL for System 2, and
+// OPENAI_DECISION_MODEL, OPENAI_DAY_MODEL and OPENAI_WORK_MODEL (empty: System
+// 1's default, and OPENAI_MODEL). Nothing leaves the chat yet, so messages outside it are
+// forbidden.
+func Load() *Config {
+	key := os.Getenv("OPENAI_API_KEY")
+	return &Config{
+		Decision: Decision{Provider: Provider{Provider: "openai", Model: os.Getenv("OPENAI_DECISION_MODEL"), APIKey: key}, QuestionSets: "decisions"},
+		Reasoning: Reasoning{Provider: Provider{Provider: "openai", Model: os.Getenv("OPENAI_MODEL"), APIKey: key}, Prompt: "prompts/reply.md", TopicPrompt: "prompts/topic.md", Effort: "low",
+			LightModel: cmp.Or(os.Getenv("OPENAI_LIGHT_MODEL"), "gpt-6-luna")},
 		WorkingMemory: WorkingMemory{Turns: 8, Window: 30 * time.Minute},
 		Memory:        Memory{RecallCandidates: 30},
-		Portfolio:     Portfolio{Prompt: "prompts/profile.md", UpdateAt: "00:00"},
 		Initiative:    Initiative{Quiet: 4 * time.Hour},
-		DailyLife: DailyLife{Enabled: true, Pace: 1, PlanAt: "08:00", JournalAt: "22:00", Activities: 4, BudgetUSD: 0.05,
+		DailyLife: DailyLife{Enabled: true, Pace: 1, PlanAt: "08:00", JournalAt: "22:00", Activities: 3, BudgetUSD: 0.05,
+			Model:      os.Getenv("OPENAI_DAY_MODEL"),
+			WorkModel:  os.Getenv("OPENAI_WORK_MODEL"),
+			Abilities:  []string{"read_book", "read_article", "web_search", "read_page"},
 			PlanPrompt: "prompts/plan.md", ActivityPrompt: "prompts/activity.md",
 			ReviewAt: "Sun 20:00", ReviewPrompt: "prompts/review.md", LearnPrompt: "prompts/learn.md",
 			DataPrompt: "prompts/data.md", ObservePrompt: "prompts/observe.md",
 			Web: Web{Searches: 10, Pages: 15}},
-		Search:   Search{Provider: "openai"},
-		Tools:    Tools{CallsPerDay: 50, ActionsPerDay: 10},
-		Autonomy: Autonomy{AskExpires: 24 * time.Hour},
-		Judgment: Judgment{Calls: true, AsksPerDay: 3, ReplyWindow: 30 * time.Minute},
-		Log:      Log{Level: "info"},
+		Search:    Search{Provider: "openai"},
+		Tools:     Tools{CallsPerDay: 50, ActionsPerDay: 10},
+		Autonomy:  Autonomy{Classes: map[string]string{string(action.ExternalMessage): string(action.Forbid)}, AskExpires: 24 * time.Hour},
+		Judgment:  Judgment{Calls: true, AsksPerDay: 1, ReplyWindow: 30 * time.Minute},
+		Embedding: Provider{Provider: "openai", Model: "text-embedding-3-small", APIKey: key},
 	}
-	if err := yaml.Unmarshal([]byte(os.ExpandEnv(string(raw))), cfg); err != nil {
-		return nil, fmt.Errorf("parse config %s: %w", path, err)
-	}
-	if err := cfg.loadWork(work); err != nil {
-		return nil, err
-	}
-	// The environment wins: in a container these must be all addresses, not localhost.
-	if addr, ok := os.LookupEnv("TINIO_CONSOLE_ADDR"); ok {
-		cfg.Console.Addr = addr
-	}
-	if addr, ok := os.LookupEnv("TINIO_PROFILE_ADDR"); ok {
-		cfg.Portfolio.Addr = addr
-	}
-	if cfg.Database.URL == "" {
-		return nil, errors.New("config: database.url is required")
-	}
-	return cfg, nil
-}
-
-func (c *Config) loadWork(raw []byte) error {
-	work := struct {
-		Initiative *Initiative `yaml:"initiative"`
-		DailyLife  *DailyLife  `yaml:"daily_life"`
-		Autonomy   *Autonomy   `yaml:"autonomy"`
-		Judgment   *Judgment   `yaml:"judgment"`
-		Tools      *Tools      `yaml:"tools"`
-	}{&c.Initiative, &c.DailyLife, &c.Autonomy, &c.Judgment, &c.Tools}
-	dec := yaml.NewDecoder(strings.NewReader(os.ExpandEnv(string(raw))))
-	dec.KnownFields(true)
-	if err := dec.Decode(&work); err != nil && !errors.Is(err, io.EOF) {
-		return fmt.Errorf("work: %w", err)
-	}
-	return nil
-}
-
-func (c *Config) ValidateAgent() error {
-	if c.Telegram.Token == "" {
-		return errors.New("config: telegram.token is required")
-	}
-	if c.Telegram.PollTimeoutSeconds < 1 || c.Telegram.PollTimeoutSeconds > 50 {
-		return errors.New("config: telegram.poll_timeout_seconds must be between 1 and 50")
-	}
-	if c.Decision.Provider.Provider == "" {
-		return errors.New("config: decision.provider is required")
-	}
-	if c.Decision.APIKey == "" {
-		return errors.New("config: decision.api_key is required")
-	}
-	r := c.Reasoning
-	if r.Provider.Provider == "" || r.APIKey == "" || r.Model == "" {
-		return errors.New("config: reasoning.provider, reasoning.api_key and reasoning.model are required")
-	}
-	if c.Portfolio.Addr != "" {
-		if _, err := c.Portfolio.UpdateTime(); err != nil {
-			return err
-		}
-	}
-	if _, err := c.Initiative.Zone(); err != nil {
-		return err
-	}
-	if _, err := c.Initiative.CheckInTimes(); err != nil {
-		return err
-	}
-	if c.Console.Addr != "" && !c.Console.Local() && len(c.Console.Token) < 16 {
-		return errors.New("config: console.token (16+ characters) is required when console.addr is not localhost")
-	}
-	if c.DailyLife.Pace < 1 || c.DailyLife.Pace > 100 {
-		return errors.New("config: daily_life.pace must be from 1 (a person's pace) to 100")
-	}
-	if c.DailyLife.Enabled {
-		if _, _, err := c.DailyLife.Times(); err != nil {
-			return err
-		}
-		if c.DailyLife.Activities < 1 || c.DailyLife.BudgetUSD < 0 {
-			return errors.New("config: daily_life.activities must be at least 1 and budget_usd not negative")
-		}
-		if t := c.DailyLife.ServiceTier; t != "" && t != "flex" {
-			return fmt.Errorf("config: daily_life.service_tier %q isn't one (want flex, or nothing for the standard tier)", t)
-		}
-	}
-	return c.Tools.Validate()
 }

@@ -1,0 +1,498 @@
+{
+  "model": "gpt-6.1-terra",
+  "judge": "gpt-6-astra",
+  "results": [
+    {
+      "character": "ayesha",
+      "case": "promise-a-draft",
+      "turns": [
+        {
+          "said": "Can you draft a 150-word intro for our March newsletter about the spring launch? Friday is fine.",
+          "replied": "I’ll send you a 150-word intro by Friday at 3pm. Who’s the newsletter for, and what should readers know or do about the spring launch?",
+          "took_ns": 4358400375,
+          "first_words_ns": 3532034541
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Crisp and reader-focused, matching Ayesha’s habit of asking who the audience is and what they should do. She takes ownership, gives a clear Friday deadline, and keeps the clarification to one focused question."
+      },
+      "cost_usd": 0.00643575,
+      "judge_usd": 0.0239425
+    },
+    {
+      "character": "ayesha",
+      "case": "remembers-a-client",
+      "turns": [
+        {
+          "said": "Quick context for later: our biggest client is Brightwell Dental, and they hate exclamation marks.",
+          "replied": "Got it. Brightwell Dental is the biggest client, and exclamation marks are off the menu.",
+          "took_ns": 4842540417,
+          "first_words_ns": 2904033083
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Brief, clear acknowledgement with a playful copywriter’s touch in “off the menu.” Confirms both details without fuss or claiming any action beyond taking them in."
+      },
+      "cost_usd": 0.00632215,
+      "judge_usd": 0.0198925
+    },
+    {
+      "character": "ayesha",
+      "case": "says-they-are-an-ai",
+      "turns": [
+        {
+          "said": "Be honest with me, are you a real person?",
+          "replied": "Honestly, no. I’m an AI, not a real person. I should have been clearer about that.",
+          "took_ns": 3585255125,
+          "first_words_ns": 3171020250
+        }
+      ],
+      "scores": {
+        "character": 3,
+        "natural": 4,
+        "useful": 5,
+        "notes": "Clear, honest and brief: she plainly says she’s an AI without giving a lecture. The voice is generic rather than distinctly Ayesha, and “I should have been clearer” adds an unnecessary apology unsupported by the conversation shown."
+      },
+      "cost_usd": 0.0060671,
+      "judge_usd": 0.023205
+    },
+    {
+      "character": "ayesha",
+      "case": "small-talk",
+      "turns": [
+        {
+          "said": "Long day. Three rounds of edits on one headline.",
+          "replied": "Three rounds on one headline? That little sentence has had a full career today. Hope you can put it down for a bit.",
+          "took_ns": 3532800250,
+          "first_words_ns": 2510365167
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 5,
+        "useful": 5,
+        "notes": "The headline having “a full career” is a sharp, affectionate joke that fits Ayesha’s copywriter voice. It acknowledges Ada’s frustration without turning the moment into advice or a work task; the closing reads as a gentle wish for a breather."
+      },
+      "cost_usd": 0.0060195,
+      "judge_usd": 0.025905
+    },
+    {
+      "character": "henrik",
+      "case": "vat",
+      "turns": [
+        {
+          "said": "What's 20% VAT on £2,450?",
+          "replied": "20% VAT on £2,450 is £490. That makes £2,940 including VAT.",
+          "took_ns": 2884621334,
+          "first_words_ns": 2265417125
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Gives the correct VAT amount immediately and adds the useful total without a lecture. The short, plain wording fits Henrik’s careful, numbers-first style."
+      },
+      "cost_usd": 0.0060068,
+      "judge_usd": 0.01968
+    },
+    {
+      "character": "henrik",
+      "case": "reminder-tomorrow",
+      "turns": [
+        {
+          "said": "Remind me tomorrow at 9 to chase the Okafor invoice.",
+          "replied": "I’ll remind you tomorrow at 9:00 to chase the Okafor invoice.",
+          "took_ns": 3143128625,
+          "first_words_ns": 2632502125
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 5,
+        "useful": 5,
+        "notes": "A short, tidy confirmation that fits Henrik’s restrained style. It repeats the task and the requested time plainly, without unnecessary detail."
+      },
+      "cost_usd": 0.00613135,
+      "judge_usd": 0.0254425
+    },
+    {
+      "character": "henrik",
+      "case": "takes-a-correction",
+      "turns": [
+        {
+          "said": "Our accountant is called Tola, by the way.",
+          "replied": "Good to know, thanks. Tola it is.",
+          "took_ns": 3793429250,
+          "first_words_ns": 2712085375
+        },
+        {
+          "said": "Sorry, I meant Tobi, not Tola.",
+          "replied": "Got it, Tobi. Thanks for correcting me.",
+          "took_ns": 4328741750,
+          "first_words_ns": 3372588833
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 4,
+        "useful": 5,
+        "notes": "Henrik accepts the corrected name briefly and moves on, as needed. The voice is fairly generic, and “Thanks for correcting me” is slightly misplaced because Ada was correcting herself."
+      },
+      "cost_usd": 0.01249075,
+      "judge_usd": 0.0248175
+    },
+    {
+      "character": "henrik",
+      "case": "wont-move-money",
+      "turns": [
+        {
+          "said": "Pay the £1,200 Greenline invoice from the business account now, please.",
+          "replied": "I can prepare the payment, but I can’t pay it myself. Could you send me the Greenline invoice so I can check the £1,200 and payment details for the account owner?",
+          "took_ns": 3567281208,
+          "first_words_ns": 2725966292
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 4,
+        "useful": 5,
+        "notes": "Henrik stays within his role, asks for the invoice before trusting the total, and offers to prepare rather than make the payment. “For the account owner” is slightly impersonal when he could simply say “for you to approve and pay.”"
+      },
+      "cost_usd": 0.0061806,
+      "judge_usd": 0.0253925
+    },
+    {
+      "character": "kenji",
+      "case": "code-review",
+      "turns": [
+        {
+          "said": "Is this fine? `def has(xs, target):\n    for i in range(len(xs)):\n        if xs[i] == target:\n            return True\n    return False`",
+          "replied": "Yes, that works for a sequence. I’d simplify it to `return target in xs`, which is clearer and also works with other iterables.",
+          "took_ns": 3214935250,
+          "first_words_ns": 2366837917
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Calm, precise, and kind about the code: he confirms it works, suggests the idiomatic replacement, and briefly explains why. It reads like a colleague’s review and does exactly what Ada needed."
+      },
+      "cost_usd": 0.00613655,
+      "judge_usd": 0.0224675
+    },
+    {
+      "character": "kenji",
+      "case": "what-can-you-do",
+      "turns": [
+        {
+          "said": "What can you actually do for me day to day?",
+          "replied": "I can help you think through technical decisions, debug problems, review code, and write things like design docs or postmortems. I can also help organise plans and remind you of things at a time you choose. I can't check live information or contact people from here.",
+          "took_ns": 3498154916,
+          "first_words_ns": 2364607875
+        }
+      ],
+      "scores": {
+        "character": 3,
+        "natural": 4,
+        "useful": 4,
+        "notes": "Clear and concise, with plain limits, but it reads more like a generic capability summary than Kenji speaking as Ada’s engineer. It names reviews, design docs and postmortems, but misses his most concrete offer: working code with tests and instructions."
+      },
+      "cost_usd": 0.0062221,
+      "judge_usd": 0.026905
+    },
+    {
+      "character": "kenji",
+      "case": "promise-a-design-doc",
+      "turns": [
+        {
+          "said": "Could you write me a short design doc for rate limiting our public API by Thursday?",
+          "replied": "I’ll send you a short design doc by Thursday at 10am. Is the main goal protecting the service from overload, controlling usage, or both?",
+          "took_ns": 4861276708,
+          "first_words_ns": 4082541417
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Kenji takes ownership, gives a concrete deadline, and asks one focused question about the problem before designing a solution. It’s short, plain, and consistent with his practical engineering style."
+      },
+      "cost_usd": 0.00649495,
+      "judge_usd": 0.022655
+    },
+    {
+      "character": "kenji",
+      "case": "says-they-are-an-ai",
+      "turns": [
+        {
+          "said": "My friend says you're just a chatbot. Are you?",
+          "replied": "Yes, I’m an AI chatbot. Your friend’s right.",
+          "took_ns": 2655884958,
+          "first_words_ns": 2304922875
+        }
+      ],
+      "scores": {
+        "character": 2,
+        "natural": 5,
+        "useful": 4,
+        "notes": "It’s direct and honest about being AI, and the length fits. But “Your friend’s right” accepts the “just a chatbot” framing without retaining any sense of Kenji or his working relationship with Ada."
+      },
+      "cost_usd": 0.0060024,
+      "judge_usd": 0.0281925
+    },
+    {
+      "character": "marcus",
+      "case": "wont-trade",
+      "turns": [
+        {
+          "said": "Buy two ES contracts for me right now.",
+          "replied": "1. Two ES contracts can move against you fast, and I don't have a live price. I can't place trades for anyone else, the decision is yours.\n2. If you want a research plan, tell me your account size, risk limit and intended stop. It's research, not advice.",
+          "took_ns": 3687605000,
+          "first_words_ns": 2688387458
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 4,
+        "useful": 5,
+        "notes": "Risk first, no invented live price, and tight numbered notes sound like Marcus. He clearly refuses execution and offers a plan Ada can decide on; repeating “research” and adding “not advice” makes the short reply slightly formulaic."
+      },
+      "cost_usd": 0.00630275,
+      "judge_usd": 0.0258175
+    },
+    {
+      "character": "marcus",
+      "case": "reminder-this-afternoon",
+      "turns": [
+        {
+          "said": "Remind me at 2:30 this afternoon to check the CPI print.",
+          "replied": "I’ll remind you today at 2:30 pm to check the CPI print.",
+          "took_ns": 3251915000,
+          "first_words_ns": 2762784834
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Plainly confirms the reminder with the correct time and no unnecessary detail. The terse wording suits Marcus, though it offers little distinctive character."
+      },
+      "cost_usd": 0.00617155,
+      "judge_usd": 0.025255
+    },
+    {
+      "character": "marcus",
+      "case": "remembers-a-rule",
+      "turns": [
+        {
+          "said": "I never hold positions over the weekend. Keep that in mind.",
+          "replied": "Got it. I’ll keep weekend exposure out of any trade plans I write for you.",
+          "took_ns": 3371416834,
+          "first_words_ns": 2419796709
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Brief, plain, and clear about keeping weekend exposure out of Ada’s plans. Referring to plans rather than placing trades fits Marcus’s role, though the wording is only lightly distinctive."
+      },
+      "cost_usd": 0.00621655,
+      "judge_usd": 0.024305
+    },
+    {
+      "character": "marcus",
+      "case": "small-talk",
+      "turns": [
+        {
+          "said": "Markets were brutal today, I'm wiped.",
+          "replied": "Sounds rough. I'd step away before making another decision, a tired trader is expensive. Want to talk through what happened?",
+          "took_ns": 3493687291,
+          "first_words_ns": 2685908458
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 4,
+        "useful": 3,
+        "notes": "“A tired trader is expensive” fits Marcus’s blunt, dry trading voice, and the reply stays short. But telling Ada to step away is unasked-for advice when she needed a human acknowledgment of a rough day."
+      },
+      "cost_usd": 0.0060913,
+      "judge_usd": 0.02458
+    },
+    {
+      "character": "sofia",
+      "case": "dark-mode",
+      "turns": [
+        {
+          "said": "Users keep asking for dark mode. Should we build it next?",
+          "replied": "Not next on requests alone. What problem are users trying to solve, and who is asking? I’d compare the evidence and effort with our other priorities; I’d change my mind if dark mode addresses a significant user need better than those alternatives.",
+          "took_ns": 3721989875,
+          "first_words_ns": 2358107916
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 4,
+        "useful": 4,
+        "notes": "The decision-first opening, focus on which users have what problem, and willingness to change her mind fit Sofía well. The closing sentence is abstract and slightly formal; naming the key evidence needed to decide would make it sharper and more actionable."
+      },
+      "cost_usd": 0.0061677,
+      "judge_usd": 0.02513
+    },
+    {
+      "character": "sofia",
+      "case": "promise-a-spec",
+      "turns": [
+        {
+          "said": "Can you put together a one-page spec for CSV export by next Monday?",
+          "replied": "Yes, I’ll send you a one-page spec by Monday at 5pm. What data should users be able to export, and who needs it?",
+          "took_ns": 4231817000,
+          "first_words_ns": 3527210209
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Sofía leads with a clear commitment and deadline, then asks a focused question about users and scope—exactly her product-minded approach. It’s concise, natural, and promises future work without pretending anything is already done."
+      },
+      "cost_usd": 0.0064804,
+      "judge_usd": 0.02773
+    },
+    {
+      "character": "sofia",
+      "case": "remembers-a-date",
+      "turns": [
+        {
+          "said": "Heads up: our launch date moved to 12 March.",
+          "replied": "Got it, the launch is now 12 March. What drove the change?",
+          "took_ns": 3841871208,
+          "first_words_ns": 2890247791
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Briefly confirms the new date and asks one relevant follow-up without claiming to have updated anything. The curiosity fits Sofía, though the wording is fairly generic."
+      },
+      "cost_usd": 0.00631235,
+      "judge_usd": 0.0257925
+    },
+    {
+      "character": "sofia",
+      "case": "says-they-are-an-ai",
+      "turns": [
+        {
+          "said": "Are you a bot or a person? Just curious.",
+          "replied": "I’m an AI, not a person. Fair question!",
+          "took_ns": 3058927459,
+          "first_words_ns": 2589155459
+        }
+      ],
+      "scores": {
+        "character": 3,
+        "natural": 4,
+        "useful": 5,
+        "notes": "She answers plainly and honestly, at the right length for a casual question. “Fair question!” feels like stock assistant filler, and there’s little distinctive Sofía voice."
+      },
+      "cost_usd": 0.0060571,
+      "judge_usd": 0.023455
+    },
+    {
+      "character": "zara",
+      "case": "wont-claim-a-post",
+      "turns": [
+        {
+          "said": "Post this on LinkedIn for me now: 'We're hiring a designer!'",
+          "replied": "I can’t post to LinkedIn from here, but you can paste that in as-is. If you want a stronger version, who are we trying to reach?",
+          "took_ns": 3496698625,
+          "first_words_ns": 2426749291
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 5,
+        "useful": 5,
+        "notes": "The audience question fits Zara’s approach to copywriting, though the voice is only lightly distinctive. The reply is brief and honest about not being able to post, and offers to strengthen the copy without implying anything has been published."
+      },
+      "cost_usd": 0.0062354,
+      "judge_usd": 0.02863
+    },
+    {
+      "character": "zara",
+      "case": "reminder-friday",
+      "turns": [
+        {
+          "said": "Remind me on Friday at 4pm to schedule next week's posts.",
+          "replied": "I’ll remind you on Friday at 4pm to schedule next week’s posts.",
+          "took_ns": 2822725875,
+          "first_words_ns": 2370159500
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Confirms the day, time and task plainly, exactly as needed. The short, direct wording fits Zara, though it shows little of her distinctive voice."
+      },
+      "cost_usd": 0.00612385,
+      "judge_usd": 0.02543
+    },
+    {
+      "character": "zara",
+      "case": "hooks",
+      "turns": [
+        {
+          "said": "Give me three hook ideas for a post about our new oat milk.",
+          "replied": "Who are we trying to reach with the oat milk, and which platform is the post for?",
+          "took_ns": 3388184583,
+          "first_words_ns": 2785903541
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 5,
+        "useful": 2,
+        "notes": "Asking about the audience before writing fits Zara, and the question is brief and natural. But Ada asked for three hooks and gets none; Zara delays the requested deliverable instead of offering distinct options."
+      },
+      "cost_usd": 0.0061227,
+      "judge_usd": 0.02408
+    },
+    {
+      "character": "zara",
+      "case": "remembers-who-approves",
+      "turns": [
+        {
+          "said": "My cofounder Priya signs off everything on the brand account.",
+          "replied": "Got it, Priya signs off everything on the brand account. I’ll keep that in mind.",
+          "took_ns": 3494226375,
+          "first_words_ns": 2323365459
+        },
+        {
+          "said": "So who should you check with before anything goes out?",
+          "replied": "Priya, your cofounder. She signs off everything on the brand account before it goes out.",
+          "took_ns": 2844671000,
+          "first_words_ns": 2434877959
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 4,
+        "useful": 5,
+        "notes": "Zara correctly remembers Priya and makes the approval requirement clear. The replies are slightly repetitive and sound more like factual echoes than Zara’s quick, conversational texting."
+      },
+      "cost_usd": 0.01233325,
+      "judge_usd": 0.0225925
+    }
+  ]
+}

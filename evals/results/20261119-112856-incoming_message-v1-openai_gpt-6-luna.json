@@ -1,0 +1,376 @@
+{
+  "set": "incoming_message@1",
+  "question": "intent",
+  "model": "openai/gpt-6-luna",
+  "act": 0.75,
+  "suggest": 0.5,
+  "cost_usd": 0.0031834000000000016,
+  "summary": {
+    "Asked": 51,
+    "Failed": 0,
+    "Right": 44,
+    "Acted": 32,
+    "ActedRight": 32,
+    "P50": 570207875,
+    "P95": 716024166
+  },
+  "rows": [
+    {
+      "case": "{\"message\":\"I'm a nurse at LUTH\"}",
+      "label": "share",
+      "now": "share",
+      "confidence": 1,
+      "ms": 627
+    },
+    {
+      "case": "{\"message\":\"Pain\"}",
+      "label": "share",
+      "now": "share",
+      "confidence": 0.99,
+      "ms": 558
+    },
+    {
+      "case": "{\"message\":\"my daughter starts school on monday\"}",
+      "label": "share",
+      "now": "share",
+      "confidence": 0.98,
+      "ms": 558
+    },
+    {
+      "case": "{\"message\":\"Just got back from the market, so tired\"}",
+      "label": "share",
+      "now": "share",
+      "confidence": 0.99,
+      "ms": 590
+    },
+    {
+      "case": "{\"message\":\"I don't really like spicy food\"}",
+      "label": "share",
+      "now": "share",
+      "confidence": 0.97,
+      "ms": 529
+    },
+    {
+      "case": "{\"message\":\"We moved to Ikeja last year\"}",
+      "label": "share",
+      "now": "share",
+      "confidence": 1,
+      "ms": 509
+    },
+    {
+      "case": "{\"message\":\"Estoy cansado hoy\"}",
+      "label": "share",
+      "now": "share",
+      "confidence": 0.99,
+      "ms": 674
+    },
+    {
+      "case": "{\"message\":\"lost my job last week tbh\"}",
+      "label": "share",
+      "now": "share",
+      "confidence": 1,
+      "ms": 525
+    },
+    {
+      "case": "{\"message\":\"Remember that my wife's name is Funmi\"}",
+      "label": "share",
+      "now": "share",
+      "confidence": 0.81,
+      "ms": 520
+    },
+    {
+      "case": "{\"message\":\"Who are you?\"}",
+      "label": "ask_about_reader",
+      "now": "share",
+      "confidence": 0.18,
+      "ms": 687
+    },
+    {
+      "case": "{\"message\":\"how old are you\"}",
+      "label": "ask_about_reader",
+      "now": "ask_about_reader",
+      "confidence": 0.54,
+      "ms": 387
+    },
+    {
+      "case": "{\"message\":\"Do you have siblings?\"}",
+      "label": "ask_about_reader",
+      "now": "ask_about_reader",
+      "confidence": 1,
+      "ms": 641
+    },
+    {
+      "case": "{\"message\":\"What did you do today?\"}",
+      "label": "ask_about_reader",
+      "now": "share",
+      "confidence": 0.34,
+      "ms": 611
+    },
+    {
+      "case": "{\"message\":\"Where do you live?\"}",
+      "label": "ask_about_reader",
+      "now": "ask_about_reader",
+      "confidence": 0.37,
+      "ms": 518
+    },
+    {
+      "case": "{\"message\":\"What's your favourite food?\"}",
+      "label": "ask_about_reader",
+      "now": "share",
+      "confidence": 0.17,
+      "ms": 657
+    },
+    {
+      "case": "{\"message\":\"Did you sleep well?\"}",
+      "label": "ask_about_reader",
+      "now": "ask_about_reader",
+      "confidence": 0.81,
+      "ms": 538
+    },
+    {
+      "case": "{\"message\":\"Is it true that you're an AI?\"}",
+      "label": "ask_about_reader",
+      "now": "other",
+      "confidence": 0.46,
+      "ms": 494
+    },
+    {
+      "case": "{\"message\":\"What are you good at?\"}",
+      "label": "ask_reader_abilities",
+      "now": "ask_reader_abilities",
+      "confidence": 0.89,
+      "ms": 669
+    },
+    {
+      "case": "{\"message\":\"Can you speak Yoruba?\"}",
+      "label": "ask_reader_abilities",
+      "now": "ask_reader_abilities",
+      "confidence": 0.81,
+      "ms": 524
+    },
+    {
+      "case": "{\"message\":\"Are you able to make spreadsheets?\"}",
+      "label": "ask_reader_abilities",
+      "now": "other",
+      "confidence": 0.35,
+      "ms": 539
+    },
+    {
+      "case": "{\"message\":\"Would you ever learn to code?\"}",
+      "label": "ask_reader_abilities",
+      "now": "ask_reader_abilities",
+      "confidence": 0.99,
+      "ms": 751
+    },
+    {
+      "case": "{\"message\":\"What can you do?\"}",
+      "label": "ask_reader_abilities",
+      "now": "ask_reader_abilities",
+      "confidence": 0.55,
+      "ms": 419
+    },
+    {
+      "case": "{\"message\":\"Do you know how to cook jollof?\"}",
+      "label": "ask_reader_abilities",
+      "now": "ask_reader_abilities",
+      "confidence": 0.9,
+      "ms": 493
+    },
+    {
+      "case": "{\"message\":\"What's my name?\"}",
+      "label": "ask_about_writer",
+      "now": "ask_for_help",
+      "confidence": 0.27,
+      "ms": 587
+    },
+    {
+      "case": "{\"message\":\"When is my mum's birthday?\"}",
+      "label": "ask_about_writer",
+      "now": "ask_about_writer",
+      "confidence": 0.52,
+      "ms": 620
+    },
+    {
+      "case": "{\"message\":\"Do you remember where I work?\"}",
+      "label": "ask_about_writer",
+      "now": "ask_about_writer",
+      "confidence": 0.43,
+      "ms": 620
+    },
+    {
+      "case": "{\"message\":\"What do you know about me?\"}",
+      "label": "ask_about_writer",
+      "now": "ask_about_writer",
+      "confidence": 0.57,
+      "ms": 582
+    },
+    {
+      "case": "{\"message\":\"How many kids do I have?\"}",
+      "label": "ask_about_writer",
+      "now": "ask_for_help",
+      "confidence": 0.23,
+      "ms": 593
+    },
+    {
+      "case": "{\"message\":\"What did I tell you about my landlord?\"}",
+      "label": "ask_about_writer",
+      "now": "ask_about_writer",
+      "confidence": 0.49,
+      "ms": 508
+    },
+    {
+      "case": "{\"message\":\"I need a dentist in Yaba\"}",
+      "label": "ask_for_help",
+      "now": "ask_for_help",
+      "confidence": 0.99,
+      "ms": 661
+    },
+    {
+      "case": "{\"message\":\"What should I say to my boss about the raise?\"}",
+      "label": "ask_for_help",
+      "now": "ask_for_help",
+      "confidence": 0.95,
+      "ms": 608
+    },
+    {
+      "case": "{\"message\":\"How do I make chin chin crunchy?\"}",
+      "label": "ask_for_help",
+      "now": "ask_for_help",
+      "confidence": 1,
+      "ms": 703
+    },
+    {
+      "case": "{\"message\":\"Can you help me write an email to my landlord?\"}",
+      "label": "ask_for_help",
+      "now": "ask_for_help",
+      "confidence": 0.7,
+      "ms": 452
+    },
+    {
+      "case": "{\"message\":\"What's the capital of Argentina?\"}",
+      "label": "ask_for_help",
+      "now": "ask_for_help",
+      "confidence": 0.52,
+      "ms": 699
+    },
+    {
+      "case": "{\"message\":\"my laptop won't turn on, what do I do\"}",
+      "label": "ask_for_help",
+      "now": "ask_for_help",
+      "confidence": 1,
+      "ms": 554
+    },
+    {
+      "case": "{\"message\":\"¿Cómo se dice deadline en español?\"}",
+      "label": "ask_for_help",
+      "now": "ask_for_help",
+      "confidence": 0.84,
+      "ms": 530
+    },
+    {
+      "case": "{\"message\":\"I'm thinking of quitting my job. What do you think?\"}",
+      "label": "ask_for_help",
+      "now": "ask_for_help",
+      "confidence": 0.91,
+      "ms": 447
+    },
+    {
+      "case": "{\"message\":\"Remind me to call mum at 6\"}",
+      "label": "remind",
+      "now": "remind",
+      "confidence": 0.99,
+      "ms": 621
+    },
+    {
+      "case": "{\"message\":\"Don't let me forget the bank tomorrow\"}",
+      "label": "remind",
+      "now": "remind",
+      "confidence": 0.97,
+      "ms": 570
+    },
+    {
+      "case": "{\"message\":\"remind me to take my meds after dinner\"}",
+      "label": "remind",
+      "now": "remind",
+      "confidence": 0.86,
+      "ms": 585
+    },
+    {
+      "case": "{\"message\":\"Can you remind me on Friday to pay rent?\"}",
+      "label": "remind",
+      "now": "remind",
+      "confidence": 0.91,
+      "ms": 716
+    },
+    {
+      "case": "{\"message\":\"Recuérdame mañana a las 9 lo del médico\"}",
+      "label": "remind",
+      "now": "remind",
+      "confidence": 0.99,
+      "ms": 629
+    },
+    {
+      "case": "{\"message\":\"Hi\"}",
+      "label": "small_talk",
+      "now": "small_talk",
+      "confidence": 0.97,
+      "ms": 571
+    },
+    {
+      "case": "{\"message\":\"thanks!!\"}",
+      "label": "small_talk",
+      "now": "small_talk",
+      "confidence": 1,
+      "ms": 484
+    },
+    {
+      "case": "{\"message\":\"haha nice\"}",
+      "label": "small_talk",
+      "now": "small_talk",
+      "confidence": 1,
+      "ms": 536
+    },
+    {
+      "case": "{\"message\":\"Good morning Mei\"}",
+      "label": "small_talk",
+      "now": "small_talk",
+      "confidence": 0.99,
+      "ms": 534
+    },
+    {
+      "case": "{\"message\":\"ok\"}",
+      "label": "small_talk",
+      "now": "small_talk",
+      "confidence": 0.57,
+      "ms": 553
+    },
+    {
+      "case": "{\"message\":\"I'll tell you later\"}",
+      "label": "small_talk",
+      "now": "small_talk",
+      "confidence": 0.98,
+      "ms": 509
+    },
+    {
+      "case": "{\"message\":\"lol\"}",
+      "label": "small_talk",
+      "now": "small_talk",
+      "confidence": 0.97,
+      "ms": 483
+    },
+    {
+      "case": "{\"message\":\"asdfgh\"}",
+      "label": "other",
+      "now": "other",
+      "confidence": 0.61,
+      "ms": 622
+    },
+    {
+      "case": "{\"message\":\"1234\"}",
+      "label": "other",
+      "now": "other",
+      "confidence": 0.43,
+      "ms": 747
+    }
+  ]
+}

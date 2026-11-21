@@ -35,6 +35,15 @@ func TestJudgment(t *testing.T) {
 		}
 	})
 
+	t.Run("a ready character's comes approved, so it's used from the start", func(t *testing.T) {
+		m, _ := newMind(&fakeReplier{}, &fakeSystem1{}, &fakeSystem2{})
+		m.Judgment, m.JudgmentApproved = judgment, true
+		m.seedJudgment(context.Background())
+		if note := m.judgmentNote(context.Background(), planJudgment, ""); !strings.Contains(note, "Start small, then build on it.") {
+			t.Errorf("note = %q; want the seeded principle", note)
+		}
+	})
+
 	t.Run("approved judgment of the right types goes into the note", func(t *testing.T) {
 		m, s := newMind(&fakeReplier{}, &fakeSystem1{}, &fakeSystem2{})
 		m.Judgment = judgment

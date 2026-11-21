@@ -68,6 +68,9 @@ type Material struct {
 	Project  *memory.Project // the project, moved on or newly started; saved only if the activity succeeds
 	Done     bool
 	WorkKind string // "": System 2 chooses
+	// CostUSD is what getting it cost (a web search's model and tool), paid
+	// like a decision's.
+	CostUSD float64
 }
 
 // Fence marks text from outside (a book, an article, a web page) as

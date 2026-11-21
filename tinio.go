@@ -1,6 +1,5 @@
-// Package tinio is what every person shares, built into the binary: the
-// config, the prompts, the question sets, and the characters to start from. So
-// the binary alone, with a person's DATABASE_URL and TINIO_KEY, runs them.
+// Package tinio is what every agent shares, built into the binary: the prompts,
+// the question sets, and the characters to start from.
 package tinio
 
 import (
@@ -10,7 +9,7 @@ import (
 	"os"
 )
 
-//go:embed configs prompts decisions characters .env.example
+//go:embed prompts decisions characters
 var built embed.FS
 
 // Files is the shared files, a file or folder on disk (relative to where it

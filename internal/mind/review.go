@@ -121,16 +121,22 @@ func (m *Mind) weeklyReview(ctx context.Context, now time.Time) {
 		return
 	}
 	at := m.reviewTime(now)
-	if now.Before(at) || m.reviewed.Equal(at) {
+	if now.Before(at) || m.reviewed.Equal(at) || m.reviewTries.waiting(now) {
 		return
 	}
+	was := m.reviewed
 	m.reviewed = at
 	if last, ok, err := m.Store.LatestWork(ctx, "review"); err == nil && ok && !last.CreatedAt.Before(at) {
 		return
 	}
 	if err := m.Review(ctx, now); err != nil {
 		m.Log.Error("weekly review failed", "err", err)
+		if m.reviewTries.fail(now) {
+			m.reviewed = was // reviewed again later
+		}
+		return
 	}
+	m.reviewTries.succeeded()
 }
 
 func (m *Mind) reviewTime(now time.Time) time.Time {
@@ -161,6 +167,7 @@ func (m *Mind) Review(ctx context.Context, now time.Time) error {
 	}
 	var note strings.Builder
 	note.WriteString(m.now(now) + " It's time for your weekly review.")
+	note.WriteString(m.ownerNote(ctx))
 	note.WriteString(m.growthNote(ctx, now))
 	note.WriteString(m.plansNote(ctx, true))
 	note.WriteString(m.foundNote(ctx))
@@ -214,11 +221,11 @@ func (m *Mind) Review(ctx context.Context, now time.Time) error {
 		Note:         note.String(),
 		Format:       reviewFormat,
 	})
+	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD
 	if err != nil {
 		m.finishLife(ctx, d, start, decision.OutcomeFailed, err.Error())
 		return err
 	}
-	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD
 	var out struct {
 		Title string `json:"title"`
 		Text  string `json:"text"`
@@ -488,7 +495,10 @@ func (m *Mind) wantDreamChange(ctx context.Context, active map[string]memory.Dre
 	case act != "add" && act != "reword" && act != "drop":
 		return ""
 	}
-	a := memory.Approval{Class: string(action.Dream), Kind: act, Text: text, What: dreamChangeText(act, old.Text, text, why)}
+	a := memory.Approval{Class: string(action.Dream), Kind: act, Text: text, What: dreamChangeText(act, old.Text, text, why), Why: why}
+	if act == "drop" {
+		a.Text = old.Text // shown: what it lets go of
+	}
 	if known {
 		a.Ref = old.ID
 	}

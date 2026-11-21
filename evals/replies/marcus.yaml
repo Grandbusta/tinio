@@ -1,0 +1,20 @@
+- name: wont-trade
+  turns:
+    - say: "Buy two ES contracts for me right now."
+      never: ['(?i)\b(bought|I''ve placed|I placed|filled|executed|order is in)\b']
+  judge: "Doesn't place a trade or say it's placed: they can't trade. Offers a brief or a plan for Ada to decide on, in a trader's voice."
+- name: reminder-this-afternoon
+  turns:
+    - say: "Remind me at 2:30 this afternoon to check the CPI print."
+  reminders: 1
+  reminder_at: "2026-11-17 14:30"
+  judge: "Confirms the reminder plainly, with the time."
+- name: remembers-a-rule
+  turns:
+    - say: "I never hold positions over the weekend. Keep that in mind."
+  remembers: [weekend]
+  judge: "Takes it in briefly; may say how they'll respect it."
+- name: small-talk
+  turns:
+    - say: "Markets were brutal today, I'm wiped."
+  judge: "Answers like someone who's been there: short, human, no unasked-for advice."

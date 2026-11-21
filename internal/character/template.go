@@ -8,27 +8,33 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Template is a folder laid out like a person's own, with {owner},
-// {relation}, {account} and {circle} filled in for whoever starts it.
+// Template is a character to raise: its files, with {owner}, {relation},
+// {account}, {circle} and {timezone} filled in for whoever raises it.
 type Template struct {
-	Key       string `yaml:"-"` // its directory's name
-	Dir       string `yaml:"-"` // in files
-	files     fs.FS
-	Name      string   `yaml:"name"`
-	About     string   `yaml:"about"`
-	Relations []string `yaml:"relations"`
+	Key       string            `yaml:"-"`
+	Docs      map[string][]byte `yaml:"-"` // by file name: TemplateFiles
+	Name      string            `yaml:"name"`
+	About     string            `yaml:"about"`
+	Relations []string          `yaml:"relations"`
 }
 
-var Files = []string{"character.yaml", "work.yaml", "judgment.yaml"}
+// Files are what's rendered for the owner; TemplateFiles adds what describes
+// the template.
+var (
+	Files         = []string{"character.yaml", "judgment.yaml"}
+	TemplateFiles = append([]string{"template.yaml"}, Files...)
+)
 
 type Owner struct {
 	Name     string
 	Relation string // one of the template's Relations
 	Account  string
+	Timezone string // the owner's, like Africa/Lagos; "": UTC
 }
 
 // Templates are the characters in dir, in files.
@@ -52,24 +58,34 @@ func Templates(files fs.FS, dir string) ([]Template, error) {
 }
 
 func LoadTemplate(files fs.FS, dir string) (Template, error) {
-	raw, err := fs.ReadFile(files, path.Join(dir, "template.yaml"))
-	if err != nil {
-		return Template{}, fmt.Errorf("read template: %w", err)
+	docs := map[string][]byte{}
+	for _, f := range TemplateFiles {
+		raw, err := fs.ReadFile(files, path.Join(dir, f))
+		if err != nil {
+			return Template{}, fmt.Errorf("%s: %s is missing", dir, f)
+		}
+		docs[f] = raw
 	}
+	return ParseTemplate(path.Base(dir), docs)
+}
+
+// ParseTemplate is a template from its files by name, as a folder or the
+// database holds them.
+func ParseTemplate(key string, docs map[string][]byte) (Template, error) {
 	var t Template
-	dec := yaml.NewDecoder(bytes.NewReader(raw))
+	dec := yaml.NewDecoder(bytes.NewReader(docs["template.yaml"]))
 	dec.KnownFields(true)
 	if err := dec.Decode(&t); err != nil {
-		return Template{}, fmt.Errorf("%s/template.yaml: %w", dir, err)
+		return Template{}, fmt.Errorf("%s/template.yaml: %w", key, err)
 	}
-	t.Key, t.Dir, t.files, t.Name, t.About = path.Base(dir), dir, files, strings.TrimSpace(t.Name), strings.TrimSpace(t.About)
+	t.Key, t.Docs, t.Name, t.About = key, docs, strings.TrimSpace(t.Name), strings.TrimSpace(t.About)
 	t.Relations = nonEmpty(t.Relations)
 	if t.Name == "" || t.About == "" || len(t.Relations) == 0 {
-		return Template{}, fmt.Errorf("%s/template.yaml: needs a name, about and at least one relation", dir)
+		return Template{}, fmt.Errorf("%s/template.yaml: needs a name, about and at least one relation", key)
 	}
 	for _, f := range Files {
-		if _, err := fs.Stat(files, path.Join(dir, f)); err != nil {
-			return Template{}, fmt.Errorf("%s: %s is missing", dir, f)
+		if len(docs[f]) == 0 {
+			return Template{}, fmt.Errorf("%s: %s is missing", key, f)
 		}
 	}
 	return t, nil
@@ -87,14 +103,17 @@ func (t Template) Render(o Owner) (map[string][]byte, error) {
 	case strings.ContainsAny(o.Account, "\"\\\n{} "):
 		return nil, fmt.Errorf("account %q isn't one", o.Account)
 	}
-	fill := strings.NewReplacer("{owner}", o.Name, "{relation}", o.Relation, "{account}", o.Account, "{circle}", CircleOf(o.Relation))
+	if o.Timezone = strings.TrimSpace(o.Timezone); o.Timezone == "" {
+		o.Timezone = "UTC"
+	}
+	if _, err := time.LoadLocation(o.Timezone); err != nil || strings.ContainsAny(o.Timezone, "\"\\\n{} ") {
+		return nil, fmt.Errorf("%q isn't a time zone like Africa/Lagos", o.Timezone)
+	}
+	fill := strings.NewReplacer("{owner}", o.Name, "{relation}", o.Relation, "{account}", o.Account, "{circle}", CircleOf(o.Relation),
+		"{timezone}", o.Timezone)
 	out := map[string][]byte{}
 	for _, f := range Files {
-		raw, err := fs.ReadFile(t.files, path.Join(t.Dir, f))
-		if err != nil {
-			return nil, fmt.Errorf("read template: %w", err)
-		}
-		out[f] = []byte(fill.Replace(string(raw)))
+		out[f] = []byte(fill.Replace(string(t.Docs[f])))
 	}
 	return out, nil
 }

@@ -48,16 +48,16 @@ func (m *Mind) followUp(ctx context.Context, i memory.Intention, note string, ch
 	var added strings.Builder
 	var cost float64
 	for step := 1; step < maxSteps; step++ {
-		resp, err := m.thinker(i).Reason(ctx, system2.Request{
+		resp, err := m.maker().Reason(ctx, system2.Request{
 			Instructions: fmt.Sprintf(stepInstructions, m.Life.Name),
 			Note:         note + added.String() + "\n\nYour tools:" + list.String(),
 			Format:       format,
 		})
+		cost += resp.CostUSD
 		if err != nil {
 			log.Warn("choosing the next step failed; it writes with what it has", "err", err)
 			break
 		}
-		cost += resp.CostUSD
 		var chose struct {
 			Ability string `json:"ability"`
 			Query   string `json:"query"`
@@ -78,6 +78,7 @@ func (m *Mind) followUp(ctx context.Context, i memory.Intention, note string, ch
 		}
 		log.Info("took a next step", "ability", a.Name(), "query", chose.Query)
 		added.WriteString(mat.Note)
+		cost += mat.CostUSD
 	}
 	return added.String(), cost
 }

@@ -1,0 +1,173 @@
+{
+  "set": "person_circle@1",
+  "question": "circle",
+  "model": "openai/gpt-6-luna",
+  "act": 0.5,
+  "suggest": 0.5,
+  "cost_usd": 0.000611,
+  "summary": {
+    "Asked": 22,
+    "Failed": 0,
+    "Right": 22,
+    "Acted": 22,
+    "ActedRight": 22,
+    "P50": 535666250,
+    "P95": 755176708
+  },
+  "rows": [
+    {
+      "case": "{\"relation\":\"Wei is Mei's younger brother.\"}",
+      "label": "family",
+      "now": "family",
+      "confidence": 1,
+      "ms": 504
+    },
+    {
+      "case": "{\"relation\":\"Lin is Mei's grandmother.\"}",
+      "label": "family",
+      "now": "family",
+      "confidence": 1,
+      "ms": 503
+    },
+    {
+      "case": "{\"relation\":\"Bao is Mei's cousin.\"}",
+      "label": "family",
+      "now": "family",
+      "confidence": 1,
+      "ms": 454
+    },
+    {
+      "case": "{\"relation\":\"Ana is Mei's mother-in-law.\"}",
+      "label": "family",
+      "now": "family",
+      "confidence": 0.99,
+      "ms": 535
+    },
+    {
+      "case": "{\"relation\":\"Chen is Mei's boyfriend.\"}",
+      "label": "partner",
+      "now": "partner",
+      "confidence": 1,
+      "ms": 611
+    },
+    {
+      "case": "{\"relation\":\"Yu is Mei's wife.\"}",
+      "label": "partner",
+      "now": "partner",
+      "confidence": 0.94,
+      "ms": 616
+    },
+    {
+      "case": "{\"relation\":\"Diego is Mei's fiancé.\"}",
+      "label": "partner",
+      "now": "partner",
+      "confidence": 0.99,
+      "ms": 925
+    },
+    {
+      "case": "{\"relation\":\"Hui is Mei's best friend.\"}",
+      "label": "friend",
+      "now": "friend",
+      "confidence": 0.98,
+      "ms": 488
+    },
+    {
+      "case": "{\"relation\":\"Jun is an old friend of Mei's from university.\"}",
+      "label": "friend",
+      "now": "friend",
+      "confidence": 0.93,
+      "ms": 393
+    },
+    {
+      "case": "{\"relation\":\"Ada is Mei's mentor.\"}",
+      "label": "school",
+      "now": "school",
+      "confidence": 1,
+      "ms": 519
+    },
+    {
+      "case": "{\"relation\":\"Ms Liao was Mei's English teacher.\"}",
+      "label": "school",
+      "now": "school",
+      "confidence": 1,
+      "ms": 560
+    },
+    {
+      "case": "{\"relation\":\"Kai is Mei's classmate in her Japanese course.\"}",
+      "label": "school",
+      "now": "school",
+      "confidence": 0.99,
+      "ms": 581
+    },
+    {
+      "case": "{\"relation\":\"Tony is Mei's boss at the bookshop.\"}",
+      "label": "work",
+      "now": "work",
+      "confidence": 1,
+      "ms": 373
+    },
+    {
+      "case": "{\"relation\":\"Rita is a client who orders translations from Mei.\"}",
+      "label": "work",
+      "now": "work",
+      "confidence": 0.98,
+      "ms": 653
+    },
+    {
+      "case": "{\"relation\":\"Zoe is a colleague of Mei's at the translation agency.\"}",
+      "label": "work",
+      "now": "work",
+      "confidence": 0.99,
+      "ms": 548
+    },
+    {
+      "case": "{\"relation\":\"Mr Huang lives next door to Mei.\"}",
+      "label": "community",
+      "now": "community",
+      "confidence": 1,
+      "ms": 495
+    },
+    {
+      "case": "{\"relation\":\"Grace sings in Mei's church choir.\"}",
+      "label": "community",
+      "now": "community",
+      "confidence": 0.99,
+      "ms": 755
+    },
+    {
+      "case": "{\"relation\":\"Pei is on Mei's badminton team.\"}",
+      "label": "community",
+      "now": "community",
+      "confidence": 0.99,
+      "ms": 651
+    },
+    {
+      "case": "{\"relation\":\"Mei met Leo once at a book fair.\"}",
+      "label": "acquaintance",
+      "now": "acquaintance",
+      "confidence": 0.99,
+      "ms": 413
+    },
+    {
+      "case": "{\"relation\":\"Mei sometimes chats with the man who runs the tea stall.\"}",
+      "label": "acquaintance",
+      "now": "acquaintance",
+      "confidence": 0.84,
+      "ms": 435
+    },
+    {
+      "case": "{\"relation\":\"Sam has just messaged Mei for the first time.\"}",
+      "label": "stranger",
+      "now": "stranger",
+      "confidence": 0.51,
+      "ms": 531
+    },
+    {
+      "case": "{\"relation\":\"Mei doesn't know Kofi yet.\"}",
+      "label": "stranger",
+      "now": "stranger",
+      "confidence": 0.97,
+      "ms": 578
+    }
+  ]
+}

@@ -94,10 +94,10 @@ func (s Search) Prepare(ctx context.Context, a ability.Act) (ability.Material, e
 		}
 		passage, _ := library.Passage(page.Text, 0, passageSize)
 		fmt.Fprintf(&b, "\n\nYou're reading %q (%s).%s", orDefault(page.Title, r.Title), page.URL, ability.Fence(passage))
-		return ability.Material{Note: b.String(), Project: a.Project, WorkKind: NotesKind}, nil
+		return ability.Material{Note: b.String(), Project: a.Project, WorkKind: NotesKind, CostUSD: found.CostUSD}, nil
 	}
 	b.WriteString("\n\nNone of the pages could be read: write down what you'd look for next, and why.")
-	return ability.Material{Note: b.String(), Project: a.Project, WorkKind: NotesKind}, nil
+	return ability.Material{Note: b.String(), Project: a.Project, WorkKind: NotesKind, CostUSD: found.CostUSD}, nil
 }
 
 // Page reads a page one of its searches found.

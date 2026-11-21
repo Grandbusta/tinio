@@ -7,6 +7,8 @@ import (
 	"errors"
 )
 
+// Reasoner answers a request. On an error, the Response holds only what was
+// spent getting it (Provider, Usage, CostUSD), so the caller can record it.
 type Reasoner interface {
 	Reason(ctx context.Context, req Request) (Response, error)
 }
@@ -21,6 +23,10 @@ type Request struct {
 	CollectFacts bool
 	// Format asks for JSON in Response.Text. Not used with CollectFacts.
 	Format *Format
+	// Draft, if set, is told the reply so far while it's written, all of it
+	// each time, and may be told it again from the start if it's tried again.
+	// It runs on the call's goroutine, so it should be quick. Not used with Format.
+	Draft func(text string)
 }
 
 type Format struct {
@@ -38,6 +44,7 @@ const (
 type Memory struct {
 	About About
 	Text  string
+	Areas []string // the parts of life it's about, as the prompt lists them; nil if none were given
 }
 
 type Reminder struct {
@@ -67,6 +74,21 @@ var ActSchema = map[string]any{"type": "object", "additionalProperties": false, 
 		"tool": map[string]any{"type": "string", "description": "the tool's name, as listed"},
 		"args": map[string]any{"type": "string", "description": "its arguments, a JSON object"},
 		"why":  map[string]any{"type": "string", "description": "why, in a few words"},
+	}}
+
+// Look is a reading tool it wants to use before it writes its reply, with
+// what to give it. A response with looks has no reply yet: it's asked again
+// with what they returned.
+type Look struct {
+	Tool  string // e.g. "google.calendar"
+	Query string
+}
+
+// LookSchema is one look.
+var LookSchema = map[string]any{"type": "object", "additionalProperties": false, "required": []string{"tool", "query"},
+	"properties": map[string]any{
+		"tool":  map[string]any{"type": "string", "description": "the reading tool's name, as listed"},
+		"query": map[string]any{"type": "string", "description": "what to give it, as its description says"},
 	}}
 
 // Move is a new time for a promise it already made.
@@ -155,8 +177,14 @@ type Response struct {
 	Send     Send
 	Moves    []Move
 	Acts     []Act
-	Usage    Usage
-	CostUSD  float64 // 0 when no price is configured
+	// Looks, if any, are what it wants to read before it replies; Text is
+	// then empty, and only Looks counts.
+	Looks []Look
+	// Topic is the name it gave what the message starts, when the note asked
+	// for one; "" otherwise.
+	Topic   string
+	Usage   Usage
+	CostUSD float64 // 0 when no price is configured
 }
 
 type Usage struct {

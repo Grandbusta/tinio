@@ -1,0 +1,24 @@
+# Is a message the answer to what the agent just asked (follow_up's
+# answers_previous), rather than something new? "true" or "false".
+{"state":{"previous_reply":"What did you have for lunch?","message":"Rice and stew"},"label":"true"}
+{"state":{"previous_reply":"How was the interview?","message":"It went well I think"},"label":"true"}
+{"state":{"previous_reply":"Where are you travelling to?","message":"Abuja"},"label":"true"}
+{"state":{"previous_reply":"Do you want me to remind you?","message":"yes please"},"label":"true"}
+{"state":{"previous_reply":"Which one did you choose, the red or the blue?","message":"blue"},"label":"true"}
+{"state":{"previous_reply":"Is your mum feeling better?","message":"a bit, thanks"},"label":"true"}
+{"state":{"previous_reply":"What time works for you?","message":"after 5"},"label":"true"}
+{"state":{"previous_reply":"How old is your son now?","message":"7"},"label":"true"}
+{"state":{"previous_reply":"What are you reading these days?","message":"Nothing much, too busy"},"label":"true"}
+{"state":{"previous_reply":"Did you finish the report?","message":"Not yet 😩"},"label":"true"}
+{"state":{"previous_reply":"¿Cómo te fue en el examen?","message":"Bien, aprobé"},"label":"true","note":"Spanish: how did the exam go? Well, I passed"}
+{"state":{"previous_reply":"What's the name of your shop?","message":"Leaf & Kettle"},"label":"true"}
+{"state":{"previous_reply":"Good morning! Slept well?","message":"Yes, did you?"},"label":"true","note":"answers, then asks back"}
+{"state":{"previous_reply":"Which do you prefer, tea or coffee?","message":"tea. what about you?"},"label":"true"}
+{"state":{"previous_reply":"What did you have for lunch?","message":"Can you remind me to call Tunde at 4?"},"label":"false"}
+{"state":{"previous_reply":"How was the interview?","message":"What's the capital of Ghana?"},"label":"false"}
+{"state":{"previous_reply":"I finished the poem this morning.","message":"Nice"},"label":"false","note":"nothing was asked"}
+{"state":{"previous_reply":"I'm reading about the night market today.","message":"What's your favourite food?"},"label":"false"}
+{"state":{"previous_reply":"Do you want me to remind you?","message":"Who are you anyway?"},"label":"false"}
+{"state":{"previous_reply":"Here's the recipe you asked for.","message":"Thanks!"},"label":"false"}
+{"state":{"previous_reply":"How's your week going?","message":"Can you write me a birthday message for my dad?"},"label":"false"}
+{"state":{"previous_reply":"What time works for you?","message":"Hi"},"label":"false"}

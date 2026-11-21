@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/Grandbusta/tinio/internal/ability"
 	"github.com/Grandbusta/tinio/internal/action"
+	"github.com/Grandbusta/tinio/internal/decision"
 	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/perception"
 	"github.com/Grandbusta/tinio/internal/providers/system2"
@@ -142,5 +145,44 @@ func TestOnlyGoodProposalsFromTheOwnerAreKept(t *testing.T) {
 	m.handle(context.Background(), fromOwner("Save it twice"))
 	if len(s.actions) != 1 {
 		t.Errorf("over the cap: %d actions", len(s.actions))
+	}
+}
+
+// A reply to its owner can read with its tools first (a connection, the web)
+// and answer from what it read, paying for what it read; what it then
+// proposes asks, even where it could act on its own, since text it read can't
+// make it act unasked. Only its owner's replies look.
+func TestAReplyLooksBeforeItAnswers(t *testing.T) {
+	d := &fakeDoer{name: "notes.write_file", class: action.Write}
+	m, s, _, r, s2 := actionMind(d, save)
+	m.setPolicy(m.policy().With(map[action.Class]action.Verdict{action.Write: action.Auto}))
+	cal := &fakeAbility{name: "google.calendar", describe: "read the calendar", risk: ability.UsesTools,
+		found: map[string]string{`{"from":"2026-10-30"}`: "Tea tasting at 10"}}
+	search := &fakeAbility{name: "web_search", describe: "search the web", risk: ability.ReadsWeb, cost: 0.03,
+		found: map[string]string{"tea fair dates": "The tea fair opens 3 November"}}
+	m.Abilities = ability.NewSet(cal, search)
+	m.ReplyPrompt.Text += "\n{looks}"
+	s2.looks = [][]system2.Look{{{Tool: "google.calendar", Query: `{"from":"2026-10-30"}`}, {Tool: "web_search", Query: "tea fair dates"}}}
+
+	m.handle(context.Background(), fromOwner("What do I have on tomorrow?"))
+	if len(cal.acts) != 1 || len(search.acts) != 1 {
+		t.Fatalf("looked %d and %d times", len(cal.acts), len(search.acts))
+	}
+	last := s2.requests[len(s2.requests)-1]
+	if !strings.Contains(last.Note, "Tea tasting at 10") || !strings.Contains(last.Note, "tea fair opens") ||
+		!strings.Contains(s2.requests[0].Instructions, "google.calendar: read the calendar") {
+		t.Errorf("not told what it looked at:\n%s", last.Note)
+	}
+	if i := slices.IndexFunc(s.decisions, func(d decision.Decision) bool { return d.Action == "reply" }); i < 0 || s.decisions[i].CostUSD < 0.03 {
+		t.Errorf("what it read wasn't paid for: %+v", s.decisions)
+	}
+	if len(r.sent) == 0 || r.sent[len(r.sent)-1] != "a thoughtful reply" {
+		t.Errorf("replied %q", r.sent)
+	}
+	if len(s.actions) != 1 || s.actions[0].Status != memory.ActionProposed {
+		t.Errorf("after a look, a change didn't ask: %+v", s.actions)
+	}
+	if len(m.lookable(memory.Person{Key: "account:someone-else"})) != 0 {
+		t.Error("someone but its owner can have it look")
 	}
 }

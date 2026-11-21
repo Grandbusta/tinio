@@ -10,9 +10,11 @@ package mind
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -34,9 +36,13 @@ import (
 	"github.com/Grandbusta/tinio/internal/providers/system2"
 	"github.com/Grandbusta/tinio/internal/render"
 	"github.com/Grandbusta/tinio/internal/search"
+	"github.com/Grandbusta/tinio/internal/usage"
 )
 
 const nonTextSetID = "reflex.non_text@1"
+
+// draftEvery is how often, at most, a reply being written is shown again.
+const draftEvery = 150 * time.Millisecond
 
 type Store interface {
 	SavePercept(ctx context.Context, p perception.Percept) (isNew bool, err error)
@@ -56,6 +62,7 @@ type Store interface {
 	IntentionsDue(ctx context.Context, from, to time.Time) ([]memory.Intention, error)
 	FinishIntention(ctx context.Context, id ulid.ULID, status, result string, at time.Time) error
 	PostponeIntention(ctx context.Context, id ulid.ULID, due time.Time) error
+	RetryIntention(ctx context.Context, id ulid.ULID, due time.Time) error
 	OpenIntentions(ctx context.Context, subject, kind string) ([]memory.Intention, error)
 	AwaitIntention(ctx context.Context, id ulid.ULID) error
 	ResumeIntention(ctx context.Context, id ulid.ULID, notBefore time.Time) error
@@ -63,7 +70,7 @@ type Store interface {
 	Approval(ctx context.Context, id ulid.ULID) (memory.Approval, bool, error)
 	UnsentApprovals(ctx context.Context, limit int) ([]memory.Approval, error)
 	MarkApprovalSent(ctx context.Context, id ulid.ULID, message []byte, at time.Time) error
-	DecideApproval(ctx context.Context, id ulid.ULID, status string, at time.Time) (bool, error)
+	DecideApproval(ctx context.Context, id ulid.ULID, status, text string, at time.Time) (bool, error)
 	StaleApprovals(ctx context.Context, before time.Time, limit int) ([]memory.Approval, error)
 	SetWorkPublic(ctx context.Context, id ulid.ULID, public bool, by string) (bool, error)
 	SaveAutonomyRule(ctx context.Context, class, verdict, by string, percept ulid.ULID, at time.Time) error
@@ -135,9 +142,24 @@ type Store interface {
 	LatestWork(ctx context.Context, kind string) (memory.Work, bool, error)
 	CostSince(ctx context.Context, since time.Time, actions []string) (float64, error)
 	Conversations(ctx context.Context) ([]memory.Conversation, error)
-	LastSpokeFirst(ctx context.Context, person, kind string) (time.Time, bool, error)
+	LastPercept(ctx context.Context, person, kind string) (time.Time, bool, error)
+	// Standing is its account's use of the week; the zero value meters nothing.
+	Standing(ctx context.Context) (usage.Standing, error)
 	UnaskedFacts(ctx context.Context, person string, since time.Time, limit int) ([]memory.Fact, error)
 	MarkFactsAsked(ctx context.Context, ids []ulid.ULID, at time.Time) error
+	NextDue(ctx context.Context, now time.Time, promiseLead, askExpires time.Duration, canAsk bool, sumAfter time.Duration) (time.Time, bool, error)
+	Topics(ctx context.Context, person string, quietSince time.Time, limit int) ([]memory.Topic, error)
+	OldTopics(ctx context.Context, person string, before time.Time, limit int) ([]memory.Topic, error)
+	SaveTopicEmbedding(ctx context.Context, id string, v []float32, model string) error
+	Topic(ctx context.Context, id string) (memory.Topic, bool, error)
+	StartTopic(ctx context.Context, t memory.Topic) error
+	SetTopic(ctx context.Context, percept ulid.ULID, topic string, at time.Time) error
+	NameTopic(ctx context.Context, id, title string) error
+	TopicExchanges(ctx context.Context, topic string, after time.Time, exclude ulid.ULID, limit int) ([]memory.Exchange, error)
+	TopicsToSum(ctx context.Context, before time.Time, limit int) ([]memory.Topic, error)
+	SumTopic(ctx context.Context, t memory.Topic) error
+	QuietTopics(ctx context.Context, before time.Time) error
+	PerceptTopic(ctx context.Context, id ulid.ULID) (string, error)
 }
 
 // WorkingMemory bounds how much of the current conversation the mind keeps
@@ -151,6 +173,12 @@ type Replier interface {
 	Reply(ctx context.Context, p perception.Percept, text string) error
 }
 
+// Drafter shows a reply while it's written, all of it so far each time; the
+// Replier then sends it.
+type Drafter interface {
+	Draft(ctx context.Context, p perception.Percept, text string) error
+}
+
 // Prompt's Ref versions Text and is recorded on every System 2 decision.
 type Prompt struct {
 	Ref  string
@@ -160,18 +188,28 @@ type Prompt struct {
 type Config struct {
 	Life character.Character
 	// Judgment is seeded for the owner to review; only what they approve is used.
-	Judgment character.Judgment
-	Percepts <-chan perception.Percept
-	Store    Store
-	Replier  Replier
-	System1  system1.DecisionModel
-	System2  system2.Reasoner
-	// DaySystem2 thinks for its own day: planning, its own activities,
-	// learning, the weekly review, what it watches. nil: System2. Replies, and
-	// what it makes or says for someone, always use System2.
+	// JudgmentApproved seeds it approved: a ready character's, which Tinio wrote
+	// and stands behind, rather than the owner.
+	Judgment         character.Judgment
+	JudgmentApproved bool
+	Percepts         <-chan perception.Percept
+	Store            Store
+	Replier          Replier
+	Drafter          Drafter // nil: a reply shows only once it's written
+	System1          system1.DecisionModel
+	System2          system2.Reasoner
+	// DaySystem2 thinks for its own day: planning, learning, the weekly review,
+	// what it watches. nil: System2. Replies, and what it says to someone,
+	// always use System2.
 	DaySystem2 system2.Reasoner
-	Incoming   questions.Set
-	FollowUp   questions.Set // zero value: never checked
+	// WorkSystem2 makes works, for itself or someone: an activity's piece, the
+	// steps to it, a work's data. nil: System2.
+	WorkSystem2 system2.Reasoner
+	// LightSystem2 writes replies once its account's week is used (light mode).
+	// nil: System2.
+	LightSystem2 system2.Reasoner
+	Incoming     questions.Set
+	FollowUp     questions.Set // zero value: never checked
 	// LifeArea zero value: nothing is labelled and every reply searches memory.
 	LifeArea     questions.Set
 	PersonCircle questions.Set
@@ -184,11 +222,17 @@ type Config struct {
 	RecallCandidates int // facts considered per reply: same life area first, then newest
 	ReplyPrompt      Prompt
 	Working          WorkingMemory
+	// TopicSort sorts messages into topics, so a reply is written from what
+	// it's about; zero value: there are none, and replies have the last few
+	// minutes. TopicPrompt sums topics up; zero: they're never summed up.
+	TopicSort   questions.Set
+	TopicPrompt Prompt
 	// Ticks is the clock, about once a minute; nil: the agent never speaks first.
 	Ticks <-chan time.Time
 	// Zone is for reminders and check-in times; nil: UTC.
 	Zone      *time.Location
 	CheckIns  CheckIns
+	Quiet     QuietHours
 	Day       Day
 	Abilities *ability.Set
 	// SkillLevel zero value: works aren't scored, and skills only move with feedback.
@@ -213,6 +257,13 @@ type Config struct {
 	// Skills are know-how its owner gave it (agent_skills).
 	Skills []agentskill.Skill
 	Calls  Calls
+	// Born: they were seeded at an earlier start (Seed), so Run doesn't again.
+	Born bool
+	// RestAfter, if set, ends Run with a *Resting once they've heard nothing for
+	// this long and have nothing in hand or due soon. Zero: they never rest.
+	RestAfter time.Duration
+	// Kept is what they kept when they last went to rest; zero the first time.
+	Kept Kept
 	// Embedder nil: it takes the owner's newest decision of the right type instead.
 	Embedder embed.Embedder
 	Log      *slog.Logger
@@ -229,47 +280,77 @@ type Mind struct {
 	skillMu   sync.Mutex
 	skillVecs map[string][]float32
 	toPlan    atomic.Bool // a goal was taken on in a chat: draft its learning plan on the next tick
+	changed   atomic.Bool // they heard something since the last tick that did its work (due)
+	reload    atomic.Bool // their character changed: rest at the next tick and wake at once (Reload)
+	// held is when messages left unheard while their account rested are to be
+	// read (unix nanoseconds; 0: none): set by the talk loop, acted on by the life loop.
+	held atomic.Int64
 
 	dataOnce    sync.Once
 	dataFormats map[string]render.DataFormat // what each kind of work it makes carries, from its life; read by both loops
 
+	// stepMu is held by the talk loop while it handles a message, and tried by
+	// the life loop before it goes to rest; it guards resting and lastHeard.
+	stepMu    sync.Mutex
+	resting   bool
+	lastHeard time.Time
+
 	// Only the life loop touches these.
-	lastTick   time.Time
-	planned    string // the local date ("2006-01-02") its day was last planned for
-	round      int    // the last round of that day it planned (0: the morning plan)
-	reviewed   time.Time
-	looked     map[string]time.Time // when each watcher last looked
-	unfillable map[ulid.ULID]bool   // works whose data it failed to write; not tried again until a restart
+	lastTick    time.Time
+	planned     string // the local date ("2006-01-02") its day was last planned for
+	round       int    // the last round of that day it planned (0: the morning plan)
+	reviewed    time.Time
+	planTries   tries                // the day's plan failing in a row
+	reviewTries tries                // the weekly review failing in a row
+	looked      map[string]time.Time // when each watcher last looked
+	unfillable  map[ulid.ULID]bool   // works whose data it failed to write; not tried again until a restart
+	dataLeft    bool                 // the last tick filled in an old work's data, so there may be more
+	nextDue     time.Time            // what nextWake said after the last full tick; zero: work it out
+	sumLater    map[string]time.Time // topics that failed to be summed up, and when to try again
 }
 
 func New(c Config) *Mind {
 	if c.Zone == nil {
 		c.Zone = time.UTC
 	}
-	return &Mind{Config: c}
+	k := c.Kept
+	return &Mind{Config: c, lastTick: k.LastTick, planned: k.Planned, round: k.Round, reviewed: k.Reviewed}
 }
 
-// Run runs two loops until ctx is done or the percepts end: one talks, the
-// other lives its day on the clock's ticks, so a slow plan, activity or
-// review never keeps a reply waiting.
+// Run runs two loops until ctx is done, the percepts end, or they go to rest
+// (a *Resting): one talks, the other lives its day on the clock's ticks, so a
+// slow plan, activity or review never keeps a reply waiting.
 func (m *Mind) Run(ctx context.Context) error {
 	m.loadPermissions(ctx)
-	m.bornKnowing(ctx)
-	m.bornWanting(ctx)
-	m.seedJudgment(ctx)
+	if !m.Born {
+		m.Seed(ctx)
+	}
 	m.labelUnlabelledFacts(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	lived := make(chan struct{})
+	var rest *Resting
 	go func() {
 		defer close(lived)
 		defer cancel()
-		m.live(ctx)
+		rest = m.live(ctx)
 	}()
 	m.talk(ctx)
 	cancel()
 	<-lived
+	if rest != nil {
+		return rest
+	}
 	return nil
+}
+
+// Seed copies what they were born with into memory: their family, dreams and
+// skills, and their owner's judgment for review. Each part adds only what's
+// missing, so running it again is safe but costly: dozens of writes. False if
+// anything wasn't saved, so it's run again next time.
+func (m *Mind) Seed(ctx context.Context) bool {
+	known, wanting, judged := m.bornKnowing(ctx), m.bornWanting(ctx), m.seedJudgment(ctx)
+	return known && wanting && judged
 }
 
 func (m *Mind) talk(ctx context.Context) {
@@ -281,19 +362,47 @@ func (m *Mind) talk(ctx context.Context) {
 			if !ok {
 				return
 			}
-			m.handle(ctx, p)
+			if !m.hear(ctx, p) {
+				return
+			}
 		}
 	}
 }
 
-func (m *Mind) live(ctx context.Context) {
+// live returns when ctx is done, or with a *Resting when they go to rest.
+func (m *Mind) live(ctx context.Context) *Resting {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case now := <-m.Ticks:
-			m.tick(ctx, now)
+			if m.due(now) {
+				m.changed.Store(false) // before it: what's heard meanwhile counts for the next
+				func() {
+					defer m.survive("tick "+now.Format(time.RFC3339), nil)
+					m.tick(ctx, now)
+				}()
+				m.planNext(ctx, now)
+			}
+			if r := m.restIfIdle(ctx, now); r != nil {
+				return r
+			}
 		}
+	}
+}
+
+// survive, deferred, keeps a panic in one step from ending the process, which
+// many agents share: the step is logged with its stack and dropped, and err
+// (if not nil) says so. recover reaches only the goroutine it runs in, so
+// every goroutine the mind starts defers this.
+func (m *Mind) survive(step string, err *error) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	m.Log.Error("a step panicked and was dropped", "step", step, "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+	if err != nil {
+		*err = fmt.Errorf("panicked: %v", r)
 	}
 }
 
@@ -311,6 +420,20 @@ func (m *Mind) setPolicy(p action.Policy) {
 
 func (m *Mind) handle(ctx context.Context, p perception.Percept) {
 	log := m.Log.With("percept", p.ID.String(), "source", p.Source)
+	state := usage.Normal
+	if p.Kind == perception.KindMessage || p.Kind == perception.KindHello {
+		st, err := m.Store.Standing(ctx)
+		if err != nil {
+			log.Warn("reading the account's usage failed; replying as usual", "err", err)
+		}
+		if state = st.State(p.At); state == usage.Resting {
+			// Left unsaved, so unheard: given to them again when they wake at the reset.
+			m.held.Store(st.ResetsAt(p.At).UnixNano())
+			m.changed.Store(true)
+			log.Info("resting: the message waits for the reset", "until", st.ResetsAt(p.At))
+			return
+		}
+	}
 	isNew, err := m.Store.SavePercept(ctx, p)
 	if err != nil {
 		log.Error("save percept", "err", err)
@@ -326,6 +449,10 @@ func (m *Mind) handle(ctx context.Context, p perception.Percept) {
 	}
 	if p.Kind == perception.KindCall {
 		m.pickAnswered(ctx, p)
+		return
+	}
+	if p.Kind == perception.KindHello {
+		m.hello(ctx, p)
 		return
 	}
 
@@ -345,33 +472,61 @@ func (m *Mind) handle(ctx context.Context, p perception.Percept) {
 	var (
 		reply    string
 		attached *render.File
-		after    []*decision.Decision // what the reply's answer changed: saved after it
+		learn    func() []*decision.Decision // keeps what the reply learned, once it's sent; nil if nothing
+		after    []*decision.Decision        // what the reply's answer changed: saved after it
 	)
 	if p.Text == "" {
 		root.Tier, root.SetID, root.Action = decision.TierReflex, nonTextSetID, "reply"
 		reply = "I can only read text for now."
 	} else {
 		recent := m.recall(ctx, p)
+		checks := m.checkAhead(ctx, p)
+		sorted := m.sortTopic(ctx, p, recent)
+		// What it made and the skill that fits don't wait on the reading: they're
+		// looked up meanwhile, and joined before the fact check reads the store.
+		looked := make(chan related, 1)
+		go func() {
+			var r related
+			defer func() { looked <- r }()
+			defer m.survive("looking up works and skills", nil)
+			r = m.lookUp(ctx, p, person, recent)
+		}()
 		var (
 			why    string
 			labels *lifeLabels
 		)
 		reply, why, labels = m.decideIncoming(ctx, p, root, recent)
-		if why != "" {
+		rel := <-looked
+		aheadFacts, aheadThreads := checks()
+		about, starts, sort := sorted()
+		if sort != nil {
+			sort.ParentID = &root.ID
+			chain = append(chain, sort)
+		}
+		about = m.placeTopic(ctx, &p, about, starts, root.Action == "continue", recent)
+		if why == "" {
+			root.CostUSD += aheadFacts.resp.CostUSD + aheadThreads.resp.CostUSD
+		} else {
 			var (
 				facts          []memory.Fact
 				recallDecision *decision.Decision
 			)
 			if m.OpenThreads.ID != "" && m.readAs(root, "small_talk") {
-				facts, recallDecision = m.recallOpenThreads(ctx, p, root)
+				root.CostUSD += aheadFacts.resp.CostUSD
+				facts, recallDecision = m.recallOpenThreads(ctx, p, root, aheadThreads)
 			} else {
-				facts, recallDecision = m.recallFacts(ctx, p, root, labels)
+				root.CostUSD += aheadThreads.resp.CostUSD
+				facts, recallDecision = m.recallFacts(ctx, p, root, labels, aheadFacts)
 			}
 			if recallDecision != nil {
 				chain = append(chain, recallDecision)
 			}
 			child := newDecision(p, &root.ID, time.Now())
-			reply, attached, after = m.reason(ctx, p, person, root, child, recent, facts, why)
+			writer := m.System2
+			if state == usage.Light && m.LightSystem2 != nil {
+				writer = m.LightSystem2
+			}
+			reply, attached, learn = m.reason(ctx, writer, p, person, root, child, m.talkedOf(ctx, p, recent, about), facts, why, rel, about)
 			chain = append(chain, child)
 		}
 	}
@@ -388,6 +543,9 @@ func (m *Mind) handle(ctx context.Context, p perception.Percept) {
 		actor.Outcome = &decision.Outcome{Status: decision.OutcomeFailed, Detail: err.Error()}
 	}
 	now := time.Now()
+	if learn != nil {
+		after = learn()
+	}
 	actor.Outcome.At = now.UTC()
 	actor.Latency = now.Sub(actor.At)
 	if actor != root {
@@ -451,6 +609,7 @@ func (m *Mind) decideIncoming(ctx context.Context, p perception.Percept, d *deci
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer m.survive("follow-up check", &followErr)
 			follow, followErr = m.System1.Decide(ctx, system1.Request{
 				State:     map[string]any{"message": p.Text, "previous_reply": previous},
 				Questions: m.FollowUp.Questions,
@@ -463,6 +622,7 @@ func (m *Mind) decideIncoming(ctx context.Context, p perception.Percept, d *deci
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer m.survive("life-area labelling", &lifeErr)
 			lifeLabelsFound, life, lifeErr = m.labelText(ctx, n.message(p.Text), n)
 		}()
 	}
@@ -530,113 +690,191 @@ func lastReply(recent []memory.Exchange) string {
 	return recent[len(recent)-1].Reply
 }
 
+// checked is a fact check asked while the message was read: the candidates it
+// was given, and System 1's answers (none if it wasn't asked or failed).
+type checked struct {
+	candidates []memory.Fact
+	resp       system1.Response
+}
+
+// checkAhead loads the facts each way of recalling (recallFacts,
+// recallOpenThreads) would consider and has System 1 check them, both in one
+// call, while the message is read; wait returns what it found. Until an agent knows more facts
+// than it considers, the reading doesn't change which, so a reply rarely waits
+// on a check after it. The way not taken is paid for, and cheap.
+func (m *Mind) checkAhead(ctx context.Context, p perception.Percept) (wait func() (facts, threads checked)) {
+	var facts, threads checked
+	load := func(subjects []string) []memory.Fact {
+		fs, err := m.Store.RecallCandidates(ctx, subjects, nil, m.RecallCandidates)
+		if err != nil {
+			m.Log.Warn("loading facts to check ahead failed", "percept", p.ID.String(), "err", err)
+		}
+		return fs
+	}
+	if m.FactRelevance.ID != "" && m.RecallCandidates > 0 {
+		facts.candidates = load(recallSubjects(p))
+	}
+	if m.OpenThreads.ID != "" && p.Speaker != "" && m.RecallCandidates > 0 {
+		since := p.At.Add(-openThreadWindow)
+		for _, f := range load([]string{p.Speaker}) {
+			if !f.At.Before(since) {
+				threads.candidates = append(threads.candidates, f)
+			}
+		}
+	}
+	all := slices.Clone(facts.candidates)
+	for _, f := range threads.candidates {
+		if !slices.ContainsFunc(all, func(x memory.Fact) bool { return x.ID == f.ID }) {
+			all = append(all, f)
+		}
+	}
+	if len(all) == 0 {
+		return func() (checked, checked) { return facts, threads }
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var err error
+		defer m.survive("checking facts ahead", &err)
+		n := m.namesFor(p)
+		var resp system1.Response
+		resp, err = m.System1.Decide(ctx, system1.Request{
+			State: map[string]any{"facts": factTexts(all, n), "message": n.message(p.Text)},
+			Questions: slices.Concat(factQuestions(m.FactRelevance, facts.candidates, all, "relevant:", n),
+				factQuestions(m.OpenThreads, threads.candidates, all, "open:", n)),
+		})
+		// One call, counted once: with the facts, unless there were none.
+		if len(facts.candidates) > 0 {
+			facts.resp.CostUSD = resp.CostUSD
+		} else {
+			threads.resp.CostUSD = resp.CostUSD
+		}
+		if err != nil {
+			m.Log.Warn("checking facts ahead failed; checked after reading", "percept", p.ID.String(), "err", err)
+			return
+		}
+		answers := func(prefix string) map[string]decision.Answer {
+			out := map[string]decision.Answer{}
+			for name, a := range resp.Answers {
+				if id, ok := strings.CutPrefix(name, prefix); ok {
+					out[id] = a
+				}
+			}
+			return out
+		}
+		facts.resp.Provider, facts.resp.Answers = resp.Provider, answers("relevant:")
+		threads.resp.Provider, threads.resp.Answers = resp.Provider, answers("open:")
+	}()
+	return func() (checked, checked) {
+		<-done
+		return facts, threads
+	}
+}
+
+func recallSubjects(p perception.Percept) []string {
+	if p.Speaker == "" {
+		return []string{memory.SubjectSelf}
+	}
+	return []string{memory.SubjectSelf, p.Speaker}
+}
+
 // recallFacts picks the facts that would help reply to p, by how the message
-// was filed by life area (labels; nil if it was not):
+// was filed by life area (labels; nil if it was not), using what ahead already
+// checked:
 //   - not about the agent's or the speaker's life ("capital of France?"): memory is not searched;
 //   - about one of them in general ("Tell me about yourself"): every candidate goes through;
 //   - otherwise System 1 checks each candidate, the message's life areas first.
 //
-// The returned decision is nil when there was nothing to do.
+// The returned decision is nil when there was nothing to do; then root pays
+// for what was checked ahead.
 func (m *Mind) recallFacts(ctx context.Context, p perception.Percept, root *decision.Decision,
-	labels *lifeLabels) ([]memory.Fact, *decision.Decision) {
-	if m.FactRelevance.ID == "" || m.RecallCandidates <= 0 {
+	labels *lifeLabels, ahead checked) ([]memory.Fact, *decision.Decision) {
+	unused := func() ([]memory.Fact, *decision.Decision) {
+		root.CostUSD += ahead.resp.CostUSD
 		return nil, nil
 	}
+	if m.FactRelevance.ID == "" || m.RecallCandidates <= 0 {
+		return unused()
+	}
 	if labels != nil && !labels.Personal && !labels.Broad {
-		return nil, nil
+		return unused()
 	}
 	var areas []string
 	if labels != nil {
 		areas = labels.Areas
 	}
-	subjects := []string{memory.SubjectSelf}
-	if p.Speaker != "" {
-		subjects = append(subjects, p.Speaker)
-	}
-	candidates, err := m.Store.RecallCandidates(ctx, subjects, areas, m.RecallCandidates)
+	candidates, err := m.Store.RecallCandidates(ctx, recallSubjects(p), areas, m.RecallCandidates)
 	if err != nil {
 		m.Log.Warn("loading facts failed; replying without them", "percept", p.ID.String(), "err", err)
-		return nil, nil
+		return unused()
 	}
 	if len(candidates) == 0 {
-		return nil, nil
+		return unused()
 	}
 
 	start := time.Now()
 	d := newDecision(p, &root.ID, start)
 	if labels != nil && labels.Broad {
 		d.Tier, d.SetID, d.Action = decision.TierReflex, "reflex.recall_all@1", "recall_all"
+		d.CostUSD = ahead.resp.CostUSD
 		slices.Reverse(candidates) // oldest first, the order they were told
 		d.Outcome = &decision.Outcome{Status: decision.OutcomeOK,
 			Detail: fmt.Sprintf("broad question: passed all %d facts", len(candidates)), At: time.Now().UTC()}
 		d.Latency = time.Since(start)
 		return candidates, d
 	}
-	return m.checkFacts(ctx, p, d, m.FactRelevance, "recall", candidates, true), d
+	return m.checkFacts(ctx, p, d, m.FactRelevance, "recall", candidates, true, ahead), d
 }
 
 // openThreadWindow is how far back "what's going on with you" reaches: a
 // friend asks about last week's interview, not about a cold from June.
 const openThreadWindow = 30 * 24 * time.Hour
 
-func (m *Mind) recallOpenThreads(ctx context.Context, p perception.Percept, root *decision.Decision) ([]memory.Fact, *decision.Decision) {
-	if m.OpenThreads.ID == "" || p.Speaker == "" || m.RecallCandidates <= 0 {
-		return nil, nil
-	}
-	facts, err := m.Store.RecallCandidates(ctx, []string{p.Speaker}, nil, m.RecallCandidates)
-	if err != nil {
-		m.Log.Warn("loading facts failed; replying without them", "percept", p.ID.String(), "err", err)
-		return nil, nil
-	}
-	since := p.At.Add(-openThreadWindow)
-	var recent []memory.Fact
-	for _, f := range facts {
-		if !f.At.Before(since) {
-			recent = append(recent, f)
-		}
-	}
-	if len(recent) == 0 {
+// recallOpenThreads is recall for small talk: what's been going on with the
+// speaker lately, as checkAhead found it.
+func (m *Mind) recallOpenThreads(ctx context.Context, p perception.Percept, root *decision.Decision, ahead checked) ([]memory.Fact, *decision.Decision) {
+	if len(ahead.candidates) == 0 {
 		return nil, nil
 	}
 	d := newDecision(p, &root.ID, time.Now())
-	return m.checkFacts(ctx, p, d, m.OpenThreads, "recall_open", recent, false), d
+	return m.checkFacts(ctx, p, d, m.OpenThreads, "recall_open", ahead.candidates, false, ahead), d
 }
 
-// checkFacts returns the candidates System 1 passes, oldest first, in one
-// call. The step is recorded on d.
+// checkFacts returns the candidates System 1 passes, oldest first, asking only
+// about those ahead hasn't answered. The step is recorded on d, with what was
+// checked ahead.
 func (m *Mind) checkFacts(ctx context.Context, p perception.Percept, d *decision.Decision, set questions.Set,
-	action string, candidates []memory.Fact, withMessage bool) []memory.Fact {
+	action string, candidates []memory.Fact, withMessage bool, ahead checked) []memory.Fact {
 	start := time.Now()
 	d.Tier, d.SetID, d.Action = decision.TierSystem1, set.Ref(), action
+	d.Provider, d.CostUSD = ahead.resp.Provider, ahead.resp.CostUSD
 
-	n := m.namesFor(p)
-	template := set.Questions[0]
-	texts := make([]string, len(candidates))
-	qs := make([]system1.Question, len(candidates))
-	for i, f := range candidates {
-		texts[i] = n.fact(f)
-		q := template
-		q.Name = f.ID.String()
-		q.Instructions = n.fill(strings.ReplaceAll(template.Instructions, "{fact}", fmt.Sprintf("`facts[%d]`", i)))
-		qs[i] = q
+	answers := map[string]decision.Answer{}
+	var pending []memory.Fact
+	for _, f := range candidates {
+		if a, ok := ahead.resp.Answers[f.ID.String()]; ok {
+			answers[f.ID.String()] = a
+		} else {
+			pending = append(pending, f)
+		}
 	}
-	state := map[string]any{"facts": texts}
-	if withMessage {
-		state["message"] = n.message(p.Text)
+	if len(pending) > 0 {
+		resp, err := m.askFacts(ctx, p, set, pending, withMessage)
+		if err != nil {
+			m.Log.Warn("fact check failed; replying without facts", "percept", p.ID.String(), "set", set.Ref(), "err", err)
+			d.Action = "error"
+			d.Outcome = &decision.Outcome{Status: decision.OutcomeFailed, Detail: err.Error(), At: time.Now().UTC()}
+			d.Latency = time.Since(start)
+			return nil
+		}
+		d.Provider, d.CostUSD = resp.Provider, d.CostUSD+resp.CostUSD
+		maps.Copy(answers, resp.Answers)
 	}
-	resp, err := m.System1.Decide(ctx, system1.Request{State: state, Questions: qs})
-	if err != nil {
-		m.Log.Warn("fact check failed; replying without facts", "percept", p.ID.String(), "set", set.Ref(), "err", err)
-		d.Action = "error"
-		d.Outcome = &decision.Outcome{Status: decision.OutcomeFailed, Detail: err.Error(), At: time.Now().UTC()}
-		d.Latency = time.Since(start)
-		return nil
-	}
-	d.Provider, d.Answers, d.CostUSD = resp.Provider, resp.Answers, resp.CostUSD
+	d.Answers = answers
 
 	var kept []memory.Fact
 	for _, f := range candidates {
-		if a := resp.Answers[f.ID.String()]; !a.Refused && a.Probability >= set.Thresholds.Act {
+		if a := answers[f.ID.String()]; !a.Refused && a.Probability >= set.Thresholds.Act {
 			kept = append(kept, f)
 		}
 	}
@@ -647,70 +885,159 @@ func (m *Mind) checkFacts(ctx context.Context, p perception.Percept, d *decision
 	return kept
 }
 
-func (m *Mind) reason(ctx context.Context, p perception.Percept, person memory.Person, parent, d *decision.Decision,
-	recent []memory.Exchange, facts []memory.Fact, why string) (string, *render.File, []*decision.Decision) {
+// askFacts asks set's one question of each fact, in one call.
+func (m *Mind) askFacts(ctx context.Context, p perception.Percept, set questions.Set, facts []memory.Fact,
+	withMessage bool) (system1.Response, error) {
+	n := m.namesFor(p)
+	state := map[string]any{"facts": factTexts(facts, n)}
+	if withMessage {
+		state["message"] = n.message(p.Text)
+	}
+	return m.System1.Decide(ctx, system1.Request{State: state, Questions: factQuestions(set, facts, facts, "", n)})
+}
+
+func factTexts(facts []memory.Fact, n names) []string {
+	texts := make([]string, len(facts))
+	for i, f := range facts {
+		texts[i] = n.fact(f)
+	}
+	return texts
+}
+
+// factQuestions is set's one question of each of facts, named prefix and the
+// fact's id, pointing at its place in all, the facts System 1 is given.
+func factQuestions(set questions.Set, facts, all []memory.Fact, prefix string, n names) []system1.Question {
+	if len(facts) == 0 {
+		return nil
+	}
+	qs := make([]system1.Question, len(facts))
+	for i, f := range facts {
+		at := slices.IndexFunc(all, func(x memory.Fact) bool { return x.ID == f.ID })
+		qs[i] = set.Questions[0]
+		qs[i].Name = prefix + f.ID.String()
+		qs[i].Instructions = n.fill(strings.ReplaceAll(qs[i].Instructions, "{fact}", fmt.Sprintf("`facts[%d]`", at)))
+	}
+	return qs
+}
+
+// related is what a reply may draw on that doesn't wait on reading the
+// message: what it made that the talk is about, and the skill that fits.
+type related struct {
+	works    string
+	workRefs map[string]memory.Work
+	skill    string
+	cost     float64
+}
+
+// lookUp finds both at once: each waits on an embedding.
+func (m *Mind) lookUp(ctx context.Context, p perception.Percept, person memory.Person, recent []memory.Exchange) related {
+	var (
+		r         related
+		skillCost float64
+		wg        sync.WaitGroup
+	)
+	about := talkAbout(recent, p.Text)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer m.survive("finding the skill that fits", nil)
+		r.skill, skillCost = m.skillNote(ctx, about)
+	}()
+	if canPromise(p, person) {
+		r.works, r.workRefs, r.cost = m.worksNote(ctx, p.Speaker, about)
+	}
+	wg.Wait()
+	r.cost += skillCost
+	return r
+}
+
+// reason writes the reply. What it learned (facts, reminders, corrections, ...)
+// is kept by learn, which the caller runs once the reply is sent, so the reply
+// never waits on it; learn returns the decisions it made, and is nil if
+// System 2 failed.
+func (m *Mind) reason(ctx context.Context, writer system2.Reasoner, p perception.Percept, person memory.Person, parent, d *decision.Decision,
+	recent []memory.Exchange, facts []memory.Fact, why string, rel related, about topical) (reply string, file *render.File, learn func() []*decision.Decision) {
 	d.Tier, d.SetID, d.Action = decision.TierSystem2, m.ReplyPrompt.Ref, "reply"
 	n := m.namesFor(p)
 	note, refs := m.system2Note(parent, why, facts, n)
-	var (
-		works     string
-		workRefs  map[string]memory.Work
-		embedCost float64
-	)
-	if canPromise(p, person) {
-		works, workRefs, embedCost = m.worksNote(ctx, p.Speaker, talkAbout(recent, p.Text))
-	}
 	promises, promised := m.promisesNote(ctx, p, person, n)
-	skill, skillCost := m.skillNote(ctx, talkAbout(recent, p.Text))
-	embedCost += skillCost
 
-	resp, err := m.System2.Reason(ctx, system2.Request{
+	req := system2.Request{
 		Instructions: m.instructions(ctx, person, n),
 		History:      turns(recent),
-		Note: m.now(p.At) + m.peopleNote(ctx) + m.goalsNote(ctx, person) + "\n\n" + note + works + skill + promises +
-			m.permissionsNote(p) + nameNote(recent, n.speaker),
+		Note: m.now(p.At) + m.peopleNote(ctx) + m.goalsNote(ctx, person) + "\n\n" + note + m.topicNote(p, about, n) + rel.works +
+			rel.skill + promises + m.permissionsNote(p) + nameNote(recent, n.speaker),
 		Message:      p.Text,
 		CollectFacts: true,
-	})
+	}
+	if m.Drafter != nil {
+		var shown time.Time
+		req.Draft = func(text string) {
+			if time.Since(shown) < draftEvery {
+				return // what's left shows with the reply
+			}
+			shown = time.Now()
+			if err := m.Drafter.Draft(ctx, p, text); err != nil {
+				m.Log.Debug("draft not shown", "percept", p.ID.String(), "err", err)
+			}
+		}
+	}
+	resp, err := writer.Reason(ctx, req)
+	spent, looked := rel.cost, false
+	for round := 1; err == nil && len(resp.Looks) > 0 && round <= lookRounds && len(m.lookable(person)) > 0; round++ {
+		more, cost := m.look(ctx, p, person, resp.Looks, round == lookRounds)
+		spent += resp.CostUSD + cost
+		req.Note += more
+		looked = true
+		resp, err = writer.Reason(ctx, req)
+	}
+	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD+spent // a failed call is paid for too
+	if err == nil && resp.Text == "" {
+		err = errors.New("it asked to look again after its last look")
+	}
 	if err != nil {
 		m.Log.Error("system 2 failed", "percept", p.ID.String(), "err", err)
 		d.Action = "error"
 		return "Sorry, I couldn't think that through just now.", nil, nil
 	}
-	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD+embedCost
 	m.Log.Debug("system 2 usage", "input_tokens", resp.Usage.InputTokens, "cached_tokens", resp.Usage.CachedTokens,
 		"output_tokens", resp.Usage.OutputTokens, "reasoning_tokens", resp.Usage.ReasoningTokens)
 
-	for _, mem := range resp.Remember {
-		subject := memory.SubjectSelf
-		if mem.About == system2.AboutSpeaker {
-			if p.Speaker == "" {
-				continue
+	return resp.Text, m.sendWith(p, resp.Send, rel.workRefs), func() []*decision.Decision {
+		var fs []memory.Fact
+		for _, mem := range resp.Remember {
+			subject := memory.SubjectSelf
+			if mem.About == system2.AboutSpeaker {
+				if p.Speaker == "" {
+					continue
+				}
+				subject = p.Speaker
 			}
-			subject = p.Speaker
+			fs = append(fs, memory.Fact{Subject: subject, Text: mem.Text, Areas: m.filedAreas(mem.Areas)})
 		}
-		cost, err := m.saveFact(ctx, p, subject, mem.Text, n)
-		d.CostUSD += cost
-		if err != nil {
-			m.Log.Error("save fact from system 2", "percept", p.ID.String(), "err", err)
+		if about.unnamed && resp.Topic != "" {
+			if err := m.Store.NameTopic(ctx, about.topic.ID, cutRunes(resp.Topic, 60)); err != nil {
+				m.Log.Error("naming a topic failed", "percept", p.ID.String(), "err", err)
+			}
 		}
+		_, cost := m.saveFacts(ctx, p, fs, n)
+		d.CostUSD += cost + m.learnRelation(ctx, p, person, resp.WhoTheyAre)
+		m.saveReminders(ctx, p, resp.Reminders)
+		m.savePromises(ctx, p, person, resp.Promises, rel.workRefs)
+		m.movePromises(ctx, p, resp.Moves, promised)
+		if p.Speaker != "" && p.Speaker == m.policy().Owner { // only its owner can have it act, for now
+			m.propose(ctx, p, resp.Acts, p.At, !looked) // what it read can't make it act unasked
+		}
+		var more []*decision.Decision
+		more = append(more, m.correctFacts(ctx, p, d, refs, resp.Corrections, n)...)
+		more = append(more, m.changePermissions(ctx, p, d, resp.Permissions)...)
+		more = append(more, m.labelMisread(ctx, p, d, resp.Misread)...)
+		more = append(more, m.takeFeedback(ctx, p, d, resp.Feedback)...)
+		more = append(more, m.takeLessons(ctx, p, d, resp.Lessons)...)
+		more = append(more, m.takeTastes(ctx, p, d, resp.Tastes)...)
+		more = append(more, m.takeGoals(ctx, p, d, resp.Goals)...)
+		return more
 	}
-	d.CostUSD += m.learnRelation(ctx, p, person, resp.WhoTheyAre)
-	m.saveReminders(ctx, p, resp.Reminders)
-	m.savePromises(ctx, p, person, resp.Promises, workRefs)
-	m.movePromises(ctx, p, resp.Moves, promised)
-	if p.Speaker != "" && p.Speaker == m.policy().Owner { // only its owner can have it act, for now
-		m.propose(ctx, p, resp.Acts, p.At, true)
-	}
-	var more []*decision.Decision
-	more = append(more, m.correctFacts(ctx, p, d, refs, resp.Corrections, n)...)
-	more = append(more, m.changePermissions(ctx, p, d, resp.Permissions)...)
-	more = append(more, m.labelMisread(ctx, p, d, resp.Misread)...)
-	more = append(more, m.takeFeedback(ctx, p, d, resp.Feedback)...)
-	more = append(more, m.takeLessons(ctx, p, d, resp.Lessons)...)
-	more = append(more, m.takeTastes(ctx, p, d, resp.Tastes)...)
-	more = append(more, m.takeGoals(ctx, p, d, resp.Goals)...)
-	return resp.Text, m.sendWith(p, resp.Send, workRefs), more
 }
 
 // canPromise is false for strangers, whose requests could be anything.
@@ -839,7 +1166,8 @@ func (m *Mind) savePromises(ctx context.Context, p perception.Percept, person me
 		count++
 		if verdict == action.Ask {
 			what := fmt.Sprintf("%s, by %s", pr.What, due.Format("Mon 2 Jan 15:04"))
-			if err := m.ask(ctx, memory.Approval{Class: string(action.Commit), Person: p.Speaker, What: what, Ref: i.ID}); err != nil {
+			if err := m.ask(ctx, memory.Approval{Class: string(action.Commit), Person: p.Speaker, What: what, Ref: i.ID, Topic: p.Topic,
+				Why: orDefault(p.SpeakerName, fallbackName) + " asked for it."}); err != nil {
 				log.Error("asking the owner failed", "err", err)
 			}
 			continue
@@ -877,8 +1205,9 @@ func (m *Mind) instructions(ctx context.Context, person memory.Person, n names) 
 	}
 	return strings.NewReplacer("{name}", n.agent, "{speaker}", n.speaker, "{life_story}", story,
 		"{personality}", personality, "{who_they_are}", m.whoTheyAre(person, n),
-		"{makes}", m.makesList(), "{abilities}", m.abilitiesList(), "{files}", m.filesHelp(n), "{actions}", m.actionsFor(person, n), "{intents}", strings.Join(m.intents(), ", "),
+		"{makes}", m.makesList(), "{abilities}", m.abilitiesList(), "{files}", m.filesHelp(n), "{actions}", m.actionsFor(person, n), "{looks}", m.looksHelp(person, n), "{intents}", strings.Join(m.intents(), ", "),
 		"{correct_self}", m.correctSelf(person), "{permissions_help}", m.permissionsHelp(person, n),
+		"{fact_areas}", m.factAreasHelp(),
 		"{feedback_help}", m.feedbackHelp(ctx, person)+m.goalsHelp(person)).Replace(m.ReplyPrompt.Text)
 }
 

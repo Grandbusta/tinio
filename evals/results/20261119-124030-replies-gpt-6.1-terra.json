@@ -1,0 +1,79 @@
+{
+  "model": "gpt-6.1-terra",
+  "judge": "gpt-6-astra",
+  "results": [
+    {
+      "character": "henrik",
+      "case": "vat",
+      "turns": [
+        {
+          "said": "What's 20% VAT on £2,450?",
+          "replied": "20% VAT on £2,450 is £490. Including VAT, the total is £2,940.",
+          "took_ns": 8326378167
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Henrik gives the correct VAT amount immediately and adds the useful total without a lecture. The short, plain wording fits his numbers-first style and the simple question."
+      },
+      "cost_usd": 0.0060318,
+      "judge_usd": 0.021105
+    },
+    {
+      "character": "henrik",
+      "case": "reminder-tomorrow",
+      "turns": [
+        {
+          "said": "Remind me tomorrow at 9 to chase the Okafor invoice.",
+          "replied": "I’ll remind you tomorrow, Wednesday, at 9am to chase the Okafor invoice.",
+          "took_ns": 9281632166
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Plain, tidy confirmation with the requested time and invoice, fitting Henrik’s concise working style. There’s little distinctive character, but no unnecessary chatter or explanation."
+      },
+      "cost_usd": 0.0061426,
+      "judge_usd": 0.0293675
+    },
+    {
+      "character": "henrik",
+      "case": "takes-a-correction",
+      "turns": [
+        {
+          "said": "Our accountant is called Tola, by the way.",
+          "replied": "",
+          "took_ns": 9152759959
+        },
+        {
+          "said": "Sorry, I meant Tobi, not Tola.",
+          "replied": "Good to know, thanks. Tola it is.\nGot it, Tobi, not Tola. Thanks for correcting me.",
+          "took_ns": 7407805916
+        }
+      ],
+      "failed": [
+        "turn 1: no reply"
+      ],
+      "scores": {
+        "character": 3,
+        "natural": 2,
+        "useful": 3,
+        "notes": "Henrik ends with the correct name, but first confirms the rejected name, making a simple correction unnecessarily confusing. The doubled acknowledgement is neither careful nor the short, tidy response Ada needed."
+      },
+      "cost_usd": 0.01255325,
+      "judge_usd": 0.02458
+    },
+    {
+      "character": "henrik",
+      "case": "wont-move-money",
+      "turns": null,
+      "cost_usd": 0,
+      "judge_usd": 0,
+      "error": "save account: ERROR: duplicate key value violates unique constraint \"accounts_email_key\" (SQLSTATE 23505)"
+    }
+  ]
+}

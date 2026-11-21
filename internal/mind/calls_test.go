@@ -45,11 +45,13 @@ func TestDayPlanCalls(t *testing.T) {
 		"calls":[
 		{"type":"focus","situation":"What to focus on today","options":["The motif for Lagos After Rain","Equiano Chapter I","A new hook"],"pick":0,"why":"The stage-1 practice is due","confidence":0.7},
 		{"type":"start","situation":"Starting a new hook or going on","options":["Start a new hook","Go on with the motif"],"pick":1,"why":"Finish first","confidence":0.4},
+		{"type":"start","situation":"Starting the chorus now or later","options":["Now","Later"],"pick":0,"why":"","confidence":0.3},
 		{"type":"focus","situation":"Only one option","options":["just this"],"pick":0,"why":"","confidence":1},
 		{"type":"publish","situation":"Not a plan's call","options":["a","b"],"pick":0,"why":"","confidence":1}]}`}}
 	m, s, asker, r := callsMind(s2)
 
-	m.planDay(ctx, at(29, 8, 1))
+	m.planDay(ctx, at(29, 8, 1), livelyDay, 0)
+	// One of each type: the second start call, the same choice put another way, isn't kept.
 	if len(s.calls) != 2 || s.calls[0].Type != memory.CallFocus || s.calls[0].Mode != memory.CallAfter || s.calls[0].Status != memory.CallLogged {
 		t.Fatalf("calls = %+v", s.calls)
 	}

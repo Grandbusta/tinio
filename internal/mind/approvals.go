@@ -21,7 +21,7 @@ import (
 
 type Asker interface {
 	// Ask returns where it sent the request, for Settle.
-	Ask(ctx context.Context, p perception.Percept, text, id string) (json.RawMessage, error)
+	Ask(ctx context.Context, p perception.Percept, r memory.Request, id string) (json.RawMessage, error)
 	Settle(ctx context.Context, where json.RawMessage, text string) error
 }
 
@@ -58,6 +58,7 @@ func (m *Mind) sendApprovals(ctx context.Context) {
 	owner := m.person(ctx, m.policy().Owner)
 	p := outgoing(conv, owner, perception.KindApproval, time.Now()) // only says where; not kept
 	for _, a := range as {
+		p.Topic = a.Topic
 		where, err := m.Asker.Ask(ctx, p, m.request(ctx, a), a.ID.String())
 		if err != nil {
 			m.Log.Warn("asking the owner failed; trying again next tick", "approval", a.ID.String(), "err", err)
@@ -69,29 +70,40 @@ func (m *Mind) sendApprovals(ctx context.Context) {
 	}
 }
 
-func (m *Mind) request(ctx context.Context, a memory.Approval) string {
-	if a.Kind == memory.KindAction {
-		return a.Text
-	}
+// request is what the owner is asked: in words, and part by part for a card.
+func (m *Mind) request(ctx context.Context, a memory.Approval) memory.Request {
 	who := orDefault(m.person(ctx, a.Person).Name, fallbackName)
+	r := memory.Request{Why: a.Why, When: "As soon as you say yes"}
 	var ask string
-	switch action.Class(a.Class) {
-	case action.ReachOut:
+	switch {
+	case a.Kind == memory.KindAction:
+		tool, _, _ := strings.Cut(a.What, ": ")
+		r.Title, r.Quote, r.Where, r.When = "Use "+tool+"?", a.Text, tool, "Within a minute of your yes"
+		ask = fmt.Sprintf("Can I use %s?\n\n%s\n\nWhy: %s", tool, a.Text, orDefault(a.Why, "you asked"))
+	case a.Class == string(action.ReachOut):
+		r.Title, r.Quote, r.Where = "Message "+who+"?", a.Text, who
+		r.Undo, r.Final, r.Editable = "Can't be undone once it's sent", true, true
 		ask = fmt.Sprintf("Can I message %s? It'd be this:\n\n%s", who, a.Text)
-	case action.Commit:
+	case a.Class == string(action.Commit):
+		r.Title, r.Quote, r.Where, r.Undo = "Say yes to "+who+"?", a.What, who, "You can tell them later it's off"
 		ask = fmt.Sprintf("%s asked me to make something: %s. Can I say yes?", who, a.What)
-	case action.Publish:
+	case a.Class == string(action.Publish):
+		r.Title, r.Quote, r.Where, r.Undo = "Put this on my public page?", a.What, "My public page", "You can take it down"
 		ask = "Can I put this on my public page?\n\n" + a.What
-	case action.Dream:
+	case a.Class == string(action.Dream):
+		r.Title = orDefault(map[string]string{"add": "Add a dream?", "reword": "Change a dream?", "drop": "Let go of a dream?"}[a.Kind], "Change my dreams?")
+		r.Quote, r.Where, r.Undo, r.Editable = a.Text, "My dreams", "You can change it back", a.Kind != "drop"
 		ask = "Can I " + a.What + "?"
 	default:
-		ask = "Can I " + a.What + "?"
+		r.Title = "Can I " + a.What + "?"
+		ask = r.Title
 	}
-	if m.policy().AskExpires > 0 {
-		ask += fmt.Sprintf("\n\n(If I don't hear back by %s, I won't.)",
-			a.AskedAt.Add(m.policy().AskExpires).In(m.Zone).Format("Mon 2 Jan 15:04"))
+	if exp := m.policy().AskExpires; exp > 0 {
+		r.Expires = a.AskedAt.Add(exp)
+		ask += fmt.Sprintf("\n\n(If I don't hear back by %s, I won't.)", r.Expires.In(m.Zone).Format("Mon 2 Jan 15:04"))
 	}
-	return ask
+	r.Text = ask
+	return r
 }
 
 // answer counts only the owner's tap, and only the first: an approval is
@@ -121,7 +133,15 @@ func (m *Mind) answer(ctx context.Context, p perception.Percept) {
 	if ans.Approve {
 		status = memory.ApprovalApproved
 	}
-	m.decide(ctx, a, status, p.ID)
+	var changed string
+	if text := strings.TrimSpace(ans.Text); ans.Approve && text != "" {
+		if m.request(ctx, a).Editable {
+			changed, a.Text = text, text
+		} else {
+			log.Warn("a changed version of a request that can't be changed; the agent's stands", "approval", ans.Approval)
+		}
+	}
+	m.decide(ctx, a, status, changed, p.ID)
 }
 
 func (m *Mind) expireApprovals(ctx context.Context, now time.Time) {
@@ -134,13 +154,15 @@ func (m *Mind) expireApprovals(ctx context.Context, now time.Time) {
 		return
 	}
 	for _, a := range stale {
-		m.decide(ctx, a, memory.ApprovalExpired, ulid.ULID{})
+		m.decide(ctx, a, memory.ApprovalExpired, "", ulid.ULID{})
 	}
 }
 
-func (m *Mind) decide(ctx context.Context, a memory.Approval, status string, percept ulid.ULID) {
+// decide settles a once: changed, if not "", is the owner's version of its
+// text, already in a.Text.
+func (m *Mind) decide(ctx context.Context, a memory.Approval, status, changed string, percept ulid.ULID) {
 	now := time.Now()
-	ok, err := m.Store.DecideApproval(ctx, a.ID, status, now.UTC())
+	ok, err := m.Store.DecideApproval(ctx, a.ID, status, changed, now.UTC())
 	if err != nil || !ok {
 		if err != nil {
 			m.Log.Error("decide approval", "approval", a.ID.String(), "err", err)
@@ -154,7 +176,10 @@ func (m *Mind) decide(ctx context.Context, a memory.Approval, status string, per
 	if m.Asker != nil && len(a.Message) > 0 {
 		ending := map[string]string{memory.ApprovalApproved: "✅ You said yes.", memory.ApprovalDenied: "❌ You said no.",
 			memory.ApprovalExpired: "⌛ No answer, so I didn't."}[status]
-		if err := m.Asker.Settle(ctx, a.Message, m.request(ctx, a)+"\n\n"+ending); err != nil {
+		if changed != "" {
+			ending = "✅ You said yes, with your changes."
+		}
+		if err := m.Asker.Settle(ctx, a.Message, m.request(ctx, a).Text+"\n\n"+ending); err != nil {
 			m.Log.Warn("updating the request failed", "approval", a.ID.String(), "err", err)
 		}
 	}

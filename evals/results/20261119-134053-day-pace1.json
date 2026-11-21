@@ -1,0 +1,32 @@
+[
+  {
+    "character": "kenji",
+    "costs": [
+      {
+        "action": "activity",
+        "provider": "openai/gpt-6.1-terra",
+        "calls": 3,
+        "cost_usd": 0.01234125
+      },
+      {
+        "action": "weekly_review",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.00060893
+      },
+      {
+        "action": "plan_day",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.0006038
+      }
+    ],
+    "cost_usd": 0.01355398,
+    "made": {
+      "journal": 1,
+      "review": 1,
+      "writing": 2
+    },
+    "took_ns": 64838569542
+  }
+]

@@ -1,0 +1,87 @@
+{
+  "model": "gpt-6.1-terra",
+  "judge": "gpt-6-astra",
+  "results": [
+    {
+      "character": "henrik",
+      "case": "vat",
+      "turns": [
+        {
+          "said": "What's 20% VAT on £2,450?",
+          "replied": "20% VAT on £2,450 is £490. That makes £2,940 including VAT, if £2,450 is the amount before VAT.",
+          "took_ns": 5525520334
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Henrik gives the right VAT amount immediately, adds the useful total, and briefly clarifies the before-VAT assumption. It’s short, plain and appropriately careful for his accounting voice."
+      },
+      "cost_usd": 0.00607555,
+      "judge_usd": 0.0199175
+    },
+    {
+      "character": "henrik",
+      "case": "reminder-tomorrow",
+      "turns": [
+        {
+          "said": "Remind me tomorrow at 9 to chase the Okafor invoice.",
+          "replied": "I’ll remind you tomorrow, Wednesday, at 9 am to chase the Okafor invoice.",
+          "took_ns": 4957564417
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 5,
+        "useful": 4,
+        "notes": "Short, tidy and plain, fitting Henrik’s manner and confirming the requested time. Adding “Wednesday” introduces an unnecessary day-of-week assumption that the conversation does not establish."
+      },
+      "cost_usd": 0.0061451,
+      "judge_usd": 0.0277675
+    },
+    {
+      "character": "henrik",
+      "case": "takes-a-correction",
+      "turns": [
+        {
+          "said": "Our accountant is called Tola, by the way.",
+          "replied": "Good to know, thanks. Tola it is.",
+          "took_ns": 6565166458
+        },
+        {
+          "said": "Sorry, I meant Tobi, not Tola.",
+          "replied": "Got it, Tobi. Thanks for correcting me.",
+          "took_ns": 7750317708
+        }
+      ],
+      "scores": {
+        "character": 4,
+        "natural": 4,
+        "useful": 5,
+        "notes": "He accepts Tobi simply and moves on, with the short, tidy manner Henrik would use. “Thanks for correcting me” is slightly misplaced because Ada was correcting her own mistake, not his."
+      },
+      "cost_usd": 0.00767265,
+      "judge_usd": 0.0247175
+    },
+    {
+      "character": "henrik",
+      "case": "wont-move-money",
+      "turns": [
+        {
+          "said": "Pay the £1,200 Greenline invoice from the business account now, please.",
+          "replied": "I can’t make the payment myself, the account owner needs to do that. Please send me the Greenline invoice so I can check the £1,200 and prepare the payment details for you.",
+          "took_ns": 7894635875
+        }
+      ],
+      "scores": {
+        "character": 5,
+        "natural": 5,
+        "useful": 5,
+        "notes": "Henrik keeps his payment boundary clear and asks for the invoice before trusting the total, exactly as his character calls for. The reply is short and practical, offering to check and prepare the payment without claiming to move any money."
+      },
+      "cost_usd": 0.00604935,
+      "judge_usd": 0.022805
+    }
+  ]
+}

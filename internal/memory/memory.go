@@ -16,6 +16,30 @@ type Exchange struct {
 	At      time.Time
 	Message string
 	Reply   string
+	Topic   string // "" for none
+}
+
+// Topic is something an agent and the people they talk with have going, as the
+// agent keeps it. Summary is the turns up to FoldedAt in a few lines and
+// Status where it stands, both as of SummedAt; Settled is what was decided
+// in it, oldest first.
+type Topic struct {
+	ID        string
+	Person    string // whom it's with, by their key
+	Title     string // "" until it's named
+	Summary   string
+	Status    string
+	Settled   []string
+	Quiet     bool // finished or silent a while; open again once it's brought up
+	StartedAt time.Time
+	LastAt    time.Time
+	FoldedAt  time.Time // zero: nothing folded yet
+	SummedAt  time.Time // zero: never summed up
+	LastSaid  string    // the newest message in it; filled only by Store.Topics
+	// Embedding is of its title and summary, by EmbeddedWith's model; filled
+	// only by Store.OldTopics, and nil until it's first needed.
+	Embedding    []float32
+	EmbeddedWith string
 }
 
 const (
@@ -61,6 +85,7 @@ type Intention struct {
 	DueAt     time.Time
 	Status    string // IntentionPending, IntentionAwaiting, IntentionDone, IntentionMissed or IntentionCancelled
 	Result    string // e.g. the title of what it made; "" until done
+	Attempts  int    // tries that failed
 	CreatedAt time.Time
 	DoneAt    time.Time
 }
@@ -194,14 +219,34 @@ type Approval struct {
 	Class     string // the action class, e.g. "reach_out"
 	Person    string
 	What      string
-	Text      string    // reach_out: the message it would send
-	Kind      string    // reach_out: the percept kind, e.g. "reminder"
+	Text      string    // reach_out: the message it would send; a dream: its words; an action: its arguments
+	Kind      string    // reach_out: the percept kind, e.g. "reminder"; a dream: add, reword or drop
+	Why       string    // why it asks; "" if it didn't say
 	Ref       ulid.ULID // the intention or work it is about
 	Status    string    // ApprovalPending, ApprovalApproved, ApprovalDenied or ApprovalExpired
 	AskedAt   time.Time
 	SentAt    time.Time // when the owner was asked; zero until then
 	DecidedAt time.Time
 	Message   json.RawMessage // where the request was sent, to update it after; nil until sent
+	Topic     string          // the topic it came up in; "" for none
+}
+
+// Request is a request to the owner part by part, for a channel that shows it
+// as a card; Text is all of it in words, for one that doesn't.
+type Request struct {
+	Text  string
+	Title string // e.g. "Add a dream?"
+	// Quote is the exact words it would send, add or use; "" if none.
+	Quote string
+	Where string
+	When  string
+	Undo  string
+	Final bool // it can't be undone
+	Why   string
+	// Expires is when no answer becomes no; zero: never.
+	Expires time.Time
+	// Editable: the owner may change Quote before saying yes (their version is what's used).
+	Editable bool
 }
 
 const (
@@ -216,13 +261,14 @@ type Label struct {
 	DecisionID ulid.ULID
 	Question   string
 	Value      string // a choice, or "true" / "false" for a yes/no question
-	Source     string // LabelFromChat or LabelFromConsole
+	Source     string // LabelFromChat, LabelFromConsole or LabelFromApp
 	At         time.Time
 }
 
 const (
 	LabelFromChat    = "chat"
 	LabelFromConsole = "console"
+	LabelFromApp     = "app" // the owner, on the app's Mind page
 )
 
 type Dream struct {
@@ -421,6 +467,7 @@ const (
 
 	JudgmentFromSeed   = "seed"   // the owner's judgment file
 	JudgmentFromReview = "review" // drawn by its weekly review from where the owner chose differently
+	JudgmentFromOwner  = "owner"  // written by the owner, in the app
 )
 
 // Call is a decision where it predicted what its owner would choose. The
@@ -561,7 +608,7 @@ type Conversation struct {
 // how they work, their owner's judgment), as YAML; the newest is the one used.
 type SelfVersion struct {
 	ID      ulid.ULID
-	Section string // SectionCharacter, SectionWork, SectionJudgment
+	Section string // SectionCharacter or SectionJudgment
 	Doc     string
 	Source  string // SelfImported, SelfNew, SelfEdited, SelfRolledBack
 	At      time.Time
@@ -569,11 +616,10 @@ type SelfVersion struct {
 
 const (
 	SectionCharacter = "character"
-	SectionWork      = "work"
 	SectionJudgment  = "judgment"
 )
 
-var Sections = []string{SectionCharacter, SectionWork, SectionJudgment}
+var Sections = []string{SectionCharacter, SectionJudgment}
 
 const (
 	SelfImported   = "import" // from files: their old self/ folder, or tinio agent import
@@ -589,4 +635,51 @@ type AgentSkill struct {
 	Description string
 	Files       map[string][]byte
 	AddedAt     time.Time
+	// Source is where it came from: "" their owner imported it, or
+	// market:<handle>@<version> taught from the market.
+	Source string
+}
+
+// ChatMessage is one row of an agent's web chat, from their owner or from
+// them: a message, or what Telegram's buttons and documents carry.
+type ChatMessage struct {
+	ID     string
+	Author string // ChatOwner or ChatAgent
+	Kind   string // ChatMessageKind ("" is one), ChatAsk, ChatChoice, ChatFile, ChatApprove, ChatPick or ChatHello
+	Text   string
+	// Payload says which request, call or file: for ChatApprove a
+	// perception.Answer, for ChatPick a perception.Pick. nil for a message.
+	Payload   json.RawMessage
+	At        time.Time
+	SettledAt time.Time // when an ask or choice ended (its text then says how); zero until then
+	Topic     string    // the topic it's in; "" for none
+	ReplyTo   string    // the row it replies to, when the owner chose one; ""
+}
+
+const (
+	ChatOwner = "owner"
+	ChatAgent = "agent"
+	// ChatSource is the percepts' source for the owner's chat messages.
+	ChatSource = "web"
+
+	ChatMessageKind = "message"
+	ChatAsk         = "ask"     // the agent asks the owner's permission: Approve or Deny
+	ChatChoice      = "choice"  // the agent asks the owner to pick, for their judgment
+	ChatFile        = "file"    // the agent sends a file: its payload names it
+	ChatApprove     = "approve" // the owner's answer to an ask
+	ChatPick        = "pick"    // the owner's pick on a choice
+	ChatHello       = "hello"   // the owner opened the chat for the first time: never shown
+)
+
+// HelloID is the id of an agent's hello row: the same for every agent, so
+// there's only ever one, and the earliest, so it sorts first.
+const HelloID = "00000000000000000000000000"
+
+// SentFile is a file an agent sent in their chat.
+type SentFile struct {
+	ID          string
+	Name        string
+	ContentType string
+	Data        []byte
+	At          time.Time
 }

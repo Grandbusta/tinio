@@ -43,8 +43,9 @@ func (m *Mind) classifyRelation(ctx context.Context, relation string) (string, f
 const circleFamily = "family"
 
 // bornKnowing adds each relative once: a relative already known is never
-// changed by the file again.
-func (m *Mind) bornKnowing(ctx context.Context) {
+// changed by the file again. False if one couldn't be saved.
+func (m *Mind) bornKnowing(ctx context.Context) bool {
+	ok := true
 	for _, r := range m.Life.Family {
 		key := r.Account
 		if key == "" {
@@ -57,12 +58,14 @@ func (m *Mind) bornKnowing(ctx context.Context) {
 		})
 		if err != nil {
 			m.Log.Warn("storing someone it was born knowing failed", "person", key, "err", err)
+			ok = false
 			continue
 		}
 		if added {
 			m.Log.Info("born knowing", "person", key, "name", r.Name, "relation", r.Relation)
 		}
 	}
+	return ok
 }
 
 // familyKey is for a relative who never talks to the agent.

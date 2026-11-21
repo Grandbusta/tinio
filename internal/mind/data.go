@@ -107,6 +107,7 @@ func (m *Mind) fillOldData(ctx context.Context) {
 		if m.unfillable[w.ID] {
 			continue
 		}
+		m.dataLeft = true
 		if _, err := m.writeData(ctx, w); err != nil {
 			if m.unfillable == nil {
 				m.unfillable = map[ulid.ULID]bool{}
@@ -127,18 +128,18 @@ func (m *Mind) writeData(ctx context.Context, w memory.Work) (json.RawMessage, e
 	start := time.Now()
 	d := &decision.Decision{ID: ulid.Make(), At: start.UTC(), Tier: decision.TierSystem2, SetID: m.Day.DataPrompt.Ref,
 		Action: "write_data", Gate: decision.GateAuto}
-	resp, err := m.ownDay().Reason(ctx, system2.Request{
+	resp, err := m.maker().Reason(ctx, system2.Request{
 		Instructions: m.lifeInstructions(m.Day.DataPrompt),
 		Note: fmt.Sprintf("What you made, a %s, on %s:\n\n%s\n\nWrite its %s: %s", strings.ReplaceAll(w.Kind, "_", " "),
 			w.CreatedAt.In(m.Zone).Format("Monday 2 January"), titled(w), f.Needs(), f.DataHelp()),
 		Format: &system2.Format{Name: "data", Schema: map[string]any{"type": "object", "additionalProperties": false,
 			"required": []string{f.Needs()}, "properties": map[string]any{f.Needs(): f.DataSchema()}}},
 	})
+	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD
 	if err != nil {
 		m.finishLife(ctx, d, start, decision.OutcomeFailed, err.Error())
 		return nil, err
 	}
-	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD
 	data, kind := m.keptData(w.Kind, resp.Text)
 	if data == nil {
 		m.finishLife(ctx, d, start, decision.OutcomeFailed, "no "+f.Needs()+" that can be used")

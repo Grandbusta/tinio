@@ -2,10 +2,14 @@ package mind
 
 import (
 	"context"
+	"fmt"
 	"slices"
+	"strings"
+	"sync"
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/Grandbusta/tinio/internal/decision/questions"
 	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/perception"
 	"github.com/Grandbusta/tinio/internal/providers/system1"
@@ -46,6 +50,50 @@ func (m *Mind) labelText(ctx context.Context, text string, n names) (lifeLabels,
 	return l, resp, nil
 }
 
+// choices is the choices of set's question q; nil if it has none.
+func choices(set questions.Set, q string) []system1.Choice {
+	for _, x := range set.Questions {
+		if x.Name == q {
+			return x.Choices
+		}
+	}
+	return nil
+}
+
+// factAreasHelp tells System 2 to file each fact it keeps by the parts of life
+// life_area reads messages by, in its words, so recall finds them; "" with no
+// life_area.
+func (m *Mind) factAreasHelp() string {
+	cs := choices(m.LifeArea, "area")
+	if len(cs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "- Give each fact its `areas`: every part of life it's about, from these (%q only if none fits):", noArea)
+	for _, c := range cs {
+		if c.Value != noArea {
+			fmt.Fprintf(&b, "\n  - %s: %s", c.Value, c.Description)
+		}
+	}
+	return b.String() + "\n"
+}
+
+// filedAreas is what System 2 filed a fact under, if they're life_area's; nil
+// if none is, so System 1 files it instead.
+func (m *Mind) filedAreas(given []string) []string {
+	cs := choices(m.LifeArea, "area")
+	var out []string
+	for _, a := range given {
+		if a != noArea && !slices.Contains(out, a) && slices.ContainsFunc(cs, func(c system1.Choice) bool { return c.Value == a }) {
+			out = append(out, a)
+		}
+	}
+	if len(out) == 0 && len(cs) > 0 && slices.Contains(given, noArea) {
+		return []string{noArea}
+	}
+	return out
+}
+
 func factAreas(l lifeLabels) []string {
 	if len(l.Areas) == 0 {
 		return []string{noArea}
@@ -53,24 +101,44 @@ func factAreas(l lifeLabels) []string {
 	return slices.Clone(l.Areas)
 }
 
-// saveFact still saves the fact if labelling fails; it is labelled on the
-// next start. It returns what labelling cost.
-func (m *Mind) saveFact(ctx context.Context, p perception.Percept, subject, text string, n names) (float64, error) {
-	f := memory.Fact{ID: ulid.Make(), PerceptID: p.ID, Subject: subject, Text: text, At: p.At}
-	var cost float64
-	if m.LifeArea.ID != "" {
-		l, resp, err := m.labelText(ctx, n.fact(f), n)
-		if err != nil {
-			m.Log.Warn("labelling fact failed; saving it unlabelled", "percept", p.ID.String(), "err", err)
-		} else {
-			f.Areas, cost = factAreas(l), resp.CostUSD
+// saveFacts keeps facts, each with its Subject and Text, as learned from p:
+// those without Areas labelled all at once, then all saved in order. A fact whose labelling fails is
+// still saved, and labelled on the next start. It returns how many were saved
+// and what labelling cost.
+func (m *Mind) saveFacts(ctx context.Context, p perception.Percept, fs []memory.Fact, n names) (int, float64) {
+	costs := make([]float64, len(fs))
+	var wg sync.WaitGroup
+	for i := range fs {
+		fs[i].ID, fs[i].PerceptID, fs[i].At = ulid.Make(), p.ID, p.At
+		if m.LifeArea.ID == "" || len(fs[i].Areas) > 0 {
+			continue
 		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var err error
+			defer m.survive("labelling a fact", &err)
+			var l lifeLabels
+			var resp system1.Response
+			if l, resp, err = m.labelText(ctx, n.fact(fs[i]), n); err != nil {
+				m.Log.Warn("labelling fact failed; saving it unlabelled", "percept", p.ID.String(), "err", err)
+				return
+			}
+			fs[i].Areas, costs[i] = factAreas(l), resp.CostUSD
+		}()
 	}
-	if err := m.Store.SaveFact(ctx, f); err != nil {
-		return cost, err
+	wg.Wait()
+	saved, cost := 0, 0.0
+	for i, f := range fs {
+		cost += costs[i]
+		if err := m.Store.SaveFact(ctx, f); err != nil {
+			m.Log.Error("save fact", "percept", p.ID.String(), "err", err)
+			continue
+		}
+		saved++
+		m.Log.Info("remembered", "percept", p.ID.String(), "fact", f.ID.String(), "subject", f.Subject, "areas", f.Areas)
 	}
-	m.Log.Info("remembered", "percept", p.ID.String(), "fact", f.ID.String(), "subject", subject, "areas", f.Areas)
-	return cost, nil
+	return saved, cost
 }
 
 // labelUnlabelledFacts labels a person's facts with fallbackName, since

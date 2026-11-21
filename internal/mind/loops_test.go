@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Grandbusta/tinio/internal/character"
 	"github.com/Grandbusta/tinio/internal/decision"
 	"github.com/Grandbusta/tinio/internal/perception"
 	"github.com/Grandbusta/tinio/internal/providers/system2"
@@ -76,5 +77,71 @@ func TestRepliesWhileItsDayIsBusy(t *testing.T) {
 	}
 	if r := m.Replier.(*fakeReplier); len(r.sent) != 1 {
 		t.Errorf("sent %q", r.sent)
+	}
+}
+
+// panicsOnce panics on its first reply, as a bug that only one message hits
+// would. Only the talk loop calls it.
+type panicsOnce struct {
+	*fakeSystem2
+	panicked bool
+}
+
+func (p *panicsOnce) Reason(ctx context.Context, req system2.Request) (system2.Response, error) {
+	if !p.panicked && req.Format == nil {
+		p.panicked = true
+		panic("a bug one message hits")
+	}
+	return p.fakeSystem2.Reason(ctx, req)
+}
+
+// Many agents share a process, and an unrecovered panic ends it for all of them.
+func TestAPanicDropsOnlyThatMessage(t *testing.T) {
+	m, s := newMind(&fakeReplier{}, &fakeSystem1{choice: "share", confidence: 0.93}, &panicsOnce{fakeSystem2: &fakeSystem2{}})
+	store := replyStore{fakeStore: s, replied: make(chan struct{})}
+	percepts := make(chan perception.Percept)
+	m.Store, m.Percepts = store, percepts
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	stopped := make(chan error)
+	go func() { stopped <- m.Run(ctx) }()
+
+	percepts <- percept("1", "this one hits the bug")
+	select {
+	case percepts <- percept("2", "and this one doesn't"):
+	case <-ctx.Done():
+		t.Fatal("the mind stopped listening after the panic")
+	}
+	select {
+	case <-store.replied:
+	case <-ctx.Done():
+		t.Fatal("no reply to the message after the panic")
+	}
+	cancel()
+	if err := <-stopped; err != nil {
+		t.Fatal(err)
+	}
+	if r := m.Replier.(*fakeReplier); len(r.sent) != 1 {
+		t.Errorf("sent %q", r.sent)
+	}
+}
+
+// Seeding is dozens of writes, so an agent seeded at an earlier start isn't
+// seeded on every start after.
+func TestABornAgentIsntSeededAgain(t *testing.T) {
+	for _, born := range []bool{false, true} {
+		m, s := newMind(&fakeReplier{}, &fakeSystem1{}, &fakeSystem2{})
+		m.Life.Family = []character.Relative{{Name: "Ada", Relation: "mother"}}
+		m.Life.Dreams = []string{"Tobi wants to record an album."}
+		m.Born = born
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Run seeds, then sees it's done
+		if err := m.Run(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if seeded := len(s.people) == 1 && len(s.dreams) == 1; seeded == born {
+			t.Errorf("born %v: %d people, %d dreams", born, len(s.people), len(s.dreams))
+		}
 	}
 }

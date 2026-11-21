@@ -1,11 +1,12 @@
 package store
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
-	"fmt"
-	"net/url"
-	"reflect"
+	"errors"
+	"io"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -15,28 +16,11 @@ import (
 	"github.com/Grandbusta/tinio/internal/memory"
 )
 
-// newDatabase is a new, empty database beside the test one, dropped after.
-func newDatabase(t *testing.T, test *Store) string {
-	t.Helper()
-	name := "tinio_" + strings.ToLower(ulid.Make().String())
-	if _, err := test.pool.Exec(context.Background(), "CREATE DATABASE "+name); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { test.pool.Exec(context.Background(), "DROP DATABASE "+name+" WITH (FORCE)") })
-	u, _ := url.Parse(test.pool.Config().ConnString())
-	u.Path = "/" + name
-	return u.String()
-}
-
-func TestABackupRestoresIntoANewDatabase(t *testing.T) {
-	test := openTestStore(t)
+func TestABackupHoldsOnlyTheAgent(t *testing.T) {
+	s := openTestStore(t)
+	other := s.For(newAgent(t, s.pool))
 	ctx := context.Background()
 	at := time.Now().UTC().Truncate(time.Microsecond)
-	s, err := Open(ctx, newDatabase(t, test))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
 	life := memory.SelfVersion{ID: ulid.Make(), Section: memory.SectionCharacter, Doc: "name: Tobi\n", Source: memory.SelfNew, At: at}
 	skill := memory.AgentSkill{Name: "cold-email", AddedAt: at, Files: map[string][]byte{"SKILL.md": []byte("---\n"), "logo.png": {0x89, 0x00, '\n', ','}}}
 	if _, err := s.Start(ctx, "Tobi", []memory.SelfVersion{life}, map[string][]byte{"OPENAI_API_KEY": {0, '"', '\n'}}, []memory.AgentSkill{skill}, at); err != nil {
@@ -45,44 +29,45 @@ func TestABackupRestoresIntoANewDatabase(t *testing.T) {
 	if err := s.LogWeb(ctx, "search", "a \"quoted\", line\nbreak", 0.01, at); err != nil {
 		t.Fatal(err)
 	}
+	if err := other.LogWeb(ctx, "search", "someone else's", 0, at); err != nil {
+		t.Fatal(err)
+	}
+
 	var file bytes.Buffer
 	made, err := s.Backup(ctx, &file, at)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	into := newDatabase(t, test)
-	restored, err := Restore(ctx, into, bytes.NewReader(file.Bytes()), int64(file.Len()))
-	if err != nil || restored.Whose != made.Whose {
-		t.Fatalf("restore = %+v, %v", restored, err)
+	if made.Whose != "Tobi" || made.Version == 0 || made.Rows() != 6 {
+		t.Errorf("backup = %+v (%d rows)", made, made.Rows())
 	}
-	r, err := Open(ctx, into)
-	if err != nil {
-		t.Fatal(err)
+	var names []string
+	for _, tb := range made.Tables {
+		names = append(names, tb.Name)
 	}
-	defer r.Close()
-
-	again, err := r.Backup(ctx, &bytes.Buffer{}, at)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(again.Tables, made.Tables) {
-		t.Errorf("restored tables differ:\n%+v\nwant\n%+v", again.Tables, made.Tables)
-	}
-	for _, read := range []func(*Store) (any, error){
-		func(s *Store) (any, error) { return s.Secrets(ctx) },
-		func(s *Store) (any, error) { return s.AgentSkills(ctx) },
-		func(s *Store) (any, error) { return s.SelfHistory(ctx, memory.SectionCharacter, 100) },
-	} {
-		want, _ := read(s)
-		if got, err := read(r); err != nil || fmt.Sprint(got) != fmt.Sprint(want) {
-			t.Errorf("restored %v (%v), want %v", got, err, want)
+	for _, shared := range []string{"sources", "agents", "accounts", "db_migrations"} {
+		if slices.Contains(names, shared) {
+			t.Errorf("the backup has %s", shared)
 		}
 	}
-	if err := r.LogWeb(ctx, "page", "after", 0, at); err != nil {
-		t.Errorf("a new row after the restore: %v", err)
+	if slices.Index(names, "agent_skill_files") < slices.Index(names, "agent_skills") {
+		t.Errorf("a table before the one it refers to: %v", names)
 	}
-	if _, err := Restore(ctx, into, bytes.NewReader(file.Bytes()), int64(file.Len())); err == nil {
-		t.Error("restored over someone")
+
+	z, err := zip.NewReader(bytes.NewReader(file.Bytes()), int64(file.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := z.Open("web_log.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	csv, _ := io.ReadAll(f)
+	if !strings.Contains(string(csv), `"a ""quoted"", line`) || strings.Contains(string(csv), "someone else's") {
+		t.Errorf("web_log.csv = %q", csv)
+	}
+
+	if _, err := New(s.pool).Backup(ctx, io.Discard, at); !errors.Is(err, errUnbound) {
+		t.Errorf("an unbound backup: %v", err)
 	}
 }

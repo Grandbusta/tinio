@@ -1,0 +1,173 @@
+{
+  "set": "follow_up@1",
+  "question": "answers_previous",
+  "model": "openai/gpt-6-luna",
+  "act": 0.5,
+  "suggest": 0.5,
+  "cost_usd": 0.00042729999999999987,
+  "summary": {
+    "Asked": 22,
+    "Failed": 0,
+    "Right": 21,
+    "Acted": 22,
+    "ActedRight": 21,
+    "P50": 673500458,
+    "P95": 3418915542
+  },
+  "rows": [
+    {
+      "case": "{\"message\":\"Rice and stew\",\"previous_reply\":\"What did you have for lunch?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.95,
+      "ms": 3036
+    },
+    {
+      "case": "{\"message\":\"It went well I think\",\"previous_reply\":\"How was the interview?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.98,
+      "ms": 3096
+    },
+    {
+      "case": "{\"message\":\"Abuja\",\"previous_reply\":\"Where are you travelling to?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.97,
+      "ms": 3036
+    },
+    {
+      "case": "{\"message\":\"yes please\",\"previous_reply\":\"Do you want me to remind you?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 1,
+      "ms": 3418
+    },
+    {
+      "case": "{\"message\":\"blue\",\"previous_reply\":\"Which one did you choose, the red or the blue?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 1,
+      "ms": 3014
+    },
+    {
+      "case": "{\"message\":\"a bit, thanks\",\"previous_reply\":\"Is your mum feeling better?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.91,
+      "ms": 2532
+    },
+    {
+      "case": "{\"message\":\"after 5\",\"previous_reply\":\"What time works for you?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.94,
+      "ms": 3418
+    },
+    {
+      "case": "{\"message\":\"7\",\"previous_reply\":\"How old is your son now?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.99,
+      "ms": 2864
+    },
+    {
+      "case": "{\"message\":\"Nothing much, too busy\",\"previous_reply\":\"What are you reading these days?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.95,
+      "ms": 541
+    },
+    {
+      "case": "{\"message\":\"Not yet 😩\",\"previous_reply\":\"Did you finish the report?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.99,
+      "ms": 674
+    },
+    {
+      "case": "{\"message\":\"Bien, aprobé\",\"previous_reply\":\"¿Cómo te fue en el examen?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 1,
+      "ms": 601
+    },
+    {
+      "case": "{\"message\":\"Leaf \\u0026 Kettle\",\"previous_reply\":\"What's the name of your shop?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.98,
+      "ms": 657
+    },
+    {
+      "case": "{\"message\":\"Yes, did you?\",\"previous_reply\":\"Good morning! Slept well?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.96,
+      "ms": 657
+    },
+    {
+      "case": "{\"message\":\"tea. what about you?\",\"previous_reply\":\"Which do you prefer, tea or coffee?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 1,
+      "ms": 489
+    },
+    {
+      "case": "{\"message\":\"Can you remind me to call Tunde at 4?\",\"previous_reply\":\"What did you have for lunch?\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 519
+    },
+    {
+      "case": "{\"message\":\"What's the capital of Ghana?\",\"previous_reply\":\"How was the interview?\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 539
+    },
+    {
+      "case": "{\"message\":\"Nice\",\"previous_reply\":\"I finished the poem this morning.\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 690
+    },
+    {
+      "case": "{\"message\":\"What's your favourite food?\",\"previous_reply\":\"I'm reading about the night market today.\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 594
+    },
+    {
+      "case": "{\"message\":\"Who are you anyway?\",\"previous_reply\":\"Do you want me to remind you?\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 0.69,
+      "ms": 546
+    },
+    {
+      "case": "{\"message\":\"Thanks!\",\"previous_reply\":\"Here's the recipe you asked for.\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 517
+    },
+    {
+      "case": "{\"message\":\"Can you write me a birthday message for my dad?\",\"previous_reply\":\"How's your week going?\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 673
+    },
+    {
+      "case": "{\"message\":\"Hi\",\"previous_reply\":\"What time works for you?\"}",
+      "label": "false",
+      "now": "true",
+      "confidence": 0.66,
+      "ms": 517
+    }
+  ]
+}

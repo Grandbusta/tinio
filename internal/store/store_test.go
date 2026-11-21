@@ -3,32 +3,91 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
+	"github.com/Grandbusta/tinio/api/config"
 	"github.com/Grandbusta/tinio/internal/decision"
 	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/perception"
 )
 
-// openTestStore runs only when TINIO_TEST_DATABASE_URL points at a disposable database.
+// openTestStore is a new agent's store, in the database TINIO_TEST_DATABASE_URL
+// points at (a disposable one); without it the test is skipped.
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
 	url := os.Getenv("TINIO_TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("TINIO_TEST_DATABASE_URL not set")
 	}
-	s, err := Open(context.Background(), url)
+	pool, err := config.NewDB(context.Background(), url)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(s.Close)
-	return s
+	t.Cleanup(pool.Close)
+	return New(pool).For(newAgent(t, pool))
+}
+
+// newAgent is a new account's agent, Tobi.
+func newAgent(t *testing.T, pool *pgxpool.Pool) string {
+	t.Helper()
+	ctx, id, now := context.Background(), ulid.Make().String(), time.Now().UTC()
+	if _, err := pool.Exec(ctx, `INSERT INTO accounts (id, email, terms_accepted_at, adult_at, created_at) VALUES ($1, $2, $3, $3, $3)`,
+		id, strings.ToLower(id)+"@example.com", now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO agents (id, account_id, name, owner_name, relation, pace, created_at)
+		VALUES ($1, $1, 'Tobi', 'Ada', 'friend', 1, $2)`, id, now); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func TestAnAgentSeesOnlyTheirOwn(t *testing.T) {
+	s := openTestStore(t)
+	other := s.For(newAgent(t, s.pool))
+	ctx := context.Background()
+	p := perception.Percept{ID: ulid.Make(), Source: "test", ExternalID: "same", Kind: "message", Text: "hi", At: time.Now().UTC()}
+	for _, st := range []*Store{s, other} {
+		if isNew, err := st.SavePercept(ctx, p); err != nil || !isNew {
+			t.Fatalf("each agent keeps their own percept: new=%v err=%v", isNew, err)
+		}
+	}
+	f := memory.Fact{ID: ulid.Make(), PerceptID: p.ID, Subject: memory.SubjectSelf, Text: "likes jollof", At: p.At}
+	if err := s.SaveFact(ctx, f); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := other.RecentFacts(ctx, 10); err != nil || len(got) != 0 {
+		t.Errorf("another agent's facts = %+v, %v", got, err)
+	}
+	if ok, err := other.DeleteFact(ctx, f.ID); err != nil || ok {
+		t.Errorf("deleted another agent's fact: %v, %v", ok, err)
+	}
+	if got, _ := s.RecentFacts(ctx, 10); len(got) != 1 {
+		t.Errorf("own facts = %+v", got)
+	}
+
+	unbound := New(s.pool)
+	if _, err := unbound.RecentFacts(ctx, 10); !errors.Is(err, errUnbound) {
+		t.Errorf("unbound read: %v", err)
+	}
+	if _, _, _, err := unbound.Whose(ctx); !errors.Is(err, errUnbound) {
+		t.Errorf("unbound row: %v", err)
+	}
+	if err := unbound.SaveFact(ctx, f); !errors.Is(err, errUnbound) {
+		t.Errorf("unbound write: %v", err)
+	}
+	if err := unbound.SetSecrets(ctx, map[string][]byte{"X": {1}}, p.At); !errors.Is(err, errUnbound) {
+		t.Errorf("unbound transaction: %v", err)
+	}
 }
 
 func TestPerceptAndDecisionRoundTrip(t *testing.T) {
@@ -77,7 +136,6 @@ func TestPerceptAndDecisionRoundTrip(t *testing.T) {
 func TestFactAreasAndRecallOrder(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	// Far in the future so these are the newest facts in the table.
 	base := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Microsecond)
 
 	sam, other := "test:"+ulid.Make().String(), "test:"+ulid.Make().String()
@@ -409,7 +467,7 @@ func TestSourcesAndReadingProjects(t *testing.T) {
 func TestPublicWorks(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	base := time.Now().UTC().Truncate(time.Microsecond).AddDate(0, 0, -400) // older than the other tests' works
+	base := time.Now().UTC().Truncate(time.Microsecond).AddDate(0, 0, -400)
 
 	own := memory.Intention{ID: ulid.Make(), Subject: memory.SubjectSelf, Kind: memory.IntentionActivity, Text: "write",
 		DueAt: base, Status: memory.IntentionDone, CreatedAt: base}
@@ -530,10 +588,10 @@ func TestApprovals(t *testing.T) {
 		slices.ContainsFunc(stale, func(a memory.Approval) bool { return a.ID == fresh.ID }) {
 		t.Errorf("stale = %+v, %v", stale, err)
 	}
-	if ok, err := s.DecideApproval(ctx, fresh.ID, memory.ApprovalApproved, now); err != nil || !ok {
+	if ok, err := s.DecideApproval(ctx, fresh.ID, memory.ApprovalApproved, "", now); err != nil || !ok {
 		t.Fatalf("decide: %v, %v", ok, err)
 	}
-	if ok, _ := s.DecideApproval(ctx, fresh.ID, memory.ApprovalDenied, now); ok {
+	if ok, _ := s.DecideApproval(ctx, fresh.ID, memory.ApprovalDenied, "", now); ok {
 		t.Error("decided twice")
 	}
 	recent, err := s.RecentApprovals(ctx, 1000)
@@ -545,7 +603,7 @@ func TestApprovals(t *testing.T) {
 func TestLearning(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	base := time.Now().UTC().Truncate(time.Microsecond).AddDate(0, 0, -600) // older than other tests' data
+	base := time.Now().UTC().Truncate(time.Microsecond).AddDate(0, 0, -600)
 	thread := "learn-" + ulid.Make().String()
 
 	if err := s.SaveAutonomyRule(ctx, "reach_out", "auto", "test:owner", ulid.ULID{}, base); err != nil {
@@ -658,7 +716,7 @@ func TestJudgment(t *testing.T) {
 func TestCalls(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	now := time.Now().UTC().Truncate(time.Microsecond).AddDate(2, 0, 0) // after other tests' calls
+	now := time.Now().UTC().Truncate(time.Microsecond).AddDate(2, 0, 0)
 	kind := "focus_" + ulid.Make().String()[:8]
 	c := memory.Call{ID: ulid.Make(), Type: kind, Mode: memory.CallAfter, Situation: "What to focus on today.",
 		Options: []string{"the motif", "Equiano"}, Pick: 0, Why: "the stage is due", Confidence: 0.7, Status: memory.CallLogged, CreatedAt: now}
@@ -751,7 +809,7 @@ func TestRankPriority(t *testing.T) {
 func TestOutcomes(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	now := time.Now().UTC().Truncate(time.Microsecond).AddDate(3, 0, 0) // after other tests' calls
+	now := time.Now().UTC().Truncate(time.Microsecond).AddDate(3, 0, 0)
 	kind := "focus_" + ulid.Make().String()[:8]
 	c := memory.Call{ID: ulid.Make(), Type: kind, Mode: memory.CallAfter, Situation: "s", Options: []string{"a", "b"}, Status: memory.CallLogged,
 		CreatedAt: now.Add(-3 * 24 * time.Hour)}
@@ -793,7 +851,7 @@ func TestOutcomes(t *testing.T) {
 func TestTastes(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	now := time.Now().UTC().Truncate(time.Microsecond).AddDate(5, 0, 0) // newest of all tests' tastes
+	now := time.Now().UTC().Truncate(time.Microsecond).AddDate(5, 0, 0)
 	a := memory.Taste{ID: ulid.Make(), Kind: "lyrics", Likes: true, Text: "one repeated word", Source: memory.TasteFromTelegram, At: now}
 	b := memory.Taste{ID: ulid.Make(), Likes: false, Text: "long intros", Source: memory.TasteFromConsole, At: now.Add(time.Second)}
 	for _, x := range []memory.Taste{a, b} {
@@ -819,7 +877,7 @@ func TestTastes(t *testing.T) {
 func TestWorksFor(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	at := time.Now().UTC().Truncate(time.Microsecond).AddDate(6, 0, 0) // newest of all tests' works
+	at := time.Now().UTC().Truncate(time.Microsecond).AddDate(6, 0, 0)
 	sam, ada := "test:sam-"+ulid.Make().String(), "test:ada-"+ulid.Make().String()
 	work := func(title, kind, subject string, n int) memory.Work {
 		w := memory.Work{ID: ulid.Make(), Kind: kind, Title: title, Text: "x", CreatedAt: at.Add(time.Duration(n) * time.Second)}
@@ -916,5 +974,84 @@ func TestActions(t *testing.T) {
 	if i := slices.IndexFunc(recent, func(x memory.Action) bool { return x.ID == a.ID }); i < 0 || recent[i].Status != memory.ActionDone ||
 		recent[i].Result != "wrote plan.md" || !recent[i].DoneAt.Equal(at) {
 		t.Errorf("recent = %+v", recent)
+	}
+}
+
+// Row-level security is a second wall: the database itself shows a transaction
+// only the rows of the agent it says it's for, even to a query with no agent_id
+// filter. Superusers pass it, so this connects as an ordinary role.
+func TestTheDatabaseHidesOtherAgentsRows(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	other := s.For(newAgent(t, s.pool))
+	for _, st := range []*Store{s, other} {
+		p := perception.Percept{ID: ulid.Make(), Source: "test", ExternalID: ulid.Make().String(), Kind: "message", Text: "hi", At: time.Now().UTC()}
+		if _, err := st.SavePercept(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := s.pool.Exec(ctx, `DO $$ BEGIN
+		IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'tinio_rls_test') THEN
+			CREATE ROLE tinio_rls_test LOGIN PASSWORD 'test' NOSUPERUSER;
+		END IF; END $$`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO tinio_rls_test;
+		GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO tinio_rls_test`); err != nil {
+		t.Fatal(err)
+	}
+	u, _ := url.Parse(os.Getenv("TINIO_TEST_DATABASE_URL"))
+	u.User = url.UserPassword("tinio_rls_test", "test")
+	plain, err := pgxpool.New(ctx, u.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plain.Close()
+
+	count := func(agent string) (n, theirs int) {
+		t.Helper()
+		tx, err := plain.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tx.Rollback(ctx)
+		if agent != "" {
+			tx.Exec(ctx, `SELECT set_config('app.agent_id', $1, true)`, agent)
+		}
+		if err := tx.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE agent_id = $1) FROM percepts`, agent).Scan(&n, &theirs); err != nil {
+			t.Fatal(err)
+		}
+		return n, theirs
+	}
+	// The store's own path, as the ordinary role: its writes pass the policy's
+	// check and its reads see the rows only if it said which agent it's for.
+	mine := New(plain).For(s.agent)
+	p := perception.Percept{ID: ulid.Make(), Source: "rls", ExternalID: ulid.Make().String(), Kind: "message", At: time.Now().UTC()}
+	if isNew, err := mine.SavePercept(ctx, p); err != nil || !isNew {
+		t.Fatalf("the store wrote its own agent's percept: new=%v err=%v", isNew, err)
+	}
+	if seen, err := mine.SeenFrom(ctx, "rls"); err != nil || !seen {
+		t.Errorf("the store read its own agent's percept: %v %v", seen, err)
+	}
+	if n, theirs := count(s.agent); n == 0 || n != theirs {
+		t.Errorf("an agent's transaction saw %d percepts, %d of them theirs", n, theirs)
+	}
+	if n, _ := count(""); n != 0 {
+		t.Errorf("a transaction that says no agent saw %d percepts", n)
+	}
+
+	tx, _ := plain.Begin(ctx)
+	tx.Exec(ctx, `SELECT set_config('app.agent_id', $1, true)`, s.agent)
+	_, err = tx.Exec(ctx, `INSERT INTO percepts (agent_id, id, source, external_id, kind, at) VALUES ($1, $2, 'test', $2, 'message', now())`,
+		other.agent, ulid.Make().String())
+	tx.Rollback(ctx)
+	if err == nil {
+		t.Error("an agent's transaction wrote a row for another agent")
+	}
+
+	if _, err := New(plain).For(s.agent).SavePercept(ctx, perception.Percept{ID: ulid.Make(), Source: "test", ExternalID: ulid.Make().String(),
+		Kind: "message", Text: "hello", At: time.Now().UTC()}); err != nil {
+		t.Errorf("the store, as an ordinary role: %v", err)
 	}
 }

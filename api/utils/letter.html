@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{.Subject}}</title>
+<style>
+@media (prefers-color-scheme: dark) {
+  .bg { background: #0B0F13 !important; }
+  .card { background: #161B22 !important; border-color: #2A323D !important; }
+  .line { border-color: #2A323D !important; }
+  .t { color: #E3E7EC !important; }
+  .b { color: #C3CAD3 !important; }
+  .m, .m a { color: #8F98A3 !important; }
+  .a { color: #A9CDFF !important; }
+  .btn { background: #A9CDFF !important; color: #06162C !important; }
+  .soft { background: #1E2630 !important; border-color: #2A323D !important; }
+  .warn { background: #24210F !important; }
+}
+</style>
+</head>
+<body class="bg" style="margin:0;padding:0;background:#F1F4F7">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">{{.Preview}}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg" style="background:#F1F4F7">
+<tr><td align="center" style="padding:24px 12px 32px">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="card" style="width:100%;max-width:600px;background:#FFFFFF;border:1px solid #E3E7EC;border-radius:8px">
+<tr><td class="line" style="padding:20px 36px;border-bottom:1px solid #E3E7EC">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+<td style="padding-right:10px"><img src="{{.Site}}/apple-icon.png" width="28" height="28" alt="" style="display:block;border:0;border-radius:6px"></td>
+<td class="a" style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:21px;font-weight:800;letter-spacing:-0.5px;color:#0F4B92">tinio</td>
+</tr></table>
+</td></tr>
+<tr><td style="padding:32px 36px 30px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+<h1 class="t" style="margin:0 0 16px;font-size:24px;line-height:1.25;font-weight:700;color:#0B0F13">{{.Heading}}</h1>
+{{range .Paras}}<p class="b" style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#3E4650">{{.}}</p>
+{{end}}{{if .Code}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px"><tr><td class="soft t" style="padding:14px 22px;border-radius:8px;background:#F1F4F7;border:1px solid #E3E7EC;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:32px;font-weight:700;letter-spacing:8px;color:#0B0F13">{{.Code}}</td></tr></table>
+{{end}}{{if .Note}}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px"><tr><td class="warn b" style="padding:14px 16px;border-left:4px solid #F2C94C;background:#FFF7DE;font-size:15px;line-height:1.55;color:#3E4650;white-space:pre-line"><strong class="t" style="color:#0B0F13">{{.NoteTitle}}</strong><br>{{.Note}}</td></tr></table>
+{{end}}{{if .Button}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 20px"><tr><td class="btn" style="border-radius:999px;background:#0F4B92"><a class="btn" href="{{.Link}}" style="display:inline-block;padding:14px 26px;border-radius:999px;background:#0F4B92;color:#FFFFFF;font-size:16px;font-weight:700;text-decoration:none">{{.Button}}</a></td></tr></table>
+{{end}}<p class="m line" style="margin:0;padding-top:12px;border-top:1px solid #E3E7EC;font-size:13px;line-height:1.55;color:#565E69">{{.Fine}}</p>
+</td></tr>
+</table>
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
+<tr><td class="m" align="center" style="padding:16px 12px 0;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;color:#6B727B">
+Tinio · Raise an agent. Put it to work.<br>{{.Why}}<br><a href="{{.Site}}" style="color:#6B727B">heytinio.com</a>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

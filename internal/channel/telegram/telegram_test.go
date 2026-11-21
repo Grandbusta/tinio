@@ -15,6 +15,7 @@ import (
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
+	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/perception"
 )
 
@@ -203,7 +204,7 @@ func TestAskAndSettle(t *testing.T) {
 	api := &fakeAPI{}
 	c := newChannel(t, api.serve(t).URL, nil)
 	p := perception.Percept{Source: Source, Payload: json.RawMessage(`{"chat_id":7,"message_id":1,"user_id":42}`)}
-	where, err := c.Ask(context.Background(), p, "Can I?", "01ABC")
+	where, err := c.Ask(context.Background(), p, memory.Request{Text: "Can I?"}, "01ABC")
 	if err != nil || string(where) != `{"chat_id":7,"message_id":77}` {
 		t.Fatalf("ask = %s, %v", where, err)
 	}

@@ -12,12 +12,16 @@ func WithoutEmDashes(r Reasoner) Reasoner { return noEmDashes{r} }
 type noEmDashes struct{ Reasoner }
 
 func (n noEmDashes) Reason(ctx context.Context, req Request) (Response, error) {
+	if draft := req.Draft; draft != nil {
+		req.Draft = func(text string) { draft(RemoveEmDashes(text)) }
+	}
 	resp, err := n.Reasoner.Reason(ctx, req)
 	if err != nil {
 		return resp, err
 	}
 	resp.Text = RemoveEmDashes(resp.Text)
 	resp.WhoTheyAre = RemoveEmDashes(resp.WhoTheyAre)
+	resp.Topic = RemoveEmDashes(resp.Topic)
 	for i := range resp.Remember {
 		resp.Remember[i].Text = RemoveEmDashes(resp.Remember[i].Text)
 	}

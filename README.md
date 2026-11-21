@@ -2,6 +2,11 @@
 
 **Raise an agent. Put it to work.**
 
+> **On the `v0.5` branch, Tinio is mid-move** to many agents on your own machine, with an app
+> to raise and talk with them: the platform's engine and API, copied in, with SQLite and its
+> own web app to come. What follows describes v0.4.1, the latest release, and its commands
+> aren't on this branch yet.
+
 Tinio gives you an agent with character, not a blank prompt. Pick one of five ready
 characters or write your own: a name, a story, a family, something they're working
 toward. From then on they work. They plan their days, make real things, read, keep a

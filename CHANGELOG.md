@@ -1,6 +1,24 @@
 # Changelog
 
-## v0.4.1: a cheaper life
+## Unreleased (v0.5, under way)
+
+**Many agents, from the platform's engine**
+- The engine and API are a one-time copy of the platform's (`tinio-backend` at 0ccb7c5):
+  many agents in one database, a worker that runs them and lets them rest, the chat
+  through the database, topics, looking before replying, Wikipedia and books in a reply,
+  connections (Google, Atlassian), request cards you can change, quiet hours and pausing,
+  the week's usage meter (still on the platform's plans, until it's a cap you set), skills
+  with checks, and the six job-ready characters.
+- Left out, as the platform's own: the Skills market, admin, the invite-only beta,
+  feedback, and email through Resend.
+- The v0.4 commands (`tinio new`, `run`, `agent`, `secret`, `skill`, `doctor`, `backup`,
+  `restore`) and the five life characters are out until they come back per agent; they're
+  in git history.
+- Still to come before v0.5.0: SQLite instead of Postgres, one binary that serves the API,
+  runs the agents and serves its own web app, no sign-in on your own machine, `TINIO_KEY`
+  generated on first run, Telegram, local tools, backup and moving from v0.4.
+
+## Cheaper, never released as v0.4.1 (in v0.5)
 
 **Their own day costs less**
 - `daily_life.model`: a model of its own for their day (planning, their own activities,

@@ -1,0 +1,208 @@
+{
+  "set": "life_area@1",
+  "question": "area",
+  "model": "openai/gpt-6-luna",
+  "act": 0.5,
+  "suggest": 0.5,
+  "cost_usd": 0.0019739000000000002,
+  "summary": {
+    "Asked": 27,
+    "Failed": 0,
+    "Right": 27,
+    "Acted": 27,
+    "ActedRight": 27,
+    "P50": 554383542,
+    "P95": 724223875
+  },
+  "rows": [
+    {
+      "case": "{\"text\":\"Ada is a nurse at a hospital in Lagos.\"}",
+      "label": "work",
+      "now": "work",
+      "confidence": 0.95,
+      "ms": 628
+    },
+    {
+      "case": "{\"text\":\"Ada runs a tea shop called Leaf \\u0026 Kettle.\"}",
+      "label": "work",
+      "now": "work",
+      "confidence": 0.99,
+      "ms": 516
+    },
+    {
+      "case": "{\"text\":\"Mei translates poems between Mandarin and English.\"}",
+      "label": "work",
+      "now": "work",
+      "confidence": 0.92,
+      "ms": 529
+    },
+    {
+      "case": "{\"text\":\"Ada has a peanut allergy.\"}",
+      "label": "health",
+      "now": "health",
+      "confidence": 1,
+      "ms": 468
+    },
+    {
+      "case": "{\"text\":\"Ada takes metformin every morning.\"}",
+      "label": "health",
+      "now": "health",
+      "confidence": 1,
+      "ms": 705
+    },
+    {
+      "case": "{\"text\":\"Ada lives in Ikeja with two flatmates.\"}",
+      "label": "home",
+      "now": "home",
+      "confidence": 0.97,
+      "ms": 548
+    },
+    {
+      "case": "{\"text\":\"Ada loves Afrobeats and highlife.\"}",
+      "label": "preferences",
+      "now": "preferences",
+      "confidence": 1,
+      "ms": 474
+    },
+    {
+      "case": "{\"text\":\"Ada hates coriander.\"}",
+      "label": "preferences",
+      "now": "preferences",
+      "confidence": 1,
+      "ms": 529
+    },
+    {
+      "case": "{\"text\":\"Ada plays five-a-side football on Saturdays.\"}",
+      "label": "leisure",
+      "now": "leisure",
+      "confidence": 1,
+      "ms": 961
+    },
+    {
+      "case": "{\"text\":\"Ada's passport expires in March.\"}",
+      "label": "admin",
+      "now": "admin",
+      "confidence": 1,
+      "ms": 570
+    },
+    {
+      "case": "{\"text\":\"Ada's driving licence needs renewing.\"}",
+      "label": "admin",
+      "now": "admin",
+      "confidence": 1,
+      "ms": 702
+    },
+    {
+      "case": "{\"text\":\"Ada is saving for a car.\"}",
+      "label": "money",
+      "now": "money",
+      "confidence": 1,
+      "ms": 534
+    },
+    {
+      "case": "{\"text\":\"Ada's rent is due on the 1st.\"}",
+      "label": "money",
+      "now": "money",
+      "confidence": 0.93,
+      "ms": 452
+    },
+    {
+      "case": "{\"text\":\"Ada goes to church every Sunday.\"}",
+      "label": "religion",
+      "now": "religion",
+      "confidence": 1,
+      "ms": 593
+    },
+    {
+      "case": "{\"text\":\"Ada is flying to Accra next week.\"}",
+      "label": "travel",
+      "now": "travel",
+      "confidence": 0.81,
+      "ms": 724
+    },
+    {
+      "case": "{\"text\":\"Ada wants to visit Japan one day.\"}",
+      "label": "travel",
+      "now": "travel",
+      "confidence": 0.93,
+      "ms": 646
+    },
+    {
+      "case": "{\"text\":\"Ada's phone screen is cracked.\"}",
+      "label": "possessions",
+      "now": "possessions",
+      "confidence": 1,
+      "ms": 523
+    },
+    {
+      "case": "{\"text\":\"Ada bought a new laptop.\"}",
+      "label": "possessions",
+      "now": "possessions",
+      "confidence": 0.99,
+      "ms": 631
+    },
+    {
+      "case": "{\"text\":\"Ada is studying for her MBA.\"}",
+      "label": "education",
+      "now": "education",
+      "confidence": 1,
+      "ms": 529
+    },
+    {
+      "case": "{\"text\":\"Ada's best friend Kemi is getting married.\"}",
+      "label": "relationships",
+      "now": "relationships",
+      "confidence": 0.99,
+      "ms": 689
+    },
+    {
+      "case": "{\"text\":\"Ada and her neighbours have a WhatsApp group for the street.\"}",
+      "label": "relationships",
+      "now": "relationships",
+      "confidence": 0.79,
+      "ms": 580
+    },
+    {
+      "case": "{\"text\":\"Ada is 34.\"}",
+      "label": "identity",
+      "now": "identity",
+      "confidence": 1,
+      "ms": 595
+    },
+    {
+      "case": "{\"text\":\"Ada's brother Tunde lives in London.\"}",
+      "label": "family",
+      "now": "family",
+      "confidence": 0.94,
+      "ms": 400
+    },
+    {
+      "case": "{\"text\":\"Ada's husband is called Femi.\"}",
+      "label": "family",
+      "now": "family",
+      "confidence": 0.99,
+      "ms": 554
+    },
+    {
+      "case": "{\"text\":\"Ada's birthday party is on Saturday.\"}",
+      "label": "plans",
+      "now": "plans",
+      "confidence": 0.7,
+      "ms": 520
+    },
+    {
+      "case": "{\"text\":\"What is the capital of France?\"}",
+      "label": "world",
+      "now": "world",
+      "confidence": 0.98,
+      "ms": 589
+    },
+    {
+      "case": "{\"text\":\"The Super Eagles won last night.\"}",
+      "label": "world",
+      "now": "world",
+      "confidence": 0.96,
+      "ms": 427
+    }
+  ]
+}

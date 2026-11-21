@@ -12,43 +12,39 @@ import (
 	"github.com/Grandbusta/tinio/internal/memory"
 )
 
-// Start makes the database someone's: their first versions, secrets and
-// skills, all or nothing. It returns false, changing nothing, if a life is
-// already here; ErrNotTheirs if the database was claimed by someone else.
+// Start gives the agent their first versions, secrets and skills, all or
+// nothing. It returns false, changing nothing, if they have a life already.
 func (s *Store) Start(ctx context.Context, name string, vs []memory.SelfVersion, secrets map[string][]byte, skills []memory.AgentSkill,
 	at time.Time) (bool, error) {
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.begin(ctx, pgx.TxOptions{})
 	if err != nil {
 		return false, fmt.Errorf("start: %w", err)
 	}
 	defer tx.Rollback(ctx)
 	// Two starting at once: the second waits here, then finds the life.
-	if _, err := tx.Exec(ctx, `LOCK TABLE self_versions IN EXCLUSIVE MODE`); err != nil {
+	var one int
+	switch err := tx.QueryRow(ctx, `SELECT 1 FROM agents WHERE id = $1 FOR UPDATE`, s.agent).Scan(&one); {
+	case errors.Is(err, pgx.ErrNoRows):
+		return false, fmt.Errorf("start: there's no agent %s", s.agent)
+	case err != nil:
 		return false, fmt.Errorf("start: %w", err)
 	}
 	var lived bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM self_versions WHERE section = $1)`, memory.SectionCharacter).Scan(&lived); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agent_versions WHERE agent_id = $1 AND section = $2)`, s.agent,
+		memory.SectionCharacter).Scan(&lived); err != nil {
 		return false, fmt.Errorf("start: %w", err)
 	}
 	if lived {
 		return false, nil
 	}
-	var whose string
-	switch err := tx.QueryRow(ctx, `SELECT name FROM whose`).Scan(&whose); {
-	case errors.Is(err, pgx.ErrNoRows):
-	case err != nil:
-		return false, fmt.Errorf("start: %w", err)
-	case whose != name:
-		return false, fmt.Errorf("%w: %s's, not %s's; give %s their own database", ErrNotTheirs, whose, name, name)
-	}
-	if err := saveSelf(ctx, tx, name, vs); err != nil {
+	if err := s.saveSelf(ctx, tx, name, vs); err != nil {
 		return false, err
 	}
-	if err := setSecrets(ctx, tx, secrets, at); err != nil {
+	if err := s.setSecrets(ctx, tx, secrets, at); err != nil {
 		return false, err
 	}
 	for _, sk := range skills {
-		if err := saveSkill(ctx, tx, sk); err != nil {
+		if err := s.saveSkill(ctx, tx, sk); err != nil {
 			return false, err
 		}
 	}
@@ -66,8 +62,8 @@ func (s *Store) Self(ctx context.Context, section string) (memory.SelfVersion, b
 
 // SelfHistory is section's versions, newest first.
 func (s *Store) SelfHistory(ctx context.Context, section string, limit int) ([]memory.SelfVersion, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, section, doc, source, at FROM self_versions WHERE section = $1
-		ORDER BY at DESC, id DESC LIMIT $2`, section, limit)
+	rows, err := s.query(ctx, `SELECT id, section, doc, source, at FROM agent_versions WHERE agent_id = $1 AND section = $2
+		ORDER BY at DESC, id DESC LIMIT $3`, section, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query self: %w", err)
 	}
@@ -87,32 +83,31 @@ func (s *Store) SelfHistory(ctx context.Context, section string, limit int) ([]m
 	return out, rows.Err()
 }
 
-// SaveSelf adds new versions. name is the person's name in a life among
-// them ("" if none): whose memory this is follows it.
+// SaveSelf adds new versions. name is the person's name in a character among
+// them ("" if none): the agent's name follows it.
 func (s *Store) SaveSelf(ctx context.Context, name string, vs ...memory.SelfVersion) error {
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.begin(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("save self: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	if err := saveSelf(ctx, tx, name, vs); err != nil {
+	if err := s.saveSelf(ctx, tx, name, vs); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
-func saveSelf(ctx context.Context, tx pgx.Tx, name string, vs []memory.SelfVersion) error {
+func (s *Store) saveSelf(ctx context.Context, tx pgx.Tx, name string, vs []memory.SelfVersion) error {
 	for _, v := range vs {
-		if _, err := tx.Exec(ctx, `INSERT INTO self_versions (id, section, doc, source, at) VALUES ($1, $2, $3, $4, $5)`,
-			v.ID.String(), v.Section, v.Doc, v.Source, v.At); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO agent_versions (agent_id, id, section, doc, source, at) VALUES ($1, $2, $3, $4, $5, $6)`,
+			s.agent, v.ID.String(), v.Section, v.Doc, v.Source, v.At); err != nil {
 			return fmt.Errorf("save self: %w", err)
 		}
 	}
 	if name == "" || len(vs) == 0 {
 		return nil
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO whose (name, since) VALUES ($1, $2) ON CONFLICT (one) DO UPDATE SET name = EXCLUDED.name`,
-		name, vs[0].At); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE agents SET name = $2 WHERE id = $1`, s.agent, name); err != nil {
 		return fmt.Errorf("save self: %w", err)
 	}
 	return nil
@@ -120,7 +115,7 @@ func saveSelf(ctx context.Context, tx pgx.Tx, name string, vs []memory.SelfVersi
 
 // Secrets are sealed values by name.
 func (s *Store) Secrets(ctx context.Context) (map[string][]byte, error) {
-	rows, err := s.pool.Query(ctx, `SELECT name, sealed FROM secrets`)
+	rows, err := s.query(ctx, `SELECT name, sealed FROM secrets WHERE agent_id = $1`)
 	if err != nil {
 		return nil, fmt.Errorf("query secrets: %w", err)
 	}
@@ -139,21 +134,21 @@ func (s *Store) Secrets(ctx context.Context) (map[string][]byte, error) {
 
 // SetSecrets sets them all or none, each replacing what was there.
 func (s *Store) SetSecrets(ctx context.Context, sealed map[string][]byte, at time.Time) error {
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.begin(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("set secrets: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	if err := setSecrets(ctx, tx, sealed, at); err != nil {
+	if err := s.setSecrets(ctx, tx, sealed, at); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
-func setSecrets(ctx context.Context, tx pgx.Tx, sealed map[string][]byte, at time.Time) error {
+func (s *Store) setSecrets(ctx context.Context, tx pgx.Tx, sealed map[string][]byte, at time.Time) error {
 	for name, v := range sealed {
-		if _, err := tx.Exec(ctx, `INSERT INTO secrets (name, sealed, set_at) VALUES ($1, $2, $3)
-			ON CONFLICT (name) DO UPDATE SET sealed = EXCLUDED.sealed, set_at = EXCLUDED.set_at`, name, v, at); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO secrets (agent_id, name, sealed, set_at) VALUES ($1, $2, $3, $4)
+			ON CONFLICT (agent_id, name) DO UPDATE SET sealed = EXCLUDED.sealed, set_at = EXCLUDED.set_at`, s.agent, name, v, at); err != nil {
 			return fmt.Errorf("set secret %s: %w", name, err)
 		}
 	}
@@ -161,7 +156,7 @@ func setSecrets(ctx context.Context, tx pgx.Tx, sealed map[string][]byte, at tim
 }
 
 func (s *Store) UnsetSecret(ctx context.Context, name string) (bool, error) {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM secrets WHERE name = $1`, name)
+	tag, err := s.exec(ctx, `DELETE FROM secrets WHERE agent_id = $1 AND name = $2`, name)
 	if err != nil {
 		return false, fmt.Errorf("unset secret: %w", err)
 	}
@@ -170,8 +165,9 @@ func (s *Store) UnsetSecret(ctx context.Context, name string) (bool, error) {
 
 // AgentSkills are the skills it has, with their files, by name.
 func (s *Store) AgentSkills(ctx context.Context) ([]memory.AgentSkill, error) {
-	rows, err := s.pool.Query(ctx, `SELECT k.name, k.description, k.added_at, f.path, f.content
-		FROM agent_skills k JOIN agent_skill_files f ON f.skill = k.name ORDER BY k.name, f.path`)
+	rows, err := s.query(ctx, `SELECT k.name, k.description, k.added_at, k.source, f.path, f.content
+		FROM agent_skills k JOIN agent_skill_files f ON f.agent_id = k.agent_id AND f.skill = k.name
+		WHERE k.agent_id = $1 ORDER BY k.name, f.path`)
 	if err != nil {
 		return nil, fmt.Errorf("query skills: %w", err)
 	}
@@ -181,7 +177,7 @@ func (s *Store) AgentSkills(ctx context.Context) ([]memory.AgentSkill, error) {
 		var sk memory.AgentSkill
 		var path string
 		var content []byte
-		if err := rows.Scan(&sk.Name, &sk.Description, &sk.AddedAt, &path, &content); err != nil {
+		if err := rows.Scan(&sk.Name, &sk.Description, &sk.AddedAt, &sk.Source, &path, &content); err != nil {
 			return nil, err
 		}
 		if len(out) == 0 || out[len(out)-1].Name != sk.Name {
@@ -195,28 +191,28 @@ func (s *Store) AgentSkills(ctx context.Context) ([]memory.AgentSkill, error) {
 
 // SaveAgentSkill replaces any skill of the same name, files and all.
 func (s *Store) SaveAgentSkill(ctx context.Context, sk memory.AgentSkill) error {
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.begin(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("save skill: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	if err := saveSkill(ctx, tx, sk); err != nil {
+	if err := s.saveSkill(ctx, tx, sk); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
-func saveSkill(ctx context.Context, tx pgx.Tx, sk memory.AgentSkill) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM agent_skills WHERE name = $1`, sk.Name); err != nil {
+func (s *Store) saveSkill(ctx context.Context, tx pgx.Tx, sk memory.AgentSkill) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM agent_skills WHERE agent_id = $1 AND name = $2`, s.agent, sk.Name); err != nil {
 		return fmt.Errorf("save skill: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO agent_skills (name, description, added_at) VALUES ($1, $2, $3)`,
-		sk.Name, sk.Description, sk.AddedAt); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO agent_skills (agent_id, name, description, added_at, source) VALUES ($1, $2, $3, $4, $5)`,
+		s.agent, sk.Name, sk.Description, sk.AddedAt, sk.Source); err != nil {
 		return fmt.Errorf("save skill: %w", err)
 	}
 	for path, content := range sk.Files {
-		if _, err := tx.Exec(ctx, `INSERT INTO agent_skill_files (skill, path, content) VALUES ($1, $2, $3)`,
-			sk.Name, path, content); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO agent_skill_files (agent_id, skill, path, content) VALUES ($1, $2, $3, $4)`,
+			s.agent, sk.Name, path, content); err != nil {
 			return fmt.Errorf("save skill file %s: %w", path, err)
 		}
 	}
@@ -224,7 +220,7 @@ func saveSkill(ctx context.Context, tx pgx.Tx, sk memory.AgentSkill) error {
 }
 
 func (s *Store) RemoveAgentSkill(ctx context.Context, name string) (bool, error) {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM agent_skills WHERE name = $1`, name)
+	tag, err := s.exec(ctx, `DELETE FROM agent_skills WHERE agent_id = $1 AND name = $2`, name)
 	if err != nil {
 		return false, fmt.Errorf("remove skill: %w", err)
 	}

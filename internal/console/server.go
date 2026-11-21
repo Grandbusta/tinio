@@ -251,7 +251,7 @@ func (s *Server) log(w http.ResponseWriter, r *http.Request) {
 	if s.failed(w, err) {
 		return
 	}
-	s.json(w, entryViews(entries))
+	s.json(w, EntryViews(entries))
 }
 
 func (s *Server) chain(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +264,6 @@ func (s *Server) chain(w http.ResponseWriter, r *http.Request) {
 	if s.failed(w, err) {
 		return
 	}
-	views := entryViews(entries)
 	ids := make([]ulid.ULID, len(entries))
 	for i, e := range entries {
 		ids[i] = e.ID
@@ -273,17 +272,7 @@ func (s *Server) chain(w http.ResponseWriter, r *http.Request) {
 	if s.failed(w, err) {
 		return
 	}
-	for _, l := range labels {
-		for i := range views {
-			if views[i].ID == l.DecisionID.String() {
-				if views[i].Labels == nil {
-					views[i].Labels = map[string]string{}
-				}
-				views[i].Labels[l.Question] = l.Value
-			}
-		}
-	}
-	s.json(w, views)
+	s.json(w, Labelled(EntryViews(entries), labels))
 }
 
 // fromConsole is whether a write comes from the console's own page (same
@@ -523,7 +512,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 				}
 				continue
 			}
-			for _, e := range entryViews(entries) {
+			for _, e := range EntryViews(entries) {
 				b, _ := json.Marshal(e)
 				fmt.Fprintf(w, "event: decision\ndata: %s\n\n", b)
 				last = e.At
@@ -944,7 +933,8 @@ func nonNilMaps(m []map[string]any) []map[string]any {
 	return m
 }
 
-type entryView struct {
+// EntryView is a decision as the console, and the app's Mind, show it.
+type EntryView struct {
 	ID        string            `json:"id"`
 	ParentID  string            `json:"parent_id,omitempty"`
 	At        time.Time         `json:"at"`
@@ -966,11 +956,11 @@ type entryView struct {
 	Speaker   string            `json:"speaker"`
 }
 
-func entryViews(entries []store.LogEntry) []entryView {
-	out := make([]entryView, len(entries))
+func EntryViews(entries []store.LogEntry) []EntryView {
+	out := make([]EntryView, len(entries))
 	for i, e := range entries {
 		answers, _ := json.Marshal(e.Answers)
-		v := entryView{ID: e.ID.String(), At: e.At, Set: e.SetID, Tier: string(e.Tier), Provider: e.Provider,
+		v := EntryView{ID: e.ID.String(), At: e.At, Set: e.SetID, Tier: string(e.Tier), Provider: e.Provider,
 			Answers: answers, Action: e.Action, Gate: string(e.Gate), Reply: e.Reply, LatencyMS: e.Latency.Milliseconds(), CostUSD: e.CostUSD,
 			Outcome: e.Outcome, Source: e.Source, Kind: e.Kind, Text: e.Text, Speaker: e.Speaker}
 		if e.ParentID != nil {
@@ -982,6 +972,23 @@ func entryViews(entries []store.LogEntry) []entryView {
 		out[i] = v
 	}
 	return out
+}
+
+// Labelled is views with the labels given to them, by question.
+func Labelled(views []EntryView, labels []memory.Label) []EntryView {
+	at := map[string]int{}
+	for i, v := range views {
+		at[v.ID] = i
+	}
+	for _, l := range labels {
+		if i, ok := at[l.DecisionID.String()]; ok {
+			if views[i].Labels == nil {
+				views[i].Labels = map[string]string{}
+			}
+			views[i].Labels[l.Question] = l.Value
+		}
+	}
+	return views
 }
 
 func formatNames(fs []render.Format) []string {

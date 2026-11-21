@@ -26,41 +26,45 @@ var (
 )
 
 // seedJudgment adds only what was not seeded before, so what the owner
-// edited or rejected stays so.
-func (m *Mind) seedJudgment(ctx context.Context) {
+// edited or rejected stays so. False if it couldn't be saved.
+func (m *Mind) seedJudgment(ctx context.Context) bool {
 	if len(m.Judgment.Cases) == 0 && len(m.Judgment.Principles) == 0 && len(m.Judgment.Priorities) == 0 && len(m.Judgment.Boundaries) == 0 {
-		return
+		return true
 	}
-	now := time.Now().UTC()
+	now, status := time.Now().UTC(), memory.JudgmentProposed
+	if m.JudgmentApproved {
+		status = memory.JudgmentApproved
+	}
 	cases := make([]memory.JudgmentCase, len(m.Judgment.Cases))
 	for i, c := range m.Judgment.Cases {
 		// In the file's order, a moment apart, so they list as written.
 		cases[i] = memory.JudgmentCase{ID: ulid.Make(), Key: c.Key, Type: c.Type, Situation: c.Situation, Options: c.Options,
-			Choice: c.Choice, Reason: c.Reason, Status: memory.JudgmentProposed, Source: memory.JudgmentFromSeed,
+			Choice: c.Choice, Reason: c.Reason, Status: status, Source: memory.JudgmentFromSeed,
 			At: now.Add(time.Duration(i) * time.Millisecond)}
 	}
 	principles := make([]memory.Principle, len(m.Judgment.Principles))
 	for i, p := range m.Judgment.Principles {
 		principles[i] = memory.Principle{ID: ulid.Make(), Text: p.Text, Seed: p.Text, Types: p.Types, Cases: p.Cases,
-			Status: memory.JudgmentProposed, Source: memory.JudgmentFromSeed, CreatedAt: now.Add(time.Duration(i) * time.Millisecond)}
+			Status: status, Source: memory.JudgmentFromSeed, CreatedAt: now.Add(time.Duration(i) * time.Millisecond)}
 	}
 	at := now.Add(time.Duration(len(principles)) * time.Millisecond)
 	for i, text := range m.Judgment.Priorities {
 		principles = append(principles, memory.Principle{ID: ulid.Make(), Text: text, Seed: text, Kind: memory.PrincipleRank, Rank: i + 1,
-			Status: memory.JudgmentProposed, Source: memory.JudgmentFromSeed, CreatedAt: at.Add(time.Duration(i) * time.Millisecond)})
+			Status: status, Source: memory.JudgmentFromSeed, CreatedAt: at.Add(time.Duration(i) * time.Millisecond)})
 	}
 	for i, text := range m.Judgment.Boundaries {
 		principles = append(principles, memory.Principle{ID: ulid.Make(), Text: text, Seed: text, Kind: memory.PrincipleLimit,
-			Status: memory.JudgmentProposed, Source: memory.JudgmentFromSeed, CreatedAt: at.Add(time.Duration(i) * time.Millisecond)})
+			Status: status, Source: memory.JudgmentFromSeed, CreatedAt: at.Add(time.Duration(i) * time.Millisecond)})
 	}
 	nc, np, err := m.Store.SeedJudgment(ctx, cases, principles)
 	if err != nil {
 		m.Log.Warn("seeding its owner's judgment failed", "err", err)
-		return
+		return false
 	}
 	if nc > 0 || np > 0 {
-		m.Log.Info("seeded its owner's judgment for review", "cases", nc, "principles", np)
+		m.Log.Info("seeded its owner's judgment", "cases", nc, "principles", np, "status", status)
 	}
+	return true
 }
 
 // judgmentNote picks the past decisions most like about, or else the newest

@@ -3,19 +3,13 @@ package replay
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Grandbusta/tinio/internal/decision"
 	"github.com/Grandbusta/tinio/internal/decision/questions"
 	"github.com/Grandbusta/tinio/internal/providers/system1"
-	"github.com/Grandbusta/tinio/internal/store"
 )
-
-type fakeStore struct{ examples []store.Example }
-
-func (f fakeStore) LabelledExamples(context.Context, string, string, int) ([]store.Example, error) {
-	return f.examples, nil
-}
 
 type fakeS1 map[string]decision.Answer
 
@@ -24,7 +18,7 @@ func (f fakeS1) Decide(_ context.Context, req system1.Request) (system1.Response
 	if !ok {
 		return system1.Response{}, fmt.Errorf("no answer")
 	}
-	return system1.Response{Answers: map[string]decision.Answer{"intent": a}, CostUSD: 0.0001}, nil
+	return system1.Response{Provider: "fake/1", Answers: map[string]decision.Answer{"intent": a}, CostUSD: 0.01}, nil
 }
 
 var set = questions.Set{ID: "incoming_message", Version: 2, Primary: "intent",
@@ -34,22 +28,52 @@ func choice(c string, conf float64) decision.Answer {
 	return decision.Answer{Type: decision.QuestionChoice, Choice: c, Confidence: conf}
 }
 
-func TestReplaySuggestsAThreshold(t *testing.T) {
-	var ex []store.Example
+// cases are ten right at 0.70 to 0.925, and one wrong at 0.62.
+func cases() ([]Case, fakeS1) {
+	var cs []Case
 	s1 := fakeS1{}
-	// 10 right at 0.70 to 0.95; one wrong at 0.62.
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		text := fmt.Sprintf("msg %d", i)
-		ex = append(ex, store.Example{Text: text, Answer: choice("share", 0.9), Label: "share"})
+		cs = append(cs, Case{State: map[string]any{"message": text}, Label: "share"})
 		s1[text] = choice("share", 0.70+float64(i)*0.025)
 	}
-	ex = append(ex, store.Example{Text: "odd", Answer: choice("share", 0.9), Label: "small_talk"})
+	cs = append(cs, Case{State: map[string]any{"message": "odd"}, Label: "small_talk"})
 	s1["odd"] = choice("share", 0.62)
-	r, err := Run(context.Background(), fakeStore{examples: ex}, s1, set, 100)
+	return cs, s1
+}
+
+func TestReplaySuggestsAThreshold(t *testing.T) {
+	cs, s1 := cases()
+	r, err := Run(context.Background(), s1, set, "", cs, Options{Parallel: 4})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.Suggest != 0.65 {
 		t.Errorf("suggested %.2f, want 0.65: the lowest threshold above the one wrong answer", r.Suggest)
+	}
+	if s := r.Summary(); s.Right != 10 || s.Acted != 4 || s.ActedRight != 4 {
+		t.Errorf("summary %+v", s)
+	}
+}
+
+// A run never spends much past its cap: once it's reached, no more is asked.
+func TestReplayStopsAtTheCostCap(t *testing.T) {
+	cs, s1 := cases()
+	r, err := Run(context.Background(), s1, set, "", cs, Options{Parallel: 1, MaxCostUSD: 0.03})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Rows) != 3 || r.Skipped != 8 {
+		t.Errorf("asked %d, skipped %d; want 3 asked at a cent each", len(r.Rows), r.Skipped)
+	}
+}
+
+func TestLoad(t *testing.T) {
+	cs, err := Load(strings.NewReader("# a comment\n\n{\"state\":{\"message\":\"Pain\"},\"label\":\"share\"}\n"))
+	if err != nil || len(cs) != 1 || cs[0].Label != "share" {
+		t.Errorf("load: %+v %v", cs, err)
+	}
+	if _, err := Load(strings.NewReader("{\"state\":{\"message\":\"x\"}}\n")); err == nil {
+		t.Error("a case with no label loaded")
 	}
 }

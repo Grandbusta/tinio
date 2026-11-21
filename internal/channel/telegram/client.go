@@ -16,6 +16,7 @@ import (
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
+	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/perception"
 )
 
@@ -114,8 +115,8 @@ func (c *Channel) SendFile(ctx context.Context, p perception.Percept, name strin
 
 // Ask sends text with Approve and Deny buttons for approval id, and returns
 // where it was sent, for Settle.
-func (c *Channel) Ask(ctx context.Context, p perception.Percept, text, id string) (json.RawMessage, error) {
-	return c.send(ctx, p, text, [][]models.InlineKeyboardButton{{
+func (c *Channel) Ask(ctx context.Context, p perception.Percept, r memory.Request, id string) (json.RawMessage, error) {
+	return c.send(ctx, p, r.Text, [][]models.InlineKeyboardButton{{
 		{Text: "✅ Approve", CallbackData: gatePrefix + id + ":y"}, {Text: "❌ Deny", CallbackData: gatePrefix + id + ":n"}}})
 }
 

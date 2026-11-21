@@ -35,7 +35,7 @@ func TestPromptBudget(t *testing.T) {
 		}
 		return Prompt{Ref: name, Text: string(raw)}
 	}
-	tpl, err := character.LoadTemplate(tinio.Files, "characters/mei")
+	tpl, err := character.LoadTemplate(tinio.Files, "characters/zara")
 	if err != nil {
 		t.Fatal(err)
 	}

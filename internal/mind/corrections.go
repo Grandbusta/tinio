@@ -46,11 +46,8 @@ func (m *Mind) correctFacts(ctx context.Context, p perception.Percept, reply *de
 		d.Outcome.Detail = "forgot a fact about " + about // not what it said: it was forgotten
 		if !c.Forget {
 			d.Action = "correct_fact"
-			cost, err := m.saveFact(ctx, p, f.Subject, c.Text, n)
+			_, cost := m.saveFacts(ctx, p, []memory.Fact{{Subject: f.Subject, Text: c.Text}}, n)
 			d.CostUSD += cost
-			if err != nil {
-				m.Log.Error("save corrected fact", "err", err)
-			}
 			d.Outcome.Detail = "replaced a fact about " + about + " with: " + c.Text
 		}
 		m.Log.Info("corrected memory", "percept", p.ID.String(), "action", d.Action, "subject", f.Subject)

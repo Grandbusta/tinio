@@ -1,0 +1,98 @@
+{
+  "set": "skill_level@1",
+  "question": "level",
+  "model": "openai/gpt-6-luna",
+  "act": 0,
+  "suggest": 0.8,
+  "cost_usd": 0.00041480000000000005,
+  "summary": {
+    "Asked": 11,
+    "Failed": 0,
+    "Right": 8,
+    "Acted": 11,
+    "ActedRight": 8,
+    "P50": 1888541208,
+    "P95": 3134794459,
+    "Scored": 11,
+    "Off": 9.6
+  },
+  "rows": [
+    {
+      "case": "{\"skill\":\"Poetry\",\"work\":{\"kind\":\"poem\",\"text\":\"My cat is very nice\\nI love my cat so much\\nshe is soft and fluffy\\nI love her every day\\ncats are the best\",\"title\":\"My Cat\"}}",
+      "label": "2",
+      "now": "1.7",
+      "confidence": 0.8,
+      "ms": 2079
+    },
+    {
+      "case": "{\"skill\":\"Poetry\",\"work\":{\"kind\":\"poem\",\"text\":\"The rain comes down on the tin roof,\\na steady drumming through the night.\\nI lie awake and count the drops\\nuntil the window turns to light.\\nIn the morning puddles hold the sky,\\nand the street smells clean and new.\",\"title\":\"Rain on the Roof\"}}",
+      "label": "5",
+      "now": "4.1",
+      "confidence": 0.7,
+      "ms": 1890
+    },
+    {
+      "case": "{\"skill\":\"Poetry\",\"work\":{\"kind\":\"poem\",\"text\":\"Steam lifts from the pepper buns\\nlike a promise no one keeps for long.\\nThe fortune teller folds her table\\nwhile the squid man sings the same three notes\\nhe sang to my mother.\\nI buy what I always buy.\\nThe lanterns hum their red vowels\\nand for a moment the whole street\\nis a sentence I can almost translate.\",\"title\":\"Night Market, Raohe Street\"}}",
+      "label": "7",
+      "now": "6.7",
+      "confidence": 0.8,
+      "ms": 1834
+    },
+    {
+      "case": "{\"skill\":\"Recipe writing\",\"work\":{\"kind\":\"recipe\",\"text\":\"Cook rice with tomato and pepper. Add stuff and stir. Its very nice when its done.\",\"title\":\"Jollof rice\"}}",
+      "label": "2",
+      "now": "1.1",
+      "confidence": 0.96,
+      "ms": 2000
+    },
+    {
+      "case": "{\"skill\":\"Recipe writing\",\"work\":{\"kind\":\"recipe\",\"text\":\"Serves 2.\\n\\nIngredients: 2 chicken breasts, sliced; 1 red pepper, sliced; 1 onion, sliced; 2 tbsp soy sauce; 1 tbsp oil; 1 tsp grated ginger.\\n\\n1. Heat the oil in a wok over high heat.\\n2. Fry the chicken for 5 minutes until cooked through.\\n3. Add the pepper, onion and ginger and fry for 3 minutes.\\n4. Add the soy sauce, stir and serve with rice.\",\"title\":\"Chicken stir-fry\"}}",
+      "label": "5",
+      "now": "3.8",
+      "confidence": 0.48,
+      "ms": 1770
+    },
+    {
+      "case": "{\"skill\":\"Recipe writing\",\"work\":{\"kind\":\"recipe\",\"text\":\"Makes a big jar (about 900 g).\\n\\n500 g plain flour, 120 g caster sugar, ½ tsp grated nutmeg, ½ tsp fine salt, 100 g cold butter in cubes, 1 large egg, 150 ml cold milk, sunflower oil for frying (about 1 litre).\\n\\n1. Whisk the flour, sugar, nutmeg and salt. Rub in the butter with your fingertips until it looks like fine breadcrumbs, about 3 minutes. Don't let it warm up: warm butter is what makes chin chin chewy rather than crisp.\\n2. Beat the egg into the milk, pour it in and bring it together into a firm dough. Knead for only a minute, just until smooth.\\n3. Roll it out 5 mm thick (no thicker, or the middles stay soft) and cut 1 cm squares.\\n4. Heat the oil to 170°C. Fry in small batches, stirring, for 4 to 5 minutes, until they're the colour of a digestive biscuit, not just golden.\\n5. Drain on paper and leave them to cool completely before tasting: they crisp as they cool. Stored airtight, they keep three weeks.\",\"title\":\"Crisp chin chin\"}}",
+      "label": "7",
+      "now": "5.2",
+      "confidence": 0.54,
+      "ms": 1888
+    },
+    {
+      "case": "{\"skill\":\"Social media\",\"work\":{\"kind\":\"post\",\"text\":\"Come buy our tea!!! Best tea in Lagos!!! Tea tea tea #tea #tea #tea #lagos\",\"title\":\"Tea post\"}}",
+      "label": "2",
+      "now": "1.7",
+      "confidence": 0.88,
+      "ms": 2156
+    },
+    {
+      "case": "{\"skill\":\"Social media\",\"work\":{\"kind\":\"post\",\"text\":\"New in: hibiscus and ginger iced tea. Cool, tart and just right for a Lagos afternoon. Available all week at Leaf \\u0026 Kettle.\",\"title\":\"Hibiscus iced tea\"}}",
+      "label": "5",
+      "now": "4.9",
+      "confidence": 0.93,
+      "ms": 3134
+    },
+    {
+      "case": "{\"skill\":\"Social media\",\"work\":{\"kind\":\"post\",\"text\":\"3 pm. The generator is humming, the inbox is winning, and you've read the same email four times.\\n\\nThis is what the hibiscus-ginger cooler is for: cold, sharp, a little fiery at the back of the throat. One glass and the afternoon is yours again.\\n\\nAt Leaf \\u0026 Kettle on Allen Avenue until Sunday. Bring the colleague who's always tired.\",\"title\":\"The 3 pm slump\"}}",
+      "label": "7",
+      "now": "6",
+      "confidence": 0.7,
+      "ms": 601
+    },
+    {
+      "case": "{\"skill\":\"Translation\",\"work\":{\"kind\":\"translation\",\"text\":\"Mandarin: 我很想你。\\nEnglish: I very miss you.\",\"title\":\"I miss you\"}}",
+      "label": "2",
+      "now": "2.9",
+      "confidence": 0.23,
+      "ms": 1059
+    },
+    {
+      "case": "{\"skill\":\"Translation\",\"work\":{\"kind\":\"translation\",\"text\":\"Mandarin (Li Bai): 床前明月光，疑是地上霜。舉頭望明月，低頭思故鄉。\\n\\nEnglish:\\nMoonlight pools before my bed;\\nI'd take it for frost on the floor.\\nI lift my head to the bright moon,\\nlower it, and think of home.\",\"title\":\"Quiet Night Thoughts\"}}",
+      "label": "7",
+      "now": "5.1",
+      "confidence": 0.76,
+      "ms": 1004
+    }
+  ]
+}

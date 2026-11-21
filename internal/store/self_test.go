@@ -15,16 +15,15 @@ func TestAPersonInTheirDatabase(t *testing.T) {
 	ctx := context.Background()
 	at := time.Now().UTC().Truncate(time.Microsecond)
 	life := memory.SelfVersion{ID: ulid.Make(), Section: memory.SectionCharacter, Doc: "name: Tobi\n", Source: memory.SelfNew, At: at}
-	work := memory.SelfVersion{ID: ulid.Make(), Section: memory.SectionWork, Doc: "# mine\n", Source: memory.SelfNew, At: at}
 	skill := memory.AgentSkill{Name: "cold-email", Description: "First emails.", AddedAt: at,
 		Files: map[string][]byte{"SKILL.md": []byte("---\n"), "scripts/send.py": {0xff, 0x00}}}
-	if ok, err := s.Start(ctx, "Tobi", []memory.SelfVersion{life, work}, map[string][]byte{"OPENAI_API_KEY": {1, 2}}, []memory.AgentSkill{skill}, at); err != nil || !ok {
+	if ok, err := s.Start(ctx, "Tobi", []memory.SelfVersion{life}, map[string][]byte{"OPENAI_API_KEY": {1, 2}}, []memory.AgentSkill{skill}, at); err != nil || !ok {
 		t.Fatalf("start = %v, %v", ok, err)
 	}
 	if ok, err := s.Start(ctx, "Mei", []memory.SelfVersion{life}, nil, nil, at); err != nil || ok {
 		t.Fatalf("started twice: %v, %v", ok, err)
 	}
-	if whose, _, _ := s.Whose(ctx); whose != "Tobi" {
+	if whose, _, _, _ := s.Whose(ctx); whose != "Tobi" {
 		t.Errorf("whose = %q", whose)
 	}
 
@@ -38,7 +37,7 @@ func TestAPersonInTheirDatabase(t *testing.T) {
 	if vs, _ := s.SelfHistory(ctx, memory.SectionCharacter, 10); len(vs) != 2 || vs[1].ID != life.ID {
 		t.Errorf("history = %+v", vs)
 	}
-	if whose, _, _ := s.Whose(ctx); whose != "Tobi Ade" {
+	if whose, _, _, _ := s.Whose(ctx); whose != "Tobi Ade" {
 		t.Errorf("whose after a rename = %q", whose)
 	}
 	if _, ok, _ := s.Self(ctx, memory.SectionJudgment); ok {

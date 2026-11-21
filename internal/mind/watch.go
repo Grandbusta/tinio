@@ -114,11 +114,11 @@ func (m *Mind) observe(ctx context.Context, from string, p perception.Percept, c
 		Note:         note,
 		Format:       observeFormat(acts),
 	})
+	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD
 	if err != nil {
 		m.finishLife(ctx, d, start, decision.OutcomeFailed, err.Error())
 		return
 	}
-	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD
 	var out struct {
 		Remember []string      `json:"remember"`
 		Tell     string        `json:"tell"`
@@ -129,19 +129,14 @@ func (m *Mind) observe(ctx context.Context, from string, p perception.Percept, c
 		return
 	}
 	n := names{agent: m.Life.Name, speaker: fallbackName}
-	kept := 0
+	var fs []memory.Fact
 	for _, f := range out.Remember {
-		if f = strings.TrimSpace(f); f == "" {
-			continue
+		if f = strings.TrimSpace(f); f != "" {
+			fs = append(fs, memory.Fact{Subject: memory.SubjectSelf, Text: f})
 		}
-		cost, err := m.saveFact(ctx, p, memory.SubjectSelf, f, n)
-		d.CostUSD += cost
-		if err != nil {
-			m.Log.Error("save fact", "err", err)
-			continue
-		}
-		kept++
 	}
+	kept, cost := m.saveFacts(ctx, p, fs, n)
+	d.CostUSD += cost
 	if t := strings.TrimSpace(out.Tell); t != "" {
 		m.tellOwner(ctx, perception.KindObservation, "watch:"+from, t, true, start)
 	}

@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -89,17 +91,18 @@ func TestCollectFactsUsesStructuredOutput(t *testing.T) {
 			t.Errorf("text format = %+v", body.Text)
 		}
 		io.WriteString(w, `{"model":"m","status":"completed","output":[{"type":"message","content":[{"type":"output_text",
-			"text":"{\"reply\":\"Forest green, I think.\",\"who_they_are\":\" Sam is Tobi's cousin. \",\"remember\":[{\"about\":\"self\",\"fact\":\"Tobi's favourite colour is forest green\"},{\"about\":\"speaker\",\"fact\":\"Sam goes to Grace Chapel\"},{\"about\":\"speaker\",\"fact\":\"  \"},{\"about\":\"nobody\",\"fact\":\"x\"}],\"reminders\":[{\"when\":\"2026-10-30T09:00\",\"what\":\"call mum\"},{\"when\":\" \",\"what\":\"x\"}],\"permissions\":[{\"class\":\"reach_out\",\"verdict\":\"auto\"},{\"class\":\" \",\"verdict\":\"auto\"}],\"corrections\":[{\"fact\":\"f2\",\"action\":\"replace\",\"text\":\"Sam lives in Lekki\"},{\"fact\":\"f3\",\"action\":\"forget\",\"text\":\"\"},{\"fact\":\"f4\",\"action\":\"replace\",\"text\":\" \"}],\"misread\":\" ask_for_help \",\"send\":{\"work\":\" [w2] \",\"as\":\"PDF\"},\"moves\":[{\"promise\":\" [p1] \",\"by\":\"NOW\"},{\"promise\":\"\",\"by\":\"now\"}],\"lessons\":[{\"skill\":\"lyric writing\",\"lesson\":\" Keep hooks short \"},{\"skill\":\"\",\"lesson\":\"x\"}],\"feedback\":[{\"skill\":\"lyric writing\",\"level\":3,\"about\":\"the verse\"},{\"skill\":\"x\",\"level\":11,\"about\":\"\"}],\"promises\":[{\"by\":\"2026-10-30T20:00\",\"what\":\" Tobi writes Sam a verse \",\"ability\":\"\",\"query\":\"\",\"as\":\" PDF \"},{\"by\":\"\",\"what\":\"x\",\"ability\":\"\",\"query\":\"\"}]}"}]}]}`)
+			"text":"{\"reply\":\"Forest green, I think.\",\"who_they_are\":\" Sam is Tobi's cousin. \",\"remember\":[{\"about\":\"self\",\"fact\":\"Tobi's favourite colour is forest green\",\"areas\":[\" Preferences \",\" \"]},{\"about\":\"speaker\",\"fact\":\"Sam goes to Grace Chapel\",\"areas\":[]},{\"about\":\"speaker\",\"fact\":\"  \"},{\"about\":\"nobody\",\"fact\":\"x\"}],\"reminders\":[{\"when\":\"2026-10-30T09:00\",\"what\":\"call mum\"},{\"when\":\" \",\"what\":\"x\"}],\"permissions\":[{\"class\":\"reach_out\",\"verdict\":\"auto\"},{\"class\":\" \",\"verdict\":\"auto\"}],\"corrections\":[{\"fact\":\"f2\",\"action\":\"replace\",\"text\":\"Sam lives in Lekki\"},{\"fact\":\"f3\",\"action\":\"forget\",\"text\":\"\"},{\"fact\":\"f4\",\"action\":\"replace\",\"text\":\" \"}],\"misread\":\" ask_for_help \",\"send\":{\"work\":\" [w2] \",\"as\":\"PDF\"},\"moves\":[{\"promise\":\" [p1] \",\"by\":\"NOW\"},{\"promise\":\"\",\"by\":\"now\"}],\"lessons\":[{\"skill\":\"lyric writing\",\"lesson\":\" Keep hooks short \"},{\"skill\":\"\",\"lesson\":\"x\"}],\"feedback\":[{\"skill\":\"lyric writing\",\"level\":3,\"about\":\"the verse\"},{\"skill\":\"x\",\"level\":11,\"about\":\"\"}],\"promises\":[{\"by\":\"2026-10-30T20:00\",\"what\":\" Tobi writes Sam a verse \",\"ability\":\"\",\"query\":\"\",\"as\":\" PDF \"},{\"by\":\"\",\"what\":\"x\",\"ability\":\"\",\"query\":\"\"}]}"}]}]}`)
 	})
 	resp, err := c.Reason(context.Background(), system2.Request{Message: "What's your favourite colour?", CollectFacts: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []system2.Memory{
-		{About: system2.AboutSelf, Text: "Tobi's favourite colour is forest green"},
+		{About: system2.AboutSelf, Text: "Tobi's favourite colour is forest green", Areas: []string{"preferences"}},
 		{About: system2.AboutSpeaker, Text: "Sam goes to Grace Chapel"},
 	}
-	if resp.Text != "Forest green, I think." || !slices.Equal(resp.Remember, want) || resp.WhoTheyAre != "Sam is Tobi's cousin." ||
+	if resp.Text != "Forest green, I think." || !reflect.DeepEqual(resp.Remember, want) || resp.WhoTheyAre != "Sam is Tobi's cousin." ||
+
 		!slices.Equal(resp.Reminders, []system2.Reminder{{When: "2026-10-30T09:00", What: "call mum"}}) ||
 		!slices.Equal(resp.Promises, []system2.Promise{{By: "2026-10-30T20:00", What: "Tobi writes Sam a verse", As: "pdf"}}) ||
 		resp.Send != (system2.Send{Work: "w2", As: "pdf"}) || !slices.Equal(resp.Moves, []system2.Move{{Promise: "p1", By: "now"}}) ||
@@ -156,16 +159,21 @@ func TestACutOffAnswerIsTriedAgainWithMoreRoom(t *testing.T) {
 	}
 }
 
+// A cut-off answer is an error, and both attempts are paid for: what they
+// cost comes back with it, to be counted.
 func TestACutOffAnswerIsAnError(t *testing.T) {
 	calls := 0
-	c := newTestClient(t, pricing.Price{}, func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, pricing.Price{Output: 10}, func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		io.WriteString(w, `{"model":"m","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},
+		io.WriteString(w, `{"model":"m","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"usage":{"output_tokens":100000},
 			"output":[{"type":"message","content":[{"type":"output_text","text":"{\"title\":\"A plan\",\"text\":\"Week one: lear"}]}]}`)
 	})
-	_, err := c.Reason(context.Background(), system2.Request{Message: "x", Format: &system2.Format{Name: "work", Schema: map[string]any{"type": "object"}}})
+	resp, err := c.Reason(context.Background(), system2.Request{Message: "x", Format: &system2.Format{Name: "work", Schema: map[string]any{"type": "object"}}})
 	if !errors.Is(err, system2.ErrCutOff) || !strings.Contains(err.Error(), "max_output_tokens") || calls != 2 {
 		t.Errorf("err = %v after %d calls; want it cut off after trying twice", err, calls)
+	}
+	if resp.CostUSD < 1.99 || resp.CostUSD > 2.01 || resp.Usage.OutputTokens != 200000 {
+		t.Errorf("spent $%.2f on %d output tokens; want both attempts, $2 on 200,000", resp.CostUSD, resp.Usage.OutputTokens)
 	}
 }
 
@@ -195,5 +203,45 @@ func TestFlexWithNoRoomFallsBackToTheStandardTier(t *testing.T) {
 	}
 	if last := tiers[len(tiers)-1]; tiers[0] != "flex" || last != "" {
 		t.Errorf("tiers asked for = %q, want flex first and the standard tier last", tiers)
+	}
+}
+
+// With a Draft, the reply streams: each draft is the reply so far, never with
+// half an escape or half a character, however the text arrives.
+func TestADraftIsTheReplySoFar(t *testing.T) {
+	const out = `{"remember":[{"about":"self","fact":"I said \"reply\": no"}],"reply":"Caf\u00e9 at \"8\"?\nYes \ud83d\ude00 see you","send":{"work":"","as":""}}`
+	c := newTestClient(t, pricing.Price{}, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Stream bool `json:"stream"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		if !body.Stream {
+			t.Error("not streamed")
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		event := func(v map[string]any) {
+			b, _ := json.Marshal(v)
+			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", v["type"], b)
+		}
+		for i := 0; i < len(out); i += 3 {
+			event(map[string]any{"type": "response.output_text.delta", "delta": out[i:min(i+3, len(out))]})
+		}
+		event(map[string]any{"type": "response.completed", "response": map[string]any{"model": "m", "status": "completed",
+			"output": []any{map[string]any{"type": "message", "content": []any{map[string]any{"type": "output_text", "text": out}}}}}})
+	})
+	var drafts []string
+	resp, err := c.Reason(context.Background(), system2.Request{Message: "Coffee?", CollectFacts: true,
+		Draft: func(text string) { drafts = append(drafts, text) }})
+	const reply = "Café at \"8\"?\nYes 😀 see you"
+	if err != nil || resp.Text != reply {
+		t.Fatalf("resp = %q, %v", resp.Text, err)
+	}
+	if len(drafts) < 5 || drafts[len(drafts)-1] != reply {
+		t.Errorf("drafts = %q", drafts)
+	}
+	for _, d := range drafts {
+		if !strings.HasPrefix(reply, d) {
+			t.Errorf("draft %q isn't the start of the reply", d)
+		}
 	}
 }

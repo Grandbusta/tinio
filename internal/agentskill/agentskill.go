@@ -6,9 +6,11 @@
 package agentskill
 
 import (
+	"archive/zip"
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -30,14 +32,13 @@ const (
 )
 
 type Skill struct {
-	Name        string
+	Name        string // its handle (Handle)
+	Written     string // its name as its SKILL.md wrote it, when that wasn't already a handle; "" if it was
 	Description string
 	Body        string
 	// Files are all of it by slash-separated path, SKILL.md included.
 	Files map[string][]byte
 }
-
-var name = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // FromDir reads a skill's folder, which must be named like the skill.
 func FromDir(dir string) (Skill, error) {
@@ -76,7 +77,79 @@ func FromDir(dir string) (Skill, error) {
 	return s, nil
 }
 
+// FromUpload reads a skill someone uploaded: a SKILL.md alone, or a .zip of its
+// folder (with the folder at its root, or its files there). The same limits as
+// FromDir hold; paths that would leave the folder, and links, are refused.
+func FromUpload(filename string, data []byte) (Skill, error) {
+	if !strings.EqualFold(path.Ext(filename), ".zip") {
+		if len(data) > maxStored {
+			return Skill{}, fmt.Errorf("too big: at most %d MB", maxStored>>20)
+		}
+		return Parse(map[string][]byte{"SKILL.md": data})
+	}
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return Skill{}, fmt.Errorf("not a zip file: %w", err)
+	}
+	files, total := map[string][]byte{}, 0
+	for _, f := range zr.File {
+		if f.FileInfo().IsDir() || strings.HasPrefix(path.Base(f.Name), ".") || strings.HasPrefix(f.Name, "__MACOSX/") {
+			continue
+		}
+		if f.Mode()&fs.ModeSymlink != 0 {
+			return Skill{}, fmt.Errorf("%s is a link; a skill's files must be files", f.Name)
+		}
+		name := path.Clean(strings.ReplaceAll(f.Name, "\\", "/"))
+		if path.IsAbs(name) || name == ".." || strings.HasPrefix(name, "../") {
+			return Skill{}, fmt.Errorf("%s points outside the skill", f.Name)
+		}
+		if len(files) == maxFiles {
+			return Skill{}, fmt.Errorf("more than %d files", maxFiles)
+		}
+		if f.UncompressedSize64 > maxStored {
+			return Skill{}, fmt.Errorf("%s is too big: at most %d MB a file", f.Name, maxStored>>20)
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return Skill{}, err
+		}
+		raw, err := io.ReadAll(io.LimitReader(rc, maxStored+1))
+		rc.Close()
+		if err != nil {
+			return Skill{}, err
+		}
+		if total += len(raw); len(raw) > maxStored || total > maxTotal {
+			return Skill{}, fmt.Errorf("too big: at most %d MB a file and %d MB in all", maxStored>>20, maxTotal>>20)
+		}
+		files[name] = raw
+	}
+	// A zipped folder: its files are inside one top folder.
+	if _, ok := files["SKILL.md"]; !ok {
+		top := ""
+		for name := range files {
+			dir, _, found := strings.Cut(name, "/")
+			if !found || (top != "" && dir != top) {
+				top = ""
+				break
+			}
+			top = dir
+		}
+		if top != "" {
+			inner := make(map[string][]byte, len(files))
+			for name, raw := range files {
+				inner[strings.TrimPrefix(name, top+"/")] = raw
+			}
+			files = inner
+		}
+	}
+	return Parse(files)
+}
+
 // Parse makes a skill of its files; fs.ErrNotExist if there's no SKILL.md.
+// It forgives what people writing one by hand get wrong: frontmatter that
+// isn't quite YAML (an unquoted colon in a description) is read line by line,
+// and a name like "Brand Voice" is made the handle brand-voice (Written keeps
+// it as they wrote it). Errors are said for people, not programmers.
 func Parse(files map[string][]byte) (Skill, error) {
 	raw, ok := files["SKILL.md"]
 	if !ok {
@@ -84,23 +157,74 @@ func Parse(files map[string][]byte) (Skill, error) {
 	}
 	front, body, ok := frontmatter(raw)
 	if !ok {
-		return Skill{}, errors.New("SKILL.md has no frontmatter (--- name, description ---)")
+		return Skill{}, errors.New("the top of its SKILL.md needs a name: line and a description: line, between two --- lines")
 	}
 	var meta struct {
 		Name        string `yaml:"name"`
 		Description string `yaml:"description"`
 	}
-	if err := yaml.Unmarshal(front, &meta); err != nil {
-		return Skill{}, fmt.Errorf("SKILL.md frontmatter: %w", err)
+	if yaml.Unmarshal(front, &meta) != nil {
+		meta.Name, meta.Description = line(front, "name"), line(front, "description")
 	}
-	meta.Name, meta.Description = strings.TrimSpace(meta.Name), strings.TrimSpace(meta.Description)
+	written := strings.TrimSpace(meta.Name)
+	handle := Handle(written)
+	desc := strings.TrimSpace(meta.Description)
 	switch {
-	case !name.MatchString(meta.Name) || len(meta.Name) > 64:
-		return Skill{}, fmt.Errorf("name %q must be lowercase words joined by hyphens, at most 64 characters", meta.Name)
-	case meta.Description == "" || utf8.RuneCountInString(meta.Description) > 1024:
-		return Skill{}, errors.New("description is required, at most 1024 characters")
+	case handle == "":
+		return Skill{}, errors.New("its SKILL.md needs a name: line, with letters or numbers in it")
+	case desc == "":
+		return Skill{}, errors.New("its SKILL.md needs a description: line, saying what it's for and when to use it")
+	case utf8.RuneCountInString(desc) > 1024:
+		return Skill{}, errors.New("its description is too long: at most 1024 characters")
 	}
-	return Skill{Name: meta.Name, Description: meta.Description, Body: strings.TrimSpace(string(body)), Files: files}, nil
+	s := Skill{Name: handle, Description: desc, Body: strings.TrimSpace(string(body)), Files: files}
+	if written != handle {
+		s.Written = written
+	}
+	return s, nil
+}
+
+// line is the value after key: on its own line in front, quotes taken off; ""
+// if there's none. For frontmatter that isn't valid YAML.
+func line(front []byte, key string) string {
+	for _, l := range strings.Split(string(front), "\n") {
+		k, v, ok := strings.Cut(l, ":")
+		if ok && strings.EqualFold(strings.TrimSpace(k), key) {
+			return strings.Trim(strings.TrimSpace(v), `"'`)
+		}
+	}
+	return ""
+}
+
+var notHandle = regexp.MustCompile(`[^a-z0-9]+`)
+
+// Handle makes name a skill's handle: lowercase words joined by hyphens, at
+// most 64 characters ("Brand Voice" and "brand_voice" are brand-voice). It's
+// how the agent asks for the skill, and what a skill of the same name replaces.
+func Handle(name string) string {
+	h := strings.Trim(notHandle.ReplaceAllString(strings.ToLower(name), "-"), "-")
+	if len(h) > 64 {
+		h = strings.TrimRight(h[:64], "-")
+	}
+	return h
+}
+
+// Title is how a skill is named for people: its instructions' first heading,
+// or else its handle in words ("brand-voice" is "Brand voice").
+func Title(name, body string) string {
+	for _, l := range strings.Split(body, "\n") {
+		if t, ok := strings.CutPrefix(strings.TrimSpace(l), "# "); ok && strings.TrimSpace(t) != "" {
+			return strings.TrimSpace(t)
+		}
+		if strings.TrimSpace(l) != "" {
+			break
+		}
+	}
+	words := strings.ReplaceAll(name, "-", " ")
+	if words == "" {
+		return ""
+	}
+	return strings.ToUpper(words[:1]) + words[1:]
 }
 
 // Others are its files besides SKILL.md, sorted.

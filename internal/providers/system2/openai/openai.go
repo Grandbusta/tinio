@@ -44,11 +44,16 @@ func New(apiKey, model, baseURL string, price pricing.Price, effort, tier string
 }
 
 // replyWithFacts is the Structured Outputs schema used with CollectFacts:
-// strict mode guarantees the output matches it.
+// strict mode guarantees the output matches it. The model writes the
+// properties in order, which JSON gives a map alphabetically, so most of what
+// it saves comes before the reply. Reply first was tried (20 Nov): its first
+// words showed 0.4s sooner, but replies were blander and a fact went unsaved.
 var replyWithFacts = map[string]any{
-	"type": "object", "additionalProperties": false, "required": []string{"reply", "remember", "who_they_are", "reminders", "promises", "permissions", "corrections", "misread", "feedback", "lessons", "tastes", "goals", "send", "moves", "act"},
+	"type": "object", "additionalProperties": false, "required": []string{"reply", "remember", "who_they_are", "reminders", "promises", "permissions", "corrections", "misread", "feedback", "lessons", "tastes", "goals", "send", "moves", "act", "look", "topic"},
 	"properties": map[string]any{
 		"reply":        map[string]any{"type": "string"},
+		"look":         map[string]any{"type": "array", "items": system2.LookSchema},
+		"topic":        map[string]any{"type": "string", "description": "the name the note asks for, if it does; otherwise empty"},
 		"who_they_are": map[string]any{"type": "string"},
 		"reminders": map[string]any{"type": "array", "items": map[string]any{
 			"type": "object", "additionalProperties": false, "required": []string{"when", "what"},
@@ -135,10 +140,12 @@ var replyWithFacts = map[string]any{
 			},
 		}},
 		"remember": map[string]any{"type": "array", "items": map[string]any{
-			"type": "object", "additionalProperties": false, "required": []string{"about", "fact"},
+			"type": "object", "additionalProperties": false, "required": []string{"about", "fact", "areas"},
 			"properties": map[string]any{
 				"about": map[string]any{"type": "string", "enum": []string{string(system2.AboutSelf), string(system2.AboutSpeaker)}},
 				"fact":  map[string]any{"type": "string"},
+				"areas": map[string]any{"type": "array", "items": map[string]any{"type": "string"},
+					"description": "the parts of life it's about, from the list"},
 			},
 		}},
 	},
@@ -203,21 +210,24 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 	// Cut-off structured output is broken JSON, so it's no answer. Out of
 	// room, it tries once more with twice as much.
 	structured := req.CollectFacts || req.Format != nil
+	// spent is every attempt's cost, the failed ones' too: they're billed.
+	spent := system2.Response{Provider: "openai/" + c.model}
 	var w *responses.Response
 	for attempt := 1; ; attempt++ {
 		var err error
-		w, err = c.api.Responses.New(ctx, params)
+		w, err = c.create(ctx, params, req)
 		var apiErr *openai.Error
 		if err != nil && params.ServiceTier == responses.ResponseNewParamsServiceTierFlex &&
 			errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusTooManyRequests {
 			params.ServiceTier = "" // flex had no room, even after the SDK's retries: the standard tier
-			w, err = c.api.Responses.New(ctx, params)
+			w, err = c.create(ctx, params, req)
 		}
 		if err != nil {
-			return system2.Response{}, fmt.Errorf("openai responses: %w", err)
+			return spent, fmt.Errorf("openai responses: %w", err)
 		}
+		c.charge(&spent, w)
 		if w.Error.Code != "" {
-			return system2.Response{}, fmt.Errorf("openai responses: %s: %s", w.Error.Code, w.Error.Message)
+			return spent, fmt.Errorf("openai responses: %s: %s", w.Error.Code, w.Error.Message)
 		}
 		if w.Status != responses.ResponseStatusIncomplete || !structured {
 			break
@@ -226,7 +236,7 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 			params.MaxOutputTokens = param.NewOpt(params.MaxOutputTokens.Value * 2)
 			continue
 		}
-		return system2.Response{}, fmt.Errorf("openai responses: %w (%s)", system2.ErrCutOff, w.IncompleteDetails.Reason)
+		return spent, fmt.Errorf("openai responses: %w (%s)", system2.ErrCutOff, w.IncompleteDetails.Reason)
 	}
 
 	var text, refusal strings.Builder
@@ -252,9 +262,11 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 		perms      []system2.Permission
 		fixes      []system2.Correction
 		misread    string
+		topic      string
 		send       system2.Send
 		moves      []system2.Move
 		acts       []system2.Act
+		looks      []system2.Look
 		feedback   []system2.Feedback
 		lessons    []system2.LessonLearned
 		tastes     []system2.Taste
@@ -268,8 +280,9 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 			Reply      string `json:"reply"`
 			WhoTheyAre string `json:"who_they_are"`
 			Remember   []struct {
-				About string `json:"about"`
-				Fact  string `json:"fact"`
+				About string   `json:"about"`
+				Fact  string   `json:"fact"`
+				Areas []string `json:"areas"`
 			} `json:"remember"`
 			Reminders []struct {
 				When string `json:"when"`
@@ -293,11 +306,16 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 				Text   string `json:"text"`
 			} `json:"corrections"`
 			Misread string `json:"misread"`
+			Topic   string `json:"topic"`
 			Act     []struct {
 				Tool string `json:"tool"`
 				Args string `json:"args"`
 				Why  string `json:"why"`
 			} `json:"act"`
+			Look []struct {
+				Tool  string `json:"tool"`
+				Query string `json:"query"`
+			} `json:"look"`
 			Moves []struct {
 				Promise string `json:"promise"`
 				By      string `json:"by"`
@@ -331,14 +349,20 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 			} `json:"goals"`
 		}
 		if err := json.Unmarshal([]byte(reply), &out); err != nil {
-			return system2.Response{}, fmt.Errorf("openai responses: reply is not the requested JSON: %w", err)
+			return spent, fmt.Errorf("openai responses: reply is not the requested JSON: %w", err)
 		}
 		reply = strings.TrimSpace(out.Reply)
 		whoTheyAre = strings.TrimSpace(out.WhoTheyAre)
 		for _, f := range out.Remember {
 			about := system2.About(f.About)
 			if text := strings.TrimSpace(f.Fact); text != "" && (about == system2.AboutSelf || about == system2.AboutSpeaker) {
-				remember = append(remember, system2.Memory{About: about, Text: text})
+				var areas []string
+				for _, a := range f.Areas {
+					if a = strings.ToLower(strings.TrimSpace(a)); a != "" {
+						areas = append(areas, a)
+					}
+				}
+				remember = append(remember, system2.Memory{About: about, Text: text, Areas: areas})
 			}
 		}
 		for _, r := range out.Reminders {
@@ -358,6 +382,12 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 			}
 		}
 		misread = strings.TrimSpace(out.Misread)
+		topic = strings.TrimSpace(out.Topic)
+		for _, l := range out.Look {
+			if tool := strings.TrimSpace(l.Tool); tool != "" {
+				looks = append(looks, system2.Look{Tool: tool, Query: strings.TrimSpace(l.Query)})
+			}
+		}
 		for _, a := range out.Act {
 			if tool := strings.TrimSpace(a.Tool); tool != "" {
 				acts = append(acts, system2.Act{Tool: tool, Args: strings.TrimSpace(a.Args), Why: strings.TrimSpace(a.Why)})
@@ -400,15 +430,17 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 			}
 		}
 	}
+	if len(looks) > 0 {
+		return system2.Response{Provider: "openai/" + w.Model, Looks: looks, Usage: spent.Usage, CostUSD: spent.CostUSD}, nil
+	}
 	if reply == "" {
 		reason := string(w.Status)
 		if w.IncompleteDetails.Reason != "" {
 			reason += " (" + string(w.IncompleteDetails.Reason) + ")"
 		}
-		return system2.Response{}, errors.New("openai responses: no reply text, status " + reason)
+		return spent, errors.New("openai responses: no reply text, status " + reason)
 	}
 
-	u := w.Usage
 	return system2.Response{
 		Provider:    "openai/" + w.Model,
 		Text:        reply,
@@ -419,6 +451,7 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 		Permissions: perms,
 		Corrections: fixes,
 		Misread:     misread,
+		Topic:       topic,
 		Feedback:    feedback,
 		Lessons:     lessons,
 		Tastes:      tastes,
@@ -426,11 +459,99 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 		Send:        send,
 		Moves:       moves,
 		Acts:        acts,
-		Usage: system2.Usage{InputTokens: int(u.InputTokens), CachedTokens: int(u.InputTokensDetails.CachedTokens),
-			OutputTokens: int(u.OutputTokens), ReasoningTokens: int(u.OutputTokensDetails.ReasoningTokens)},
-		CostUSD: c.price.Cost(pricing.Usage{
-			InputTokens: int(u.InputTokens), CachedTokens: int(u.InputTokensDetails.CachedTokens),
-			CacheWriteTokens: int(u.InputTokensDetails.CacheWriteTokens), OutputTokens: int(u.OutputTokens),
-		}),
+		Usage:       spent.Usage,
+		CostUSD:     spent.CostUSD,
 	}, nil
+}
+
+// create asks for a response, streamed when req has a Draft: it's told the
+// reply as it's written.
+func (c *Client) create(ctx context.Context, params responses.ResponseNewParams, req system2.Request) (*responses.Response, error) {
+	if req.Draft == nil || req.Format != nil {
+		return c.api.Responses.New(ctx, params)
+	}
+	stream := c.api.Responses.NewStreaming(ctx, params)
+	defer stream.Close()
+	var written strings.Builder
+	shown := ""
+	for stream.Next() {
+		ev := stream.Current()
+		switch ev.Type {
+		case "response.output_text.delta":
+			written.WriteString(ev.Delta)
+			so := written.String()
+			if req.CollectFacts {
+				so = replySoFar(so)
+			}
+			if so = strings.TrimSpace(so); so != "" && so != shown {
+				shown = so
+				req.Draft(so)
+			}
+		case "response.completed", "response.incomplete", "response.failed":
+			return &ev.Response, nil
+		case "error":
+			return nil, fmt.Errorf("%s: %s", ev.Code, ev.Message)
+		}
+	}
+	if err := stream.Err(); err != nil {
+		return nil, err
+	}
+	return nil, errors.New("the stream ended without a response")
+}
+
+// replySoFar is the reply in the start of the JSON replyWithFacts asks for,
+// its escapes decoded: "" until it begins.
+func replySoFar(js string) string {
+	_, rest, ok := strings.Cut(js, `"reply":`)
+	if rest = strings.TrimLeft(rest, " \t\r\n"); !ok || !strings.HasPrefix(rest, `"`) {
+		return ""
+	}
+	rest = rest[1:]
+	end, escape := len(rest), -1
+	for i := 0; i < len(rest) && end == len(rest); i++ {
+		switch rest[i] {
+		case '\\':
+			escape = i
+			i++
+		case '"':
+			end = i
+		}
+	}
+	s := rest[:end]
+	if end == len(rest) {
+		// What's cut off at the end waits for the rest of it: an escape (\n,
+		// \u00e9), or the first half of a surrogate pair (\ud83d), so no
+		// half of a character shows.
+		if need := 2; escape >= 0 {
+			if strings.HasPrefix(s[escape:], `\u`) {
+				need = 6
+			}
+			if escape+need > len(s) {
+				s = s[:escape]
+			}
+		}
+		if n := len(s); n >= 6 && s[n-6:n-4] == `\u` {
+			if hi := strings.ToLower(s[n-4 : n-2]); hi >= "d8" && hi < "dc" {
+				s = s[:n-6]
+			}
+		}
+	}
+	var text string
+	if json.Unmarshal([]byte(`"`+s+`"`), &text) != nil {
+		return ""
+	}
+	return text
+}
+
+// charge adds what w cost to spent.
+func (c *Client) charge(spent *system2.Response, w *responses.Response) {
+	u := w.Usage
+	spent.Usage.InputTokens += int(u.InputTokens)
+	spent.Usage.CachedTokens += int(u.InputTokensDetails.CachedTokens)
+	spent.Usage.OutputTokens += int(u.OutputTokens)
+	spent.Usage.ReasoningTokens += int(u.OutputTokensDetails.ReasoningTokens)
+	spent.CostUSD += c.price.Cost(pricing.Usage{
+		InputTokens: int(u.InputTokens), CachedTokens: int(u.InputTokensDetails.CachedTokens),
+		CacheWriteTokens: int(u.InputTokensDetails.CacheWriteTokens), OutputTokens: int(u.OutputTokens),
+	})
 }

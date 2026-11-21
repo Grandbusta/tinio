@@ -97,8 +97,11 @@ func (m *Mind) logPlanCalls(ctx context.Context, calls []planCall, now time.Time
 		return 0
 	}
 	n := 0
+	var seen []string
 	for _, pc := range calls {
-		if !slices.Contains(planCallTypes, pc.Type) {
+		// One of each type a plan: a second start call is the same choice put
+		// another way, and asking both reads as the same message twice.
+		if !slices.Contains(planCallTypes, pc.Type) || slices.Contains(seen, pc.Type) {
 			continue
 		}
 		c, ok := newCall(pc.Type, memory.CallAfter, pc.Situation, pc.Options, pc.Pick, pc.Why, pc.Confidence, now)
@@ -106,6 +109,7 @@ func (m *Mind) logPlanCalls(ctx context.Context, calls []planCall, now time.Time
 			m.Log.Warn("dropped a call that isn't one", "type", pc.Type, "situation", pc.Situation, "options", len(pc.Options))
 			continue
 		}
+		seen = append(seen, pc.Type)
 		if slices.Contains(memory.StakesLevels, pc.Stakes) {
 			c.Stakes = pc.Stakes
 		}
@@ -115,6 +119,9 @@ func (m *Mind) logPlanCalls(ctx context.Context, calls []planCall, now time.Time
 			continue
 		}
 		n++
+	}
+	if n > 0 {
+		m.changed.Store(true) // the next tick asks the owner, if they're to be asked
 	}
 	return n
 }
@@ -273,7 +280,7 @@ func (m *Mind) pickAnswered(ctx context.Context, p perception.Percept) {
 // ownerReplied reports whether p was what a call was waiting for; if so it
 // has already thanked them.
 func (m *Mind) ownerReplied(ctx context.Context, p perception.Percept) bool {
-	if !m.Calls.On || p.Speaker == "" || p.Speaker != m.policy().Owner || strings.TrimSpace(p.Text) == "" || p.Kind != "message" {
+	if !m.Calls.On || p.Speaker == "" || p.Speaker != m.policy().Owner || strings.TrimSpace(p.Text) == "" || p.Kind != perception.KindMessage {
 		return false
 	}
 	c, ok, err := m.Store.WaitingCall(ctx, time.Now().Add(-m.Calls.ReplyWindow).UTC())
@@ -420,7 +427,7 @@ func (m *Mind) approvalCall(ctx context.Context, a memory.Approval, now time.Tim
 	if !m.Calls.On || (a.Status != memory.ApprovalApproved && a.Status != memory.ApprovalDenied) {
 		return
 	}
-	situation, _, _ := strings.Cut(m.request(ctx, a), "\n\n(If I don't")
+	situation, _, _ := strings.Cut(m.request(ctx, a).Text, "\n\n(If I don't")
 	c := memory.Call{ID: ulid.Make(), Type: a.Class, Mode: memory.CallBefore, Situation: situation, Options: []string{"yes", "no"},
 		Ref: a.ID, Status: memory.CallLogged, CreatedAt: a.AskedAt}
 	c.Stakes, c.Reversible = approvalStakes(action.Class(a.Class))
@@ -428,6 +435,7 @@ func (m *Mind) approvalCall(ctx context.Context, a memory.Approval, now time.Tim
 		m.Log.Error("save call", "err", err)
 		return
 	}
+	m.changed.Store(true)
 	c.OwnerPick, c.AnsweredBy, c.AnsweredAt = 1, memory.AnsweredByApproval, now.UTC()
 	if a.Status == memory.ApprovalApproved {
 		c.OwnerPick = 0
@@ -466,6 +474,7 @@ func (m *Mind) goalCall(ctx context.Context, typ string, g memory.Goal, why stri
 		m.Log.Error("save call", "err", err)
 		return false
 	}
+	m.changed.Store(true)
 	return true
 }
 

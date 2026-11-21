@@ -28,18 +28,21 @@ const (
 )
 
 // bornWanting copies dreams only if it has none yet, and each skill it
-// doesn't have. After that memory wins.
-func (m *Mind) bornWanting(ctx context.Context) {
+// doesn't have. After that memory wins. False if something couldn't be saved.
+func (m *Mind) bornWanting(ctx context.Context) bool {
+	ok := true
 	now := time.Now().UTC()
 	if len(m.Life.Dreams) > 0 {
 		dreams, err := m.Store.Dreams(ctx, false)
 		if err != nil {
 			m.Log.Warn("loading dreams failed", "err", err)
+			ok = false
 		} else if len(dreams) == 0 {
 			for _, text := range m.Life.Dreams {
 				d := memory.Dream{ID: ulid.Make(), Text: text, Status: memory.DreamActive, Source: memory.DreamFromLife, Since: now}
 				if err := m.Store.SaveDream(ctx, d); err != nil {
 					m.Log.Warn("storing a dream failed", "err", err)
+					ok = false
 					continue
 				}
 				m.Log.Info("born wanting", "dream", text)
@@ -50,23 +53,26 @@ func (m *Mind) bornWanting(ctx context.Context) {
 		if err := m.Store.AddSkill(ctx, memory.Skill{Name: sk.Name, Level: float64(sk.Level), ShownBy: sk.ShownBy,
 			UpdatedAt: now}); err != nil {
 			m.Log.Warn("storing a skill failed", "skill", sk.Name, "err", err)
+			ok = false
 			continue
 		}
-		m.startingScore(ctx, sk.Name, float64(sk.Level))
+		ok = m.startingScore(ctx, sk.Name, float64(sk.Level)) && ok
 	}
+	return ok
 }
 
 // startingScore counts the life story's level as a first score, once, so
-// the first real score moves its level instead of replacing it.
-func (m *Mind) startingScore(ctx context.Context, skill string, level float64) {
+// the first real score moves its level instead of replacing it. False if it
+// couldn't be saved.
+func (m *Mind) startingScore(ctx context.Context, skill string, level float64) bool {
 	ev, err := m.Store.RecentEvidence(ctx, skill, 1000)
 	if err != nil {
-		return
+		return false
 	}
 	at := time.Now().UTC()
 	for _, e := range ev {
 		if e.Source == memory.EvidenceLife {
-			return
+			return true
 		}
 		if e.At.Before(at) {
 			at = e.At.Add(-time.Second)
@@ -75,13 +81,14 @@ func (m *Mind) startingScore(ctx context.Context, skill string, level float64) {
 	if err := m.Store.SaveEvidence(ctx, memory.Evidence{ID: ulid.Make(), Skill: skill, Score: level, Source: memory.EvidenceLife,
 		Note: "where its life story starts it", At: at}); err != nil {
 		m.Log.Warn("storing a starting score failed", "skill", skill, "err", err)
-		return
+		return false
 	}
 	if len(ev) > 0 {
 		if lvl, err := m.recomputeLevel(ctx, skill, time.Now().UTC()); err == nil {
 			m.Log.Info("counted a skill's starting level", "skill", skill, "level", lvl)
 		}
 	}
+	return true
 }
 
 func workState(w memory.Work) map[string]string {

@@ -1,0 +1,161 @@
+{
+  "set": "fact_relevance@1",
+  "question": "relevant",
+  "model": "openai/gpt-6-luna",
+  "act": 0.5,
+  "suggest": 0.5,
+  "cost_usd": 0.00037380000000000003,
+  "summary": {
+    "Asked": 20,
+    "Failed": 0,
+    "Right": 20,
+    "Acted": 20,
+    "ActedRight": 20,
+    "P50": 578957000,
+    "P95": 929371458,
+    "Scored": 0,
+    "Off": 0
+  },
+  "rows": [
+    {
+      "case": "{\"facts\":[\"Ada is allergic to peanuts.\"],\"message\":\"What should Ada cook for dinner tonight?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 1,
+      "ms": 668
+    },
+    {
+      "case": "{\"facts\":[\"Ada's passport expires in March.\"],\"message\":\"What should Ada cook for dinner tonight?\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 502
+    },
+    {
+      "case": "{\"facts\":[\"Ada's husband Femi loves old jazz records.\"],\"message\":\"Can Mei suggest a birthday gift for Ada's husband?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 1,
+      "ms": 616
+    },
+    {
+      "case": "{\"facts\":[\"Ada works night shifts at the hospital.\"],\"message\":\"Can Mei suggest a birthday gift for Ada's husband?\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 578
+    },
+    {
+      "case": "{\"facts\":[\"Ada works night shifts at the hospital.\"],\"message\":\"Ada is so tired today.\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.9,
+      "ms": 387
+    },
+    {
+      "case": "{\"facts\":[\"Ada's favourite colour is green.\"],\"message\":\"Ada is so tired today.\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 528
+    },
+    {
+      "case": "{\"facts\":[\"Mei is writing a poem about the night market.\"],\"message\":\"How is Mei's poem going?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 1,
+      "ms": 528
+    },
+    {
+      "case": "{\"facts\":[\"Ada lives in Ikeja.\"],\"message\":\"How is Mei's poem going?\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 521
+    },
+    {
+      "case": "{\"facts\":[\"Ada is allergic to peanuts.\"],\"message\":\"What's the capital of France?\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 718
+    },
+    {
+      "case": "{\"facts\":[\"Ada has been looking for a new job since she was laid off in May.\"],\"message\":\"Ada has an interview on Friday!\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.85,
+      "ms": 929
+    },
+    {
+      "case": "{\"facts\":[\"Ada hates coriander.\"],\"message\":\"Ada has an interview on Friday!\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 584
+    },
+    {
+      "case": "{\"facts\":[\"Ada can't swim.\"],\"message\":\"Should Ada go to the beach this weekend?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.91,
+      "ms": 657
+    },
+    {
+      "case": "{\"facts\":[\"Ada's laptop screen is cracked.\"],\"message\":\"Should Ada go to the beach this weekend?\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 500
+    },
+    {
+      "case": "{\"facts\":[\"Ada's daughter Tolu turns seven today.\"],\"message\":\"It's Ada's daughter's birthday today!\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.99,
+      "ms": 685
+    },
+    {
+      "case": "{\"facts\":[\"Ada hurt her back lifting boxes at the shop in October.\"],\"message\":\"Ada's back is hurting again.\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.98,
+      "ms": 648
+    },
+    {
+      "case": "{\"facts\":[\"Ada's brother Tunde lives in London.\"],\"message\":\"Ada's back is hurting again.\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 386
+    },
+    {
+      "case": "{\"facts\":[\"Ada runs a tea shop called Leaf \\u0026 Kettle.\"],\"message\":\"What should Ada post for the shop today?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.89,
+      "ms": 566
+    },
+    {
+      "case": "{\"facts\":[\"Ada's brother Tunde lives in London.\"],\"message\":\"What should Ada post for the shop today?\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 540
+    },
+    {
+      "case": "{\"facts\":[\"Ada's dog is called Biscuit.\"],\"message\":\"Does Mei remember what Ada's dog is called?\"}",
+      "label": "true",
+      "now": "true",
+      "confidence": 1,
+      "ms": 625
+    },
+    {
+      "case": "{\"facts\":[\"Ada is allergic to peanuts.\"],\"message\":\"Thanks Mei!\"}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 548
+    }
+  ]
+}

@@ -112,6 +112,10 @@ func TestAPromiseMadeButNotSentIsSentLaterWithoutRemaking(t *testing.T) {
 
 	r.err = nil
 	m.tick(context.Background(), now.Add(time.Minute))
+	if len(s2.requests) != 2 {
+		t.Errorf("tried again a minute later: %d requests; want it put off", len(s2.requests))
+	}
+	m.tick(context.Background(), now.Add(retryAfter))
 	if got := s.intention(i.ID); got.Status != memory.IntentionDone || len(s.works) != 1 {
 		t.Errorf("after the retry: %+v, %d works (made again?)", got, len(s.works))
 	}

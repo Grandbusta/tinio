@@ -1,0 +1,29 @@
+# Which part of life a text is about (life_area's area). The text names people,
+# as the mind gives it: Ada is the owner, Mei the agent.
+{"state":{"text":"Ada is a nurse at a hospital in Lagos."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"work"}
+{"state":{"text":"Ada runs a tea shop called Leaf & Kettle."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"work"}
+{"state":{"text":"Mei translates poems between Mandarin and English."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"work"}
+{"state":{"text":"Ada has a peanut allergy."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"health"}
+{"state":{"text":"Ada takes metformin every morning."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"health"}
+{"state":{"text":"Ada lives in Ikeja with two flatmates."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"home"}
+{"state":{"text":"Ada loves Afrobeats and highlife."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"preferences"}
+{"state":{"text":"Ada hates coriander."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"preferences"}
+{"state":{"text":"Ada plays five-a-side football on Saturdays."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"leisure"}
+{"state":{"text":"Ada's passport expires in March."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"admin"}
+{"state":{"text":"Ada's driving licence needs renewing."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"admin"}
+{"state":{"text":"Ada is saving for a car."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"money"}
+{"state":{"text":"Ada's rent is due on the 1st."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"money"}
+{"state":{"text":"Ada goes to church every Sunday."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"religion"}
+{"state":{"text":"Ada is flying to Accra next week."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"travel"}
+{"state":{"text":"Ada wants to visit Japan one day."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"travel"}
+{"state":{"text":"Ada's phone screen is cracked."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"possessions"}
+{"state":{"text":"Ada bought a new laptop."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"possessions"}
+{"state":{"text":"Ada is studying for her MBA."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"education"}
+{"state":{"text":"Ada's best friend Kemi is getting married."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"relationships"}
+{"state":{"text":"Ada and her neighbours have a WhatsApp group for the street."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"relationships"}
+{"state":{"text":"Ada is 34."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"identity"}
+{"state":{"text":"Ada's brother Tunde lives in London."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"family"}
+{"state":{"text":"Ada's husband is called Femi."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"family"}
+{"state":{"text":"Ada's birthday party is on Saturday."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"plans"}
+{"state":{"text":"What is the capital of France?"},"fill":{"agent":"Mei","speaker":"Ada"},"label":"world"}
+{"state":{"text":"The Super Eagles won last night."},"fill":{"agent":"Mei","speaker":"Ada"},"label":"world"}

@@ -2,6 +2,7 @@ package mind
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -25,6 +26,36 @@ type CheckIns struct {
 	Quiet time.Duration
 }
 
+// QuietHours is when it doesn't message its owner first: check-ins, requests
+// and calls wait until they end. Reminders and promises come when they're due,
+// since the owner asked for them then. From and Until are from midnight in its
+// time zone; equal: no quiet hours. Until before From runs past midnight.
+type QuietHours struct {
+	From, Until time.Duration
+}
+
+// at is whether local, a time in its zone, is in its quiet hours.
+func (q QuietHours) at(local time.Time) bool {
+	if q.From == q.Until {
+		return false
+	}
+	of := local.Sub(time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location()))
+	if q.From < q.Until {
+		return of >= q.From && of < q.Until
+	}
+	return of >= q.From || of < q.Until
+}
+
+// end is when the quiet hours containing local end.
+func (q QuietHours) end(local time.Time) time.Time {
+	midnight := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location())
+	end := midnight.Add(q.Until)
+	if !end.After(local) {
+		end = end.AddDate(0, 0, 1)
+	}
+	return end
+}
+
 const (
 	intentionsPerTick = 10
 	// reminderGiveUp: a reminder later than this, e.g. after downtime, is missed.
@@ -46,26 +77,62 @@ const (
 )
 
 // tick does first what someone is waiting for, then its own day, the slow part.
+// Its own day (and what it watches, and checking in) goes on only while its
+// account's week allows it; what someone is waiting for is never cut.
 func (m *Mind) tick(ctx context.Context, now time.Time) {
+	if h := m.held.Load(); h != 0 && !now.Before(time.Unix(0, h)) {
+		// The reset: rest and wake at once, and the messages that waited are heard.
+		m.held.Store(0)
+		m.reload.Store(true)
+	}
+	m.dataLeft = false
+	hush := m.Quiet.at(now.In(m.Zone)) // its owner's quiet hours
 	m.expireApprovals(ctx, now)
-	m.sendApprovals(ctx)
+	if !hush {
+		m.sendApprovals(ctx)
+	}
 	m.runActions(ctx, now)
-	m.watch(ctx, now)
+	own := m.dayAllowed(ctx, now)
+	if own {
+		m.watch(ctx, now)
+	}
 	m.expireCalls(ctx, now)
-	m.sendCalls(ctx, now)
+	if !hush {
+		m.sendCalls(ctx, now)
+	}
 	m.doDueIntentions(ctx, now, false)
-	if m.checkInTime(now) {
+	m.sumTopics(ctx, now)
+	if own && !hush && m.checkInTime(now) {
 		m.checkIn(ctx, now)
 	}
-	m.planDay(ctx, now)
-	m.doDueIntentions(ctx, now, true)
+	day, quiet := m.liveliness(ctx, now)
+	if !own {
+		day = pausedDay
+	}
+	m.planDay(ctx, now, day, quiet)
+	if own {
+		m.doDueIntentions(ctx, now, true)
+	}
 	m.preparePromises(ctx, now)
-	m.weeklyReview(ctx, now)
-	m.fillOldData(ctx)
+	if day != pausedDay {
+		m.weeklyReview(ctx, now)
+		m.fillOldData(ctx)
+	}
 	if m.toPlan.Swap(false) { // a goal taken on in a chat: its learning plan, now the reply is sent
 		m.EnsurePlans(ctx, now)
 	}
 	m.lastTick = now
+}
+
+// dayAllowed is whether its account's week allows its own day now. A meter
+// that can't be read never stops it.
+func (m *Mind) dayAllowed(ctx context.Context, now time.Time) bool {
+	st, err := m.Store.Standing(ctx)
+	if err != nil {
+		m.Log.Warn("reading the account's usage failed; its day goes on", "err", err)
+		return true
+	}
+	return st.OwnDay(now)
 }
 
 func (m *Mind) doDueIntentions(ctx context.Context, now time.Time, ownDay bool) {
@@ -116,7 +183,7 @@ func (m *Mind) remind(ctx context.Context, r memory.Intention, now time.Time) {
 		return
 	}
 	person := m.person(ctx, r.Subject)
-	p := outgoing(conv, person, perception.KindReminder, now)
+	p := m.inTopicOf(ctx, outgoing(conv, person, perception.KindReminder, now), r.PerceptID)
 	n := m.namesFor(p)
 	note := fmt.Sprintf("You are messaging %s first: it's time for the reminder %s asked you for on %s: %s. "+
 		"Remind them now, in your own words, briefly, like a friend would.",
@@ -146,7 +213,7 @@ func (m *Mind) keepPromise(ctx context.Context, i memory.Intention, now time.Tim
 		}
 	}
 	promised := i.CreatedAt.In(m.Zone).Format("Monday 2 January at 15:04")
-	p := outgoing(conv, person, perception.KindDelivery, now)
+	p := m.inTopicOf(ctx, outgoing(conv, person, perception.KindDelivery, now), i.PerceptID)
 	n := m.namesFor(p)
 	s := speech{action: "deliver", attachment: titled(w), trim: firstParagraph, ref: i.ID}
 	goes := "it goes right after your message, word for word"
@@ -262,6 +329,8 @@ func firstParagraph(s string) string {
 // if sending failed it stays pending, so the next tick tries again.
 func (m *Mind) settleSpoken(ctx context.Context, i memory.Intention, got spoken, result string, now time.Time) {
 	switch got {
+	case failed:
+		m.retry(ctx, i, nil, now)
 	case sent:
 		m.finish(ctx, i, memory.IntentionDone, result, now)
 	case asked:
@@ -272,6 +341,56 @@ func (m *Mind) settleSpoken(ctx context.Context, i memory.Intention, got spoken,
 		m.finish(ctx, i, memory.IntentionMissed, "not allowed", now)
 	}
 }
+
+// Something that failed (a piece of work, a reminder, a promise's message) is
+// tried again a few times, further apart each time, then given up: a failure
+// that repeats would otherwise be paid for every minute.
+const (
+	retries    = 3
+	retryAfter = 15 * time.Minute // doubled each time
+)
+
+// retry puts i off after a failed try, or gives it up after the last. An
+// answer cut off for length is given up at once: the next would be cut off
+// too, and paid for.
+func (m *Mind) retry(ctx context.Context, i memory.Intention, err error, now time.Time) {
+	if errors.Is(err, system2.ErrCutOff) || i.Attempts >= retries {
+		why := "it failed " + fmt.Sprint(i.Attempts+1) + " times"
+		if errors.Is(err, system2.ErrCutOff) {
+			why = "it was too long to write"
+		}
+		m.Log.Warn("given up", "intention", i.ID.String(), "kind", i.Kind, "why", why)
+		m.finish(ctx, i, memory.IntentionMissed, why, now)
+		return
+	}
+	if err := m.Store.RetryIntention(ctx, i.ID, now.Add(retryAfter<<i.Attempts).UTC()); err != nil {
+		m.Log.Error("retry intention", "intention", i.ID.String(), "err", err)
+	}
+}
+
+// tries counts a step's failures in a row (the day's plan, the weekly review),
+// so it's tried again later, further apart each time, and given up after
+// retries.
+type tries struct {
+	failed int
+	next   time.Time // not tried again before
+}
+
+func (t *tries) waiting(now time.Time) bool { return now.Before(t.next) }
+
+// fail counts a failure at now: true if it's to be tried again, false if it's
+// failed too often (and the count starts again).
+func (t *tries) fail(now time.Time) bool {
+	t.failed++
+	if t.failed > retries {
+		*t = tries{}
+		return false
+	}
+	t.next = now.Add(retryAfter << (t.failed - 1))
+	return true
+}
+
+func (t *tries) succeeded() { *t = tries{} }
 
 func (m *Mind) finish(ctx context.Context, i memory.Intention, status, result string, now time.Time) {
 	if err := m.Store.FinishIntention(ctx, i.ID, status, result, now.UTC()); err != nil {
@@ -293,7 +412,7 @@ func (m *Mind) checkIn(ctx context.Context, now time.Time) {
 		if err != nil || !known || person.Circle == memory.CircleStranger || now.Sub(conv.LastActivity) < m.CheckIns.Quiet {
 			continue
 		}
-		last, ok, err := m.Store.LastSpokeFirst(ctx, conv.Person, perception.KindCheckIn)
+		last, ok, err := m.Store.LastPercept(ctx, conv.Person, perception.KindCheckIn)
 		if err != nil || (ok && sameDay(last, now, m.Zone)) {
 			continue
 		}
@@ -304,7 +423,7 @@ func (m *Mind) checkIn(ctx context.Context, now time.Time) {
 
 		p := outgoing(conv, person, perception.KindCheckIn, now)
 		root := newDecision(p, nil, now)
-		kept := m.checkFacts(ctx, p, root, m.OpenThreads, "check_in", facts, false)
+		kept := m.checkFacts(ctx, p, root, m.OpenThreads, "check_in", facts, false, checked{})
 		if len(kept) == 0 {
 			// Nothing worth asking about: recorded, but no message, so no percept.
 			root.PerceptID = ulid.ULID{}
@@ -338,6 +457,25 @@ func (m *Mind) checkIn(ctx context.Context, now time.Time) {
 	}
 }
 
+// hello is their owner opening their chat for the first time: they meet.
+func (m *Mind) hello(ctx context.Context, p perception.Percept) {
+	person := m.meet(ctx, p)
+	if person.Name != "" {
+		p.SpeakerName = person.Name
+	}
+	n := m.namesFor(p)
+	note := fmt.Sprintf("%s has just opened your chat for the first time: you're meeting. Say hello and introduce yourself "+
+		"the way you would to someone new, in a few short sentences: who you are, and something you're doing or thinking about "+
+		"today. Say plainly that you're an AI. Then ask %s one question, about them or what they'd like from you.", n.speaker, n.speaker)
+	if m.speakFirst(ctx, p, person, nil, speech{action: "hello", note: note, approved: true}) != sent {
+		// It's said once, and the owner is waiting for it: a plain one beats none.
+		plain := fmt.Sprintf("Hi %s, I'm %s. I'm an AI, and I'll always say so. Tell me a little about yourself?", n.speaker, m.Life.Name)
+		if err := m.send(ctx, p, plain, nil); err != nil {
+			m.Log.Warn("saying hello failed", "percept", p.ID.String(), "err", err)
+		}
+	}
+}
+
 type speech struct {
 	action     string
 	note       string
@@ -345,7 +483,7 @@ type speech struct {
 	file       *render.File        // sent with what System 2 wrote, as its caption; nil if none
 	trim       func(string) string // shortens what System 2 wrote; nil: kept as is
 	ref        ulid.ULID
-	approved   bool // the owner already approved it: a follow-up to an approval
+	approved   bool // no OK needed: the owner already approved it (a follow-up), or asked for it (their hello)
 }
 
 type spoken int
@@ -385,7 +523,7 @@ func (m *Mind) speakFirst(ctx context.Context, p perception.Percept, person memo
 	chain = append(chain, d)
 
 	n := m.namesFor(p)
-	recent := m.recall(ctx, p)
+	recent := m.talkedOf(ctx, p, m.recall(ctx, p), topical{topic: memory.Topic{ID: p.Topic}})
 	resp, err := m.System2.Reason(ctx, system2.Request{
 		Instructions: m.instructions(ctx, person, n),
 		History:      turns(recent),
@@ -394,13 +532,14 @@ func (m *Mind) speakFirst(ctx context.Context, p perception.Percept, person memo
 
 	})
 	got := failed
+	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD // a failed call is paid for too
 	switch {
 	case err != nil:
 		log.Error("system 2 failed", "err", err)
 		d.Action = "error"
 		d.Outcome = &decision.Outcome{Status: decision.OutcomeFailed, Detail: err.Error(), At: time.Now().UTC()}
 	default:
-		d.Provider, d.CostUSD, d.Reply = resp.Provider, resp.CostUSD, resp.Text
+		d.Reply = resp.Text
 		if s.trim != nil {
 			d.Reply = s.trim(d.Reply)
 		}
@@ -415,7 +554,7 @@ func (m *Mind) speakFirst(ctx context.Context, p perception.Percept, person memo
 			d.Gate = decision.GateAsked
 			what := fmt.Sprintf("message %s first (%s)", n.speaker, strings.ReplaceAll(p.Kind, "_", " "))
 			if err := m.ask(ctx, memory.Approval{Class: string(action.ReachOut), Person: p.Speaker, What: what,
-				Text: d.Reply, Kind: p.Kind, Ref: s.ref}); err != nil {
+				Text: d.Reply, Kind: p.Kind, Ref: s.ref, Why: "It's a " + strings.ReplaceAll(p.Kind, "_", " ") + "."}); err != nil {
 				log.Error("asking the owner failed", "err", err)
 				d.Outcome = &decision.Outcome{Status: decision.OutcomeFailed, Detail: err.Error(), At: time.Now().UTC()}
 				break

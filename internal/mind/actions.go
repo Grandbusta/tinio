@@ -118,8 +118,8 @@ func (m *Mind) propose(ctx context.Context, p perception.Percept, acts []system2
 		}
 		done++
 		if verdict == action.Ask {
-			if err := m.ask(ctx, memory.Approval{Class: a.Class, What: a.Tool + ": " + a.Why, Text: actionRequest(a),
-				Kind: memory.KindAction, Ref: a.ID}); err != nil {
+			if err := m.ask(ctx, memory.Approval{Class: a.Class, What: a.Tool + ": " + a.Why, Text: cutRunes(a.Args, 1500),
+				Why: orDefault(a.Why, "you asked"), Kind: memory.KindAction, Ref: a.ID, Topic: p.Topic}); err != nil {
 				log.Error("asking the owner failed", "err", err)
 			}
 			log.Info("proposed an action; asked the owner", "action", a.ID.String())
@@ -127,11 +127,6 @@ func (m *Mind) propose(ctx context.Context, p perception.Percept, acts []system2
 		}
 		log.Info("proposed an action; it runs on the next tick", "action", a.ID.String())
 	}
-}
-
-// actionRequest is what the owner is shown: exactly what would be done.
-func actionRequest(a memory.Action) string {
-	return fmt.Sprintf("Can I use %s?\n\n%s\n\nWhy: %s", a.Tool, cutRunes(a.Args, 1500), orDefault(a.Why, "you asked"))
 }
 
 // approveAction settles an action the owner was asked about: approved, it

@@ -4,8 +4,13 @@
 # learning, the practice piece and its "done when") and `work` (title, kind,
 # text). A start, notes about doing it, or a piece of a different kind is not
 # done: at a fast pace, this is what keeps fast from turning into shallow.
+#
+# On evals/stage_check.jsonl (19 November 2026): Luna 11 of 12, refusing a
+# recipe that met its stage at 0.98; Terra and Sol 12 of 12. Terra answers it,
+# the cheaper, at about $0.0005 a check.
 id: stage_check
-version: 1
+version: 2
+model: gpt-6.1-terra
 primary: met
 
 questions:

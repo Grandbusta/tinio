@@ -7,8 +7,14 @@
 # (lyrics) to 5.9 (a beat idea); a one-line beat idea 1.5 and "I love you baby
 # yeah" lyrics 1.2; Shakespeare's Sonnet 18 as lyric writing 6.7. Harsh at the
 # top, so a level above 7 is earned; the order is right.
+#
+# On evals/skill_level.jsonl (19 November 2026), within one level: Luna 8 of 11,
+# 0.9 off on average, rating good recipes and a good translation two levels
+# low; Terra 10 of 11, a level low throughout; Sol 11 of 11, 0.3 off. Skills
+# grow from these scores, so Sol answers it, at about $0.001 a work.
 id: skill_level
-version: 1
+version: 2
+model: gpt-6.2-sol
 
 questions:
   - name: level

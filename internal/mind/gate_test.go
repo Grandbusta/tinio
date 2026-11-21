@@ -18,15 +18,16 @@ import (
 const owner = "test:owner"
 
 type fakeAsker struct {
-	asked []string
-	ids   []string
+	asked    []string
+	ids      []string
+	requests []memory.Request
 }
 
-func (f *fakeAsker) Ask(_ context.Context, p perception.Percept, text, id string) (json.RawMessage, error) {
+func (f *fakeAsker) Ask(_ context.Context, p perception.Percept, r memory.Request, id string) (json.RawMessage, error) {
 	if p.Speaker != owner {
 		panic("asked someone who isn't the owner: " + p.Speaker)
 	}
-	f.asked, f.ids = append(f.asked, text), append(f.ids, id)
+	f.asked, f.ids, f.requests = append(f.asked, r.Text), append(f.ids, id), append(f.requests, r)
 	return json.RawMessage(`{"message_id":1}`), nil
 }
 
@@ -209,12 +210,12 @@ type slowAsker struct {
 	started, release chan struct{}
 }
 
-func (a *slowAsker) Ask(ctx context.Context, p perception.Percept, text, id string) (json.RawMessage, error) {
+func (a *slowAsker) Ask(ctx context.Context, p perception.Percept, r memory.Request, id string) (json.RawMessage, error) {
 	if len(a.asked) == 0 {
 		close(a.started)
 		<-a.release
 	}
-	return a.fakeAsker.Ask(ctx, p, text, id)
+	return a.fakeAsker.Ask(ctx, p, r, id)
 }
 
 func TestAnApprovalIsSentOnceByBothLoops(t *testing.T) {

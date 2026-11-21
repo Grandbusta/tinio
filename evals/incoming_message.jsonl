@@ -1,0 +1,54 @@
+# What the writer is doing with a message (incoming_message's intent). One case a
+# line: the state the mind gives System 1, and the right answer by the set's own
+# definitions. Cases a careful person could label two ways are left out.
+{"state":{"message":"I'm a nurse at LUTH"},"label":"share"}
+{"state":{"message":"Pain"},"label":"share","note":"a one-word answer to how they are"}
+{"state":{"message":"my daughter starts school on monday"},"label":"share"}
+{"state":{"message":"Just got back from the market, so tired"},"label":"share"}
+{"state":{"message":"I don't really like spicy food"},"label":"share"}
+{"state":{"message":"We moved to Ikeja last year"},"label":"share"}
+{"state":{"message":"Estoy cansado hoy"},"label":"share","note":"Spanish: I'm tired today"}
+{"state":{"message":"lost my job last week tbh"},"label":"share"}
+{"state":{"message":"Remember that my wife's name is Funmi"},"label":"share","note":"telling, though it says remember"}
+{"state":{"message":"Who are you?"},"label":"ask_about_reader"}
+{"state":{"message":"how old are you"},"label":"ask_about_reader"}
+{"state":{"message":"Do you have siblings?"},"label":"ask_about_reader"}
+{"state":{"message":"What did you do today?"},"label":"ask_about_reader"}
+{"state":{"message":"Where do you live?"},"label":"ask_about_reader"}
+{"state":{"message":"What's your favourite food?"},"label":"ask_about_reader"}
+{"state":{"message":"Did you sleep well?"},"label":"ask_about_reader"}
+{"state":{"message":"Is it true that you're an AI?"},"label":"ask_about_reader"}
+{"state":{"message":"What are you good at?"},"label":"ask_reader_abilities"}
+{"state":{"message":"Can you speak Yoruba?"},"label":"ask_reader_abilities"}
+{"state":{"message":"Are you able to make spreadsheets?"},"label":"ask_reader_abilities"}
+{"state":{"message":"Would you ever learn to code?"},"label":"ask_reader_abilities"}
+{"state":{"message":"What can you do?"},"label":"ask_reader_abilities"}
+{"state":{"message":"Do you know how to cook jollof?"},"label":"ask_reader_abilities"}
+{"state":{"message":"What's my name?"},"label":"ask_about_writer"}
+{"state":{"message":"When is my mum's birthday?"},"label":"ask_about_writer"}
+{"state":{"message":"Do you remember where I work?"},"label":"ask_about_writer"}
+{"state":{"message":"What do you know about me?"},"label":"ask_about_writer"}
+{"state":{"message":"How many kids do I have?"},"label":"ask_about_writer"}
+{"state":{"message":"What did I tell you about my landlord?"},"label":"ask_about_writer"}
+{"state":{"message":"I need a dentist in Yaba"},"label":"ask_for_help"}
+{"state":{"message":"What should I say to my boss about the raise?"},"label":"ask_for_help"}
+{"state":{"message":"How do I make chin chin crunchy?"},"label":"ask_for_help"}
+{"state":{"message":"Can you help me write an email to my landlord?"},"label":"ask_for_help"}
+{"state":{"message":"What's the capital of Argentina?"},"label":"ask_for_help"}
+{"state":{"message":"my laptop won't turn on, what do I do"},"label":"ask_for_help"}
+{"state":{"message":"¿Cómo se dice deadline en español?"},"label":"ask_for_help","note":"Spanish: how do you say deadline in Spanish?"}
+{"state":{"message":"I'm thinking of quitting my job. What do you think?"},"label":"ask_for_help","note":"shares, but asks for advice"}
+{"state":{"message":"Remind me to call mum at 6"},"label":"remind"}
+{"state":{"message":"Don't let me forget the bank tomorrow"},"label":"remind"}
+{"state":{"message":"remind me to take my meds after dinner"},"label":"remind"}
+{"state":{"message":"Can you remind me on Friday to pay rent?"},"label":"remind"}
+{"state":{"message":"Recuérdame mañana a las 9 lo del médico"},"label":"remind","note":"Spanish: remind me tomorrow at 9 about the doctor"}
+{"state":{"message":"Hi"},"label":"small_talk"}
+{"state":{"message":"thanks!!"},"label":"small_talk"}
+{"state":{"message":"haha nice"},"label":"small_talk"}
+{"state":{"message":"Good morning Mei"},"label":"small_talk"}
+{"state":{"message":"ok"},"label":"small_talk"}
+{"state":{"message":"I'll tell you later"},"label":"small_talk"}
+{"state":{"message":"lol"},"label":"small_talk"}
+{"state":{"message":"asdfgh"},"label":"other"}
+{"state":{"message":"1234"},"label":"other"}

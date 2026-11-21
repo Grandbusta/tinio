@@ -14,7 +14,6 @@ import (
 func TestConsoleQueries(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
-	// In the past, so these rows never look newest to the other tests.
 	base := time.Now().UTC().AddDate(0, 0, -40).Truncate(time.Microsecond)
 
 	p := perception.Percept{ID: ulid.Make(), Source: "test", ExternalID: ulid.Make().String(), Thread: "t", Speaker: "test:x",

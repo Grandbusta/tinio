@@ -16,10 +16,10 @@ import (
 // Character is the agent's life story. The agent never contradicts it; anything
 // else about itself it decides when it comes up, and remembers.
 type Character struct {
-	Name  string   `yaml:"name"`
-	Story []string `yaml:"story"`
-	// Timezone is overridden by the config's initiative.timezone when set.
+	Name        string   `yaml:"name"`
+	Story       []string `yaml:"story"`
 	Timezone    string   `yaml:"timezone"`
+	Day         Day      `yaml:"day"`
 	Personality []string `yaml:"personality"`
 	Routine     []string `yaml:"routine"`
 	Makes       []Craft  `yaml:"makes"`
@@ -28,6 +28,27 @@ type Character struct {
 	Dreams []string   `yaml:"dreams"`
 	Skills []Skill    `yaml:"skills"`
 	Family []Relative `yaml:"family"`
+}
+
+// Day is when their day runs, in their time zone. What's empty is the
+// platform's default.
+type Day struct {
+	PlanAt    string   `yaml:"plan_at"`
+	JournalAt string   `yaml:"journal_at"`
+	ReviewAt  string   `yaml:"review_at"` // a day and a time, like "Sun 20:00"
+	CheckIns  []string `yaml:"check_ins"` // none: they never check in unprompted
+}
+
+func (d Day) check() error {
+	for _, at := range append([]string{d.PlanAt, d.JournalAt}, d.CheckIns...) {
+		if _, err := time.Parse("15:04", at); at != "" && err != nil {
+			return fmt.Errorf("day: times must be HH:MM, like 08:30, have %q", at)
+		}
+	}
+	if _, err := time.Parse("Mon 15:04", d.ReviewAt); d.ReviewAt != "" && err != nil {
+		return fmt.Errorf("day: review_at must be a day and a time, like \"Sun 20:00\", have %q", d.ReviewAt)
+	}
+	return nil
 }
 
 type Craft struct {
@@ -84,12 +105,16 @@ type Relative struct {
 
 var Circles = []string{"family", "friend", "school", "work", "community"}
 
+var workRelations = []string{"boss", "client", "co-founder", "colleague", "manager", "employer"}
+
 func CircleOf(relation string) string {
 	switch r := strings.ToLower(relation); {
 	case strings.Contains(r, "friend"):
 		return "friend"
 	case strings.Contains(r, "mentor"), strings.Contains(r, "teacher"), strings.Contains(r, "tutor"):
 		return "school"
+	case slices.Contains(workRelations, r):
+		return "work"
 	}
 	return "family"
 }
@@ -108,6 +133,9 @@ func Parse(raw []byte) (Character, error) {
 		if _, err := time.LoadLocation(l.Timezone); err != nil {
 			return Character{}, fmt.Errorf("%s: timezone must be a time zone like Africa/Lagos, have %q", section, l.Timezone)
 		}
+	}
+	if err := l.Day.check(); err != nil {
+		return Character{}, fmt.Errorf("%s: %w", section, err)
 	}
 	l.Story = nonEmpty(l.Story)
 	l.Personality = nonEmpty(l.Personality)

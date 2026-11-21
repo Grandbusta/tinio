@@ -27,9 +27,11 @@ import (
 	"github.com/Grandbusta/tinio/internal/render/midi"
 	"github.com/Grandbusta/tinio/internal/render/pdf"
 	"github.com/Grandbusta/tinio/internal/search"
+	"github.com/Grandbusta/tinio/internal/usage"
 )
 
 type fakeStore struct {
+	standing    usage.Standing
 	seen        map[string]bool
 	decisions   []decision.Decision
 	exchanges   []memory.Exchange
@@ -59,6 +61,7 @@ type fakeStore struct {
 	plans       []memory.LearningPlan
 	resources   []memory.Resource
 	public      map[ulid.ULID]string // works set public: "true by owner", ...
+	topics      []memory.Topic
 }
 
 // keep returns the xs that match, at most limit of them (all, if limit < 0).
@@ -288,10 +291,13 @@ func (s *fakeStore) MarkApprovalSent(_ context.Context, id ulid.ULID, message []
 	return nil
 }
 
-func (s *fakeStore) DecideApproval(_ context.Context, id ulid.ULID, status string, at time.Time) (bool, error) {
+func (s *fakeStore) DecideApproval(_ context.Context, id ulid.ULID, status, text string, at time.Time) (bool, error) {
 	for n := range s.approvals {
 		if a := &s.approvals[n]; a.ID == id && a.Status == memory.ApprovalPending {
 			a.Status, a.DecidedAt = status, at
+			if text != "" {
+				a.Text = text
+			}
 			return true, nil
 		}
 	}
@@ -328,6 +334,11 @@ func (s *fakeStore) IntentionsDue(_ context.Context, from, to time.Time) ([]memo
 func (s *fakeStore) FinishIntention(_ context.Context, id ulid.ULID, status, result string, at time.Time) error {
 	update(s.intentions, func(x memory.Intention) bool { return x.ID == id },
 		func(x *memory.Intention) { x.Status, x.Result, x.DoneAt = status, result, at })
+	return nil
+}
+
+func (s *fakeStore) RetryIntention(_ context.Context, id ulid.ULID, due time.Time) error {
+	update(s.intentions, func(x memory.Intention) bool { return x.ID == id }, func(x *memory.Intention) { x.DueAt, x.Attempts = due, x.Attempts+1 })
 	return nil
 }
 
@@ -501,7 +512,9 @@ func (s *fakeStore) Conversations(context.Context) ([]memory.Conversation, error
 	return s.convs, nil
 }
 
-func (s *fakeStore) LastSpokeFirst(_ context.Context, person, kind string) (time.Time, bool, error) {
+func (s *fakeStore) Standing(context.Context) (usage.Standing, error) { return s.standing, nil }
+
+func (s *fakeStore) LastPercept(_ context.Context, person, kind string) (time.Time, bool, error) {
 	var last time.Time
 	for _, p := range s.percepts {
 		if p.Speaker == person && p.Kind == kind && p.At.After(last) {
@@ -596,13 +609,20 @@ func (s *fakeStore) SaveDecision(_ context.Context, d decision.Decision) error {
 }
 
 type fakeReplier struct {
-	sent []string
-	err  error
+	sent   []string
+	topics []string // the topic each reply was said in
+	err    error
 }
 
-func (r *fakeReplier) Reply(_ context.Context, _ perception.Percept, text string) error {
+func (r *fakeReplier) Reply(_ context.Context, p perception.Percept, text string) error {
 	r.sent = append(r.sent, text)
+	r.topics = append(r.topics, p.Topic)
 	return r.err
+}
+
+func (r *fakeReplier) Draft(_ context.Context, _ perception.Percept, text string) error {
+	r.sent = append(r.sent, "draft: "+text)
+	return nil
 }
 
 // fakeSystem1 may be called from two goroutines at once.
@@ -619,6 +639,10 @@ type fakeSystem1 struct {
 	scoreCalls  []system1.Request
 	stageMet    map[string]float64 // work title → how sure it meets the stage
 	stageCalls  []system1.Request
+	filed       []string           // what life_area was asked about
+	inTopic     map[string]float64 // topic id → how sure a message carries on with it
+	starts      float64            // how sure a message starts a topic
+	topicCalls  []system1.Request
 }
 
 func (f *fakeSystem1) Decide(_ context.Context, req system1.Request) (system1.Response, error) {
@@ -649,6 +673,7 @@ func (f *fakeSystem1) Decide(_ context.Context, req system1.Request) (system1.Re
 		}}, nil
 	}
 	if state, ok := req.State.(map[string]any); ok && state["text"] != nil {
+		f.filed = append(f.filed, state["text"].(string))
 		return system1.Response{Provider: "fake1/1", CostUSD: 0.00004, Answers: map[string]decision.Answer{
 			"area":     {Type: decision.QuestionChoice, Probabilities: map[string]float64{"other": 1}},
 			"personal": {Type: decision.QuestionPredicate, Probability: 1},
@@ -662,14 +687,26 @@ func (f *fakeSystem1) Decide(_ context.Context, req system1.Request) (system1.Re
 		}
 		texts := state["facts"].([]string)
 		answers := map[string]decision.Answer{}
-		for i, q := range req.Questions {
+		for _, q := range req.Questions {
+			var at int
+			fmt.Sscanf(q.Instructions[strings.Index(q.Instructions, "`facts[")+len("`facts["):], "%d", &at)
 			p := 0.0
-			if f.relevant[texts[i]] {
+			if f.relevant[texts[at]] {
 				p = 0.9
 			}
 			answers[q.Name] = decision.Answer{Type: decision.QuestionPredicate, Probability: p}
 		}
 		return system1.Response{Provider: "fake1/1", CostUSD: 0.00003, Answers: answers}, nil
+	}
+	if state, ok := req.State.(map[string]any); ok && state["topics"] != nil {
+		f.topicCalls = append(f.topicCalls, req)
+		answers := map[string]decision.Answer{"starts": {Type: decision.QuestionPredicate, Probability: f.starts}}
+		for _, q := range req.Questions {
+			if id, ok := strings.CutPrefix(q.Name, "in:"); ok {
+				answers[q.Name] = decision.Answer{Type: decision.QuestionPredicate, Probability: f.inTopic[id]}
+			}
+		}
+		return system1.Response{Provider: "fake1/1", CostUSD: 0.00002, Answers: answers}, nil
 	}
 	if req.Questions[0].Name == "answers_previous" {
 		return system1.Response{Provider: "fake1/1", CostUSD: 0.00002, Answers: map[string]decision.Answer{
@@ -700,20 +737,33 @@ type fakeSystem2 struct {
 	send       system2.Send
 	moves      []system2.Move
 	acts       []system2.Act
+	looks      [][]system2.Look  // each reply call's looks, in turn, before it replies
 	formats    map[string]string // reply text by Format.Name, for structured requests
+	topic      string            // the name it gives a topic
+	drafts     []string          // told to a request's Draft, in turn
 	requests   []system2.Request
 }
 
 func (f *fakeSystem2) Reason(_ context.Context, req system2.Request) (system2.Response, error) {
 	f.requests = append(f.requests, req)
+	for _, d := range f.drafts {
+		if req.Draft != nil {
+			req.Draft(d)
+		}
+	}
 	if f.err != nil {
-		return system2.Response{}, f.err
+		return system2.Response{Provider: "fake2/1", CostUSD: 0.002}, f.err // what failing cost
 	}
 	if req.Format != nil {
 		return system2.Response{Provider: "fake2/1", Text: f.formats[req.Format.Name], CostUSD: 0.002}, nil
 	}
+	if len(f.looks) > 0 && req.CollectFacts {
+		looks := f.looks[0]
+		f.looks = f.looks[1:]
+		return system2.Response{Provider: "fake2/1", Looks: looks, CostUSD: 0.001}, nil
+	}
 	return system2.Response{Provider: "fake2/1", Text: "a thoughtful reply", Remember: f.remember, WhoTheyAre: f.whoTheyAre,
-		Reminders: f.reminders, Promises: f.promises, Lessons: f.lessons, Feedback: f.feedback, Goals: f.goals, Send: f.send, Moves: f.moves, Acts: f.acts, CostUSD: 0.001}, nil
+		Reminders: f.reminders, Promises: f.promises, Lessons: f.lessons, Feedback: f.feedback, Goals: f.goals, Send: f.send, Moves: f.moves, Acts: f.acts, Topic: f.topic, CostUSD: 0.001}, nil
 }
 
 var testSet = questions.Set{
@@ -881,6 +931,29 @@ func TestPeople(t *testing.T) {
 	})
 }
 
+// System 2 files what it learns as it writes it: System 1 files a fact only
+// when System 2 named no area it knows.
+func TestSystem2FilesWhatItLearns(t *testing.T) {
+	s1 := &fakeSystem1{choice: "remember", confidence: 0.22}
+	m, s := newMind(&fakeReplier{}, s1, &fakeSystem2{remember: []system2.Memory{
+		{About: system2.AboutSpeaker, Text: "Sam goes to Grace Chapel", Areas: []string{"religion", "home", "religion"}},
+		{About: system2.AboutSpeaker, Text: "Sam's cat is called Biscuit", Areas: []string{"pets"}},
+	}})
+
+	m.handle(context.Background(), percept("1", "I go to Grace Chapel, and my cat is called Biscuit."))
+
+	areas := map[string][]string{}
+	for _, f := range s.facts {
+		areas[f.Text] = f.Areas
+	}
+	if !slices.Equal(areas["Sam goes to Grace Chapel"], []string{"religion", "home"}) || !slices.Equal(areas["Sam's cat is called Biscuit"], []string{"other"}) {
+		t.Errorf("areas = %v", areas)
+	}
+	if slices.Contains(s1.filed, "Sam goes to Grace Chapel") || !slices.Contains(s1.filed, "Sam's cat is called Biscuit") {
+		t.Errorf("System 1 filed %q; want only the fact System 2 couldn't", s1.filed)
+	}
+}
+
 func TestSystem2SavesFactsAboutBothSides(t *testing.T) {
 	s2 := &fakeSystem2{remember: []system2.Memory{
 		{About: system2.AboutSpeaker, Text: "Sam's passport expires in 2027"},
@@ -906,6 +979,42 @@ func TestSystem2SavesFactsAboutBothSides(t *testing.T) {
 	}
 }
 
+// onReply runs as a reply is sent.
+type onReply func()
+
+func (f onReply) Reply(context.Context, perception.Percept, string) error {
+	f()
+	return nil
+}
+
+// The reply goes out before what it learned is kept, so it never waits on that.
+func TestTheReplyIsSentBeforeWhatItLearnedIsKept(t *testing.T) {
+	var s *fakeStore
+	keptFirst := -1
+	m, s := newMind(onReply(func() { keptFirst = len(s.facts) }), &fakeSystem1{choice: "remember", confidence: 0.22},
+		&fakeSystem2{remember: []system2.Memory{{About: system2.AboutSpeaker, Text: "Sam's passport expires in 2027"}}})
+
+	m.handle(context.Background(), percept("1", "My passport expires in 2027."))
+
+	if keptFirst != 0 || len(s.facts) != 1 {
+		t.Errorf("facts kept when the reply went: %d; after: %d", keptFirst, len(s.facts))
+	}
+}
+
+// A reply shows while it's written, then is sent; a draft that comes too soon
+// after the last waits for the reply.
+func TestAReplyShowsWhileItsWritten(t *testing.T) {
+	r := &fakeReplier{}
+	m, _ := newMind(r, &fakeSystem1{choice: "remember", confidence: 0.22}, &fakeSystem2{drafts: []string{"a", "a thoughtful"}})
+	m.Drafter = r
+
+	m.handle(context.Background(), percept("1", "What's your favourite colour?"))
+
+	if want := []string{"draft: a", "a thoughtful reply"}; !slices.Equal(r.sent, want) {
+		t.Errorf("sent %q, want %q", r.sent, want)
+	}
+}
+
 func TestRecallPassesRelevantFactsToSystem2(t *testing.T) {
 	s1 := &fakeSystem1{choice: "question", confidence: 0.93, relevant: map[string]bool{"Sam's passport expires in March 2027": true}}
 	s2 := &fakeSystem2{}
@@ -918,14 +1027,17 @@ func TestRecallPassesRelevantFactsToSystem2(t *testing.T) {
 
 	m.handle(context.Background(), percept("1", "When does my passport expire?"))
 
+	// Both ways recall may go are checked in one call while the message is
+	// read; nothing is asked again after it.
 	if len(s1.recallCalls) != 1 {
-		t.Fatalf("recall checks = %d", len(s1.recallCalls))
+		t.Fatalf("recall checks = %d, want 1", len(s1.recallCalls))
 	}
 	note := s2.requests[0].Note
 	if !strings.Contains(note, "Sam's passport expires in March 2027") || strings.Contains(note, "Golf") {
 		t.Errorf("note = %q", note)
 	}
-	if len(s.decisions) != 3 || s.decisions[1].Action != "recall" || *s.decisions[1].ParentID != s.decisions[0].ID {
+	if len(s.decisions) != 3 || s.decisions[1].Action != "recall" || *s.decisions[1].ParentID != s.decisions[0].ID ||
+		s.decisions[1].CostUSD != 0.00003 {
 		t.Errorf("decisions = %+v", s.decisions)
 	}
 }
@@ -1116,3 +1228,36 @@ func (s *fakeStore) SaveCaseEmbedding(context.Context, ulid.ULID, []float32, str
 func (s *fakeStore) SaveTaste(context.Context, memory.Taste) error { return nil }
 
 func (s *fakeStore) Tastes(context.Context, int) ([]memory.Taste, error) { return nil, nil }
+
+func (s *fakeStore) NextDue(_ context.Context, now time.Time, promiseLead, askExpires time.Duration, canAsk bool, _ time.Duration) (time.Time, bool, error) {
+	var next time.Time
+	consider := func(t time.Time) {
+		if next.IsZero() || t.Before(next) {
+			next = t
+		}
+	}
+	for _, i := range s.intentions {
+		if i.Status == memory.IntentionPending {
+			if i.Kind == memory.IntentionTask {
+				consider(i.DueAt.Add(-promiseLead))
+			} else {
+				consider(i.DueAt)
+			}
+		}
+	}
+	for _, a := range s.approvals {
+		if a.Status == memory.ApprovalPending {
+			if a.SentAt.IsZero() && canAsk {
+				consider(now)
+			} else {
+				consider(a.AskedAt.Add(askExpires))
+			}
+		}
+	}
+	for _, a := range s.actions {
+		if a.Status == memory.ActionApproved {
+			consider(now)
+		}
+	}
+	return next, !next.IsZero(), nil
+}

@@ -1,0 +1,212 @@
+[
+  {
+    "character": "ayesha",
+    "costs": [
+      {
+        "action": "activity",
+        "provider": "openai/gpt-6.1-terra",
+        "calls": 4,
+        "cost_usd": 0.0150644
+      },
+      {
+        "action": "score_skill",
+        "provider": "openai/gpt-6.2-sol",
+        "calls": 2,
+        "cost_usd": 0.003028
+      },
+      {
+        "action": "plan_day",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.0007183
+      },
+      {
+        "action": "weekly_review",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.00061318
+      }
+    ],
+    "cost_usd": 0.019423880000000004,
+    "made": {
+      "journal": 1,
+      "notes": 1,
+      "review": 1,
+      "writing": 2
+    },
+    "took_ns": 72889417625
+  },
+  {
+    "character": "henrik",
+    "costs": [
+      {
+        "action": "activity",
+        "provider": "openai/gpt-6.1-terra",
+        "calls": 4,
+        "cost_usd": 0.01738725
+      },
+      {
+        "action": "weekly_review",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.00071593
+      },
+      {
+        "action": "plan_day",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.00067905
+      }
+    ],
+    "cost_usd": 0.01878223,
+    "made": {
+      "journal": 1,
+      "review": 1,
+      "writing": 3
+    },
+    "took_ns": 77066496958
+  },
+  {
+    "character": "kenji",
+    "costs": [
+      {
+        "action": "activity",
+        "provider": "openai/gpt-6.1-terra",
+        "calls": 7,
+        "cost_usd": 0.0352129
+      },
+      {
+        "action": "ask_review",
+        "provider": "openai/gpt-6.1-terra",
+        "calls": 1,
+        "cost_usd": 0.00700175
+      },
+      {
+        "action": "score_skill",
+        "provider": "openai/gpt-6.2-sol",
+        "calls": 2,
+        "cost_usd": 0.005024
+      },
+      {
+        "action": "plan_day",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.00092268
+      },
+      {
+        "action": "weekly_review",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.00072967
+      }
+    ],
+    "cost_usd": 0.048891000000000004,
+    "made": {
+      "design_doc": 2,
+      "journal": 1,
+      "notes": 1,
+      "review": 1,
+      "writing": 3
+    },
+    "took_ns": 141597034458
+  },
+  {
+    "character": "marcus",
+    "costs": [
+      {
+        "action": "activity",
+        "provider": "openai/gpt-6.1-terra",
+        "calls": 4,
+        "cost_usd": 0.01946065
+      },
+      {
+        "action": "weekly_review",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.00074568
+      },
+      {
+        "action": "plan_day",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.00072843
+      }
+    ],
+    "cost_usd": 0.020934759999999997,
+    "made": {
+      "journal": 1,
+      "review": 1,
+      "writing": 3
+    },
+    "took_ns": 85178543667
+  },
+  {
+    "character": "sofia",
+    "costs": [
+      {
+        "action": "activity",
+        "provider": "openai/gpt-6.1-terra",
+        "calls": 4,
+        "cost_usd": 0.0176839
+      },
+      {
+        "action": "weekly_review",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.00079655
+      },
+      {
+        "action": "plan_day",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.00076292
+      }
+    ],
+    "cost_usd": 0.01924337,
+    "made": {
+      "journal": 1,
+      "notes": 2,
+      "review": 1,
+      "writing": 1
+    },
+    "took_ns": 84369238625
+  },
+  {
+    "character": "zara",
+    "costs": [
+      {
+        "action": "activity",
+        "provider": "openai/gpt-6.1-terra",
+        "calls": 4,
+        "cost_usd": 0.01860355
+      },
+      {
+        "action": "score_skill",
+        "provider": "openai/gpt-6.2-sol",
+        "calls": 4,
+        "cost_usd": 0.005896
+      },
+      {
+        "action": "weekly_review",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.0006788
+      },
+      {
+        "action": "plan_day",
+        "provider": "openai/gpt-6-luna",
+        "calls": 1,
+        "cost_usd": 0.0006688
+      }
+    ],
+    "cost_usd": 0.025847150000000003,
+    "made": {
+      "campaign_brief": 1,
+      "content_calendar": 1,
+      "journal": 1,
+      "post": 1,
+      "review": 1
+    },
+    "took_ns": 87017270792
+  }
+]

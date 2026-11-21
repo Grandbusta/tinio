@@ -139,3 +139,29 @@ func TestStrangersAreNotCheckedIn(t *testing.T) {
 		t.Errorf("checked in on a stranger: %v", r.sent)
 	}
 }
+
+// In its owner's quiet hours it doesn't check in, and wakes when they end; a
+// reminder due then still comes, since the owner asked for it then.
+func TestQuietHoursHoldACheckInNotAReminder(t *testing.T) {
+	r := &fakeReplier{}
+	m, s := initiativeMind(r, &fakeSystem1{relevant: map[string]bool{"Sam have a job interview on Friday": true}}, &fakeSystem2{})
+	m.Quiet = QuietHours{From: 22 * time.Hour, Until: 12 * time.Hour} // past midnight, until noon
+	s.facts = []memory.Fact{{ID: ulid.Make(), Subject: sam, Text: "I have a job interview on Friday", At: now.Add(-48 * time.Hour)}}
+	ctx, eleven := context.Background(), time.Date(2026, 10, 27, 11, 0, 0, 0, lagos)
+
+	m.lastTick = eleven.Add(-time.Minute)
+	m.tick(ctx, eleven)
+	if len(r.sent) != 0 {
+		t.Fatalf("checked in during quiet hours: %v", r.sent)
+	}
+	if next, _ := m.nextWake(ctx, eleven); !next.Equal(eleven.Add(time.Hour)) {
+		t.Errorf("wakes at %s, want when the quiet hours end, %s", next, eleven.Add(time.Hour))
+	}
+
+	s.intentions = []memory.Intention{{ID: ulid.Make(), Subject: sam, Kind: memory.IntentionRemind, Text: "Sam should call the bank",
+		DueAt: eleven, Status: memory.IntentionPending, CreatedAt: eleven.Add(-24 * time.Hour)}}
+	m.tick(ctx, eleven.Add(time.Minute))
+	if len(r.sent) != 1 || s.intentions[0].Status != memory.IntentionDone {
+		t.Errorf("the reminder didn't come in quiet hours: sent %v", r.sent)
+	}
+}

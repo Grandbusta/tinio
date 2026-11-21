@@ -117,7 +117,7 @@ func (m *Mind) askForReview(ctx context.Context, w memory.Work, question string,
 	if owner == "" {
 		return
 	}
-	if last, ok, err := m.Store.LastSpokeFirst(ctx, owner, perception.KindReviewRequest); err != nil || (ok && now.Sub(last) < askReviewEvery) {
+	if last, ok, err := m.Store.LastPercept(ctx, owner, perception.KindReviewRequest); err != nil || (ok && now.Sub(last) < askReviewEvery) {
 		return
 	}
 	conv, ok := m.conversationWith(ctx, owner)

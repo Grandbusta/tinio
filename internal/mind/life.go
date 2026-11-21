@@ -62,7 +62,8 @@ const (
 
 // lifeActions are the decisions its own day is made of, for the budget:
 // promises count, though they are kept even past it.
-var lifeActions = []string{"plan_day", "activity", "task", "weekly_review", "plan_learning"}
+var lifeActions = []string{"plan_day", "activity", "task", "weekly_review", "plan_learning", "score_skill", "check_stage",
+	"write_data", "observe"}
 
 func (m *Mind) ownDay() system2.Reasoner {
 	if m.DaySystem2 != nil {
@@ -71,15 +72,54 @@ func (m *Mind) ownDay() system2.Reasoner {
 	return m.System2
 }
 
-// thinker is System 2 for doing i: its own day's, unless i is for someone.
-func (m *Mind) thinker(i memory.Intention) system2.Reasoner {
-	if i.Subject == memory.SubjectSelf {
-		return m.ownDay()
+func (m *Mind) maker() system2.Reasoner {
+	if m.WorkSystem2 != nil {
+		return m.WorkSystem2
 	}
 	return m.System2
 }
 
 func (m *Mind) dayOn() bool { return m.Day.PlanPrompt.Text != "" && m.Day.ActivityPrompt.Text != "" }
+
+// How long its owner can say nothing before its own day slows to one thing
+// a day, and before it stops: a day nobody reads costs with no one to gain.
+// It's back the moment they write.
+const (
+	quietSlowsAfter  = 3 * 24 * time.Hour
+	quietPausesAfter = 7 * 24 * time.Hour
+)
+
+// liveliness is how much of its own day it lives.
+type liveliness int
+
+const (
+	livelyDay liveliness = iota
+	slowDay              // one plan, one thing
+	pausedDay            // nothing of its own: no plan, review or old works' data
+)
+
+// liveliness is by how long its owner has written nothing (what the agent
+// says first doesn't count): an owner who never wrote has written nothing for
+// ever. With no owner, or no day, there's no one to wait for.
+func (m *Mind) liveliness(ctx context.Context, now time.Time) (liveliness, time.Duration) {
+	owner := m.policy().Owner
+	if owner == "" || !m.dayOn() {
+		return livelyDay, 0
+	}
+	last, wrote, err := m.Store.LastPercept(ctx, owner, perception.KindMessage)
+	if err != nil {
+		m.Log.Warn("checking when its owner last wrote failed", "err", err)
+		return livelyDay, 0
+	}
+	quiet := now.Sub(last)
+	switch {
+	case !wrote || quiet >= quietPausesAfter:
+		return pausedDay, quiet
+	case quiet >= quietSlowsAfter:
+		return slowDay, quiet
+	}
+	return livelyDay, quiet
+}
 
 func (m *Mind) startOfDay(t time.Time) time.Time {
 	l := t.In(m.Zone)
@@ -89,8 +129,8 @@ func (m *Mind) startOfDay(t time.Time) time.Time {
 // planDay plans nothing past journal time, never a round already planned
 // (e.g. before a restart), and no new rounds while what it planned is still
 // to do (it was busy, or restarted): the plan still holds, so nothing is asked.
-func (m *Mind) planDay(ctx context.Context, now time.Time) {
-	if !m.dayOn() {
+func (m *Mind) planDay(ctx context.Context, now time.Time, day liveliness, quiet time.Duration) {
+	if !m.dayOn() || m.planTries.waiting(now) {
 		return
 	}
 	midnight := m.startOfDay(now)
@@ -106,6 +146,9 @@ func (m *Mind) planDay(ctx context.Context, now time.Time) {
 	if m.planned == today && round <= m.round {
 		return
 	}
+	if day == pausedDay {
+		return // not marked planned: if its owner writes later today, it plans then
+	}
 	first := m.planned != today
 	if first { // the day's first plan: unless it planned today already (a restart)
 		existing, err := m.Store.IntentionsDue(ctx, midnight, midnight.AddDate(0, 0, 1))
@@ -114,13 +157,25 @@ func (m *Mind) planDay(ctx context.Context, now time.Time) {
 			return
 		}
 		for _, i := range existing {
-			if i.Subject == memory.SubjectSelf && i.Kind == memory.IntentionActivity {
+			if m.ownActivity(i) {
 				m.planned, m.round = today, round
 				return
 			}
 		}
 	}
 	last := min(round+roundsPerPlan-1, m.pace()-1)
+	most := m.Day.MaxActivities * (last - round + 1)
+	if day == slowDay { // the rest of the day in this one plan, or none if it's planned already
+		if !first {
+			m.round = m.pace() - 1
+			return
+		}
+		last, most = m.pace()-1, 1
+	}
+	wasPlanned, wasRound := m.planned, m.round
+	if first {
+		m.round = 0 // yesterday's rounds aren't today's
+	}
 	m.planned, m.round = today, max(last, m.round)
 	if !first && m.stillToDo(ctx, midnight, m.roundEnd(last, midnight)) {
 		m.Log.Info("what it planned is still to do; no new plan", "round", round+1)
@@ -130,7 +185,11 @@ func (m *Mind) planDay(ctx context.Context, now time.Time) {
 		m.Log.Warn("over today's budget; no plan", "round", round)
 		return
 	}
-	m.writePlan(ctx, now, midnight, round, last, first)
+	if m.writePlan(ctx, now, midnight, round, last, most, first, quiet) {
+		m.planTries.succeeded()
+	} else if m.planTries.fail(now) {
+		m.planned, m.round = wasPlanned, wasRound // planned again later
+	}
 }
 
 // stillToDo reports whether any of its own activities due before until is
@@ -141,7 +200,7 @@ func (m *Mind) stillToDo(ctx context.Context, midnight, until time.Time) bool {
 		return false
 	}
 	for _, i := range is {
-		if i.Subject == memory.SubjectSelf && i.Kind == memory.IntentionActivity && i.Ability != journal.Name &&
+		if m.ownActivity(i) && i.Ability != journal.Name &&
 			i.Status == memory.IntentionPending {
 			return true
 		}
@@ -178,8 +237,9 @@ func planFormat(abilities []ability.Ability) *system2.Format {
 			"calls": callsSchema,
 			"activities": map[string]any{"type": "array", "items": map[string]any{
 				"type": "object", "additionalProperties": false,
-				"required": []string{"at", "what", "project_id", "new_project_title", "project_kind", "ability", "query", "goal_id", "resource_id"},
+				"required": []string{"at", "what", "for", "project_id", "new_project_title", "project_kind", "ability", "query", "goal_id", "resource_id"},
 				"properties": map[string]any{
+					"for":               map[string]any{"type": "string", "enum": []string{"owner", "self"}, "description": "owner if it's done to help your owner, else self"},
 					"ability":           map[string]any{"type": "string", "enum": names},
 					"query":             map[string]any{"type": "string", "description": "what the ability is to look for; empty if none"},
 					"goal_id":           map[string]any{"type": "string", "description": "the goal this moves forward, or empty"},
@@ -197,9 +257,10 @@ func planFormat(abilities []ability.Ability) *system2.Format {
 
 // writePlan plans rounds round to last. Only the day's first plan has the
 // journal and its calls for its owner.
-func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round, last int, first bool) {
+// most is the activities it may plan; quiet, how long its owner has said
+// nothing, which it's told when that's slowed its day. False if it failed.
+func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round, last, most int, first bool, quiet time.Duration) bool {
 	until := m.roundEnd(last, midnight)
-	most := m.Day.MaxActivities * (last - round + 1)
 	start := time.Now()
 	d := &decision.Decision{ID: ulid.Make(), At: start.UTC(), Tier: decision.TierSystem2, SetID: m.Day.PlanPrompt.Ref,
 		Action: "plan_day", Gate: decision.GateAuto}
@@ -215,6 +276,10 @@ func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round, la
 	var note strings.Builder
 	note.WriteString(m.now(now))
 	fmt.Fprintf(&note, " You write your journal at %s.", midnight.Add(m.Day.JournalAt).Format("15:04"))
+	if quiet >= quietSlowsAfter {
+		fmt.Fprintf(&note, " %s hasn't written in %d days, so today you do just one thing of your own.",
+			m.ownerName(ctx), int(quiet/(24*time.Hour)))
+	}
 	if m.Day.Pace > 1 {
 		rounds := fmt.Sprintf("round %d", round+1)
 		if last > round {
@@ -250,6 +315,7 @@ func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round, la
 			fmt.Fprintf(&note, " Where it stands: %s", orNone(p.Notes))
 		}
 	}
+	note.WriteString(m.ownerNote(ctx))
 	if len(facts) > 0 {
 		note.WriteString("\n\nWhat you remember about yourself lately:")
 		for i := len(facts) - 1; i >= 0; i-- {
@@ -279,16 +345,17 @@ func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round, la
 		Note:         note.String(),
 		Format:       planFormat(abilities),
 	})
+	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD
 	if err != nil {
 		m.Log.Error("planning the day failed", "err", err)
 		m.finishLife(ctx, d, start, decision.OutcomeFailed, err.Error())
-		return
+		return false
 	}
-	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD
 	var plan struct {
 		Activities []struct {
 			At              string `json:"at"`
 			What            string `json:"what"`
+			For             string `json:"for"`
 			ProjectID       string `json:"project_id"`
 			NewProjectTitle string `json:"new_project_title"`
 			ProjectKind     string `json:"project_kind"`
@@ -301,7 +368,7 @@ func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round, la
 	}
 	if err := json.Unmarshal([]byte(resp.Text), &plan); err != nil {
 		m.finishLife(ctx, d, start, decision.OutcomeFailed, "plan is not the requested JSON: "+err.Error())
-		return
+		return false
 	}
 
 	known := map[string]bool{}
@@ -347,6 +414,11 @@ func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round, la
 			known[p.ID.String()], project = true, p.ID
 		}
 		i := memory.Intention{Text: what, ProjectID: project, DueAt: due}
+		if owner := m.policy().Owner; a.For == "owner" && owner != "" {
+			// Done for its owner, what it makes is theirs: shown as made for them, and
+			// never on its public page.
+			i.Subject = owner
+		}
 		if ab, ok := m.Abilities.Get(strings.TrimSpace(a.Ability)); ok && ab.Describe() != "" && m.allowed(ab) {
 			i.Ability = ab.Name()
 			if q := strings.TrimSpace(a.Query); q != "" {
@@ -377,6 +449,33 @@ func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round, la
 	}
 	m.finishLife(ctx, d, start, decision.OutcomeOK, detail)
 	m.Log.Info("planned the day", "rounds", fmt.Sprintf("%d-%d", round+1, last+1), "of", m.pace(), "things", len(lines), "cost_usd", resp.CostUSD)
+	return true
+}
+
+// ownerNote is what it knows of its owner, newest last, for the plan's and the review's
+// notes: both choose what to work on for them.
+func (m *Mind) ownerNote(ctx context.Context) string {
+	var facts []memory.Fact
+	if owner := m.policy().Owner; owner != "" {
+		var err error
+		if facts, err = m.Store.RecallCandidates(ctx, []string{owner}, nil, factsInPlan); err != nil {
+			m.Log.Warn("loading what it knows of its owner failed; going on without it", "err", err)
+		}
+	}
+	if len(facts) == 0 {
+		return fmt.Sprintf("\n\nYou don't know much about %s yet.", m.ownerName(ctx))
+	}
+	var note strings.Builder
+	fmt.Fprintf(&note, "\n\nWhat you know about %s, newest last:", m.ownerName(ctx))
+	for i := len(facts) - 1; i >= 0; i-- {
+		fmt.Fprintf(&note, "\n- %s: %s", facts[i].At.In(m.Zone).Format("2 Jan"), facts[i].Text)
+	}
+	return note.String()
+}
+
+// ownActivity is whether i is part of its own day: an activity, for itself or for its owner.
+func (m *Mind) ownActivity(i memory.Intention) bool {
+	return i.Kind == memory.IntentionActivity && (i.Subject == memory.SubjectSelf || (i.Subject != "" && i.Subject == m.policy().Owner))
 }
 
 func (m *Mind) linkGoal(ctx context.Context, project, goal ulid.ULID) {
@@ -393,8 +492,9 @@ func (m *Mind) linkGoal(ctx context.Context, project, goal ulid.ULID) {
 	}
 }
 
+// intend plans i for its own day: for itself unless i.Subject says it's for its owner.
 func (m *Mind) intend(ctx context.Context, i memory.Intention, now time.Time) bool {
-	i.ID, i.Subject, i.Kind, i.Status = ulid.Make(), memory.SubjectSelf, memory.IntentionActivity, memory.IntentionPending
+	i.ID, i.Subject, i.Kind, i.Status = ulid.Make(), orDefault(i.Subject, memory.SubjectSelf), memory.IntentionActivity, memory.IntentionPending
 	i.DueAt, i.CreatedAt = i.DueAt.UTC(), now.UTC()
 	err := m.Store.SaveIntention(ctx, i)
 	if err != nil {
@@ -473,7 +573,7 @@ func (m *Mind) doActivity(ctx context.Context, i memory.Intention, now time.Time
 }
 
 // makeWork finishes the intention as missed or cancelled if it can't be done;
-// if System 2 fails, it stays pending and is tried again on the next tick.
+// if System 2 fails, it's tried again later, a few times (retry).
 func (m *Mind) makeWork(ctx context.Context, i memory.Intention, action, what string, now time.Time) (memory.Work, bool) {
 	log := m.Log.With("intention", i.ID.String())
 
@@ -541,17 +641,18 @@ func (m *Mind) makeWork(ctx context.Context, i memory.Intention, action, what st
 		more, stepsCost = m.followUp(ctx, i, note, ch, project, now)
 		note += more
 	}
-	resp, err := m.thinker(i).Reason(ctx, system2.Request{
+	resp, err := m.maker().Reason(ctx, system2.Request{
 		Instructions: m.lifeInstructions(m.Day.ActivityPrompt),
 		Note:         note,
 		Format:       activityFormat(m.Life.Crafts(), m.dataSchemas(), acts),
 	})
+	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD+stepsCost+skillCost+material.CostUSD // a failed call is paid for too
 	if err != nil {
 		log.Error(action+" failed", "err", err)
 		m.finishLife(ctx, d, start, decision.OutcomeFailed, err.Error())
+		m.retry(ctx, i, err, now)
 		return memory.Work{}, false
 	}
-	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD+stepsCost+skillCost
 	var out struct {
 		Title          string   `json:"title"`
 		Kind           string   `json:"kind"`
@@ -598,16 +699,14 @@ func (m *Mind) makeWork(ctx context.Context, i memory.Intention, action, what st
 		}
 	}
 	n := names{agent: m.Life.Name, speaker: fallbackName}
+	var fs []memory.Fact
 	for _, f := range out.Remember {
-		if f = strings.TrimSpace(f); f == "" {
-			continue
-		}
-		cost, err := m.saveFact(ctx, p, memory.SubjectSelf, f, n)
-		d.CostUSD += cost
-		if err != nil {
-			log.Error("save fact", "err", err)
+		if f = strings.TrimSpace(f); f != "" {
+			fs = append(fs, memory.Fact{Subject: memory.SubjectSelf, Text: f})
 		}
 	}
+	_, cost := m.saveFacts(ctx, p, fs, n)
+	d.CostUSD += cost
 	d.Reply = title + "\n\n" + w.Text
 	m.finishLife(ctx, d, start, decision.OutcomeOK, fmt.Sprintf("made %s %q", w.Kind, title))
 	if acts {

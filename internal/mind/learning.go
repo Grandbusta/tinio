@@ -101,11 +101,11 @@ func (m *Mind) draftPlan(ctx context.Context, g memory.Goal, now time.Time) erro
 		Note:         note.String(),
 		Format:       learnFormat,
 	})
+	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD
 	if err != nil {
 		m.finishLife(ctx, d, start, decision.OutcomeFailed, err.Error())
 		return err
 	}
-	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD
 	var out struct {
 		Stages []struct {
 			Learn     string `json:"learn"`

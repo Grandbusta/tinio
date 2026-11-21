@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"slices"
 	"sort"
 
 	"gopkg.in/yaml.v3"
@@ -20,9 +21,13 @@ type Set struct {
 	Version int    `yaml:"version"`
 	// Primary is the question the router acts on (a choice or a predicate);
 	// the others add context. Empty for sets that only label, like life_area.
-	Primary    string             `yaml:"primary"`
-	Questions  []system1.Question `yaml:"questions"`
-	Thresholds Thresholds         `yaml:"thresholds"`
+	Primary   string             `yaml:"primary"`
+	Questions []system1.Question `yaml:"questions"`
+	// Model answers the set as JSON, through the reasoning API, for questions
+	// the Decisions API's model gets wrong; "" the Decisions API. A set moved
+	// takes its thresholds from `api eval`: the confidences differ.
+	Model      string     `yaml:"model"`
+	Thresholds Thresholds `yaml:"thresholds"`
 }
 
 // Thresholds on the primary answer's confidence (a predicate's probability):
@@ -36,6 +41,17 @@ type Thresholds struct {
 }
 
 func (s Set) Ref() string { return fmt.Sprintf("%s@%d", s.ID, s.Version) }
+
+// On is the set answered by model ("" the Decisions API), each question
+// carrying it.
+func (s Set) On(model string) Set {
+	s.Model = model
+	s.Questions = slices.Clone(s.Questions)
+	for i := range s.Questions {
+		s.Questions[i].Model = model
+	}
+	return s
+}
 
 // LoadDir loads every *.yaml in dir, in fsys.
 func LoadDir(fsys fs.FS, dir string) (map[string]Set, error) {
@@ -74,7 +90,7 @@ func load(fsys fs.FS, path string) (Set, error) {
 	if err := s.Validate(); err != nil {
 		return Set{}, fmt.Errorf("%s: %w", path, err)
 	}
-	return s, nil
+	return s.On(s.Model), nil
 }
 
 func (s Set) Validate() error {

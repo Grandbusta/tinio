@@ -68,7 +68,7 @@ func act(query string) ability.Act {
 func TestOnlyListedReadToolsAreOffered(t *testing.T) {
 	ctx := context.Background()
 	s := notesServer(t)
-	tools, _, err := offered(ctx, s, config.ToolServer{Name: "notes", About: "Busta's notes", Tools: map[string]string{"read_note": "read"}}, 5, &fakeStore{})
+	tools, _, err := offered(ctx, s, config.ToolServer{Name: "notes", About: "Busta's notes", Tools: map[string]string{"read_note": "read"}}, nil, 5, &fakeStore{})
 	if err != nil || len(tools) != 1 || tools[0].Name() != "notes.read_note" || tools[0].Risk() != ability.UsesTools || len(tools[0].Next()) != 1 {
 		t.Fatalf("tools = %+v, %v", tools, err)
 	}
@@ -80,7 +80,7 @@ func TestOnlyListedReadToolsAreOffered(t *testing.T) {
 		"destructive": {"delete_note": "read"},
 		"missing":     {"rename_note": "read"},
 	} {
-		if _, _, err := offered(ctx, s, config.ToolServer{Name: "notes", Tools: kinds}, 5, &fakeStore{}); err == nil {
+		if _, _, err := offered(ctx, s, config.ToolServer{Name: "notes", Tools: kinds}, nil, 5, &fakeStore{}); err == nil {
 			t.Errorf("%s: offered", name)
 		}
 	}
@@ -89,7 +89,7 @@ func TestOnlyListedReadToolsAreOffered(t *testing.T) {
 func TestReadingThroughATool(t *testing.T) {
 	ctx := context.Background()
 	st := &fakeStore{}
-	tools, _, err := offered(ctx, notesServer(t), config.ToolServer{Name: "notes", Tools: map[string]string{"read_note": "read"}}, 2, st)
+	tools, _, err := offered(ctx, notesServer(t), config.ToolServer{Name: "notes", Tools: map[string]string{"read_note": "read"}}, nil, 2, st)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestToolsThatChangeThings(t *testing.T) {
 	ctx := context.Background()
 	st := &fakeStore{}
 	reads, acts, err := offered(ctx, notesServer(t), config.ToolServer{Name: "notes",
-		Tools: map[string]string{"read_note": "read", "write_note": "write", "delete_note": "write"}}, 5, st)
+		Tools: map[string]string{"read_note": "read", "write_note": "write", "delete_note": "write"}}, nil, 5, st)
 	if err != nil || len(reads) != 1 || len(acts) != 2 {
 		t.Fatalf("reads %d, actions %d, %v", len(reads), len(acts), err)
 	}

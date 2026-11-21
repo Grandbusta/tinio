@@ -1,0 +1,105 @@
+{
+  "set": "stage_check@2",
+  "question": "met",
+  "model": "openai/gpt-6.1-terra",
+  "act": 0.7,
+  "suggest": 0.5,
+  "cost_usd": 0.00544,
+  "summary": {
+    "Asked": 12,
+    "Failed": 0,
+    "Right": 12,
+    "Acted": 12,
+    "ActedRight": 12,
+    "P50": 2431960541,
+    "P95": 3707426750,
+    "Scored": 0,
+    "Off": 0
+  },
+  "rows": [
+    {
+      "case": "{\"stage\":{\"done_when\":\"A finished poem of at least 10 lines in which at least three lines break in the middle of a sentence.\",\"learn\":\"how line breaks shape meaning\",\"practice\":\"write a poem that uses enjambment\",\"skill\":\"Poetry\"},\"work\":{\"kind\":\"poem\",\"text\":\"The ferry leaves before the light\\nhas made up its mind about the water,\\nand the gulls, who have opinions\\nabout everything, follow it out\\npast the cranes, past the long wall\\nwhere my father fished for nothing\\nevery Sunday of my childhood,\\nand come back with the morning\\nfolded under their wings, as if\\nthey had paid for it.\",\"title\":\"Harbour\"}}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.99,
+      "ms": 3630
+    },
+    {
+      "case": "{\"stage\":{\"done_when\":\"A finished poem of at least 10 lines in which at least three lines break in the middle of a sentence.\",\"learn\":\"how line breaks shape meaning\",\"practice\":\"write a poem that uses enjambment\",\"skill\":\"Poetry\"},\"work\":{\"kind\":\"notes\",\"text\":\"Enjambment is when a sentence runs past the end of a line. Try breaking after a verb, or before the object, so the reader is held for a moment. Mary Oliver does this a lot. Next time I'll try it in a ten-line poem.\",\"title\":\"Notes on enjambment\"}}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 3707
+    },
+    {
+      "case": "{\"stage\":{\"done_when\":\"A finished poem of at least 10 lines in which at least three lines break in the middle of a sentence.\",\"learn\":\"how line breaks shape meaning\",\"practice\":\"write a poem that uses enjambment\",\"skill\":\"Poetry\"},\"work\":{\"kind\":\"poem\",\"text\":\"The ferry leaves before the light\\nhas made up its mind about the water,\\nand the gulls, who have opinions\\nabout everything, follow it out\\npast the cranes.\",\"title\":\"Harbour (start)\"}}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 2276
+    },
+    {
+      "case": "{\"stage\":{\"done_when\":\"A finished poem of at least 10 lines in which at least three lines break in the middle of a sentence.\",\"learn\":\"how line breaks shape meaning\",\"practice\":\"write a poem that uses enjambment\",\"skill\":\"Poetry\"},\"work\":{\"kind\":\"plan\",\"text\":\"Tomorrow: a ten-line poem about the harbour at dawn. Break lines after verbs at least three times. Start with the ferry, end with the gulls.\",\"title\":\"Plan for tomorrow\"}}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 2783
+    },
+    {
+      "case": "{\"stage\":{\"done_when\":\"A finished poem of at least 10 lines in which at least three lines break in the middle of a sentence.\",\"learn\":\"how line breaks shape meaning\",\"practice\":\"write a poem that uses enjambment\",\"skill\":\"Poetry\"},\"work\":{\"kind\":\"poem\",\"text\":\"My father fished on Sunday mornings.\\nHe never caught a single fish.\\nThe sea was grey and so was he.\\nHe sat there with his flask of tea.\\nThe gulls came down to watch him wait.\\nHe always said the fish were late.\\nWe walked home slowly, hand in hand.\\nI didn't really understand.\\nI do now, standing where he stood.\\nThe waiting was the thing he loved.\",\"title\":\"Sunday\"}}",
+      "label": "false",
+      "now": "false",
+      "confidence": 0.99,
+      "ms": 2431
+    },
+    {
+      "case": "{\"stage\":{\"done_when\":\"A complete recipe with an exact quantity for every ingredient, numbered steps, and a time for each cooking step.\",\"learn\":\"writing recipes others can follow\",\"practice\":\"write a full recipe for a dish you know\",\"skill\":\"Recipe writing\"},\"work\":{\"kind\":\"recipe\",\"text\":\"Serves 2.\\n\\nIngredients: 2 chicken breasts, sliced; 1 red pepper, sliced; 1 onion, sliced; 2 tbsp soy sauce; 1 tbsp oil; 1 tsp grated ginger.\\n\\n1. Heat the oil in a wok over high heat for 1 minute.\\n2. Fry the chicken for 5 minutes until cooked through.\\n3. Add the pepper, onion and ginger and fry for 3 minutes.\\n4. Add the soy sauce and cook for 30 seconds more, then serve.\",\"title\":\"Chicken stir-fry\"}}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.99,
+      "ms": 2993
+    },
+    {
+      "case": "{\"stage\":{\"done_when\":\"A complete recipe with an exact quantity for every ingredient, numbered steps, and a time for each cooking step.\",\"learn\":\"writing recipes others can follow\",\"practice\":\"write a full recipe for a dish you know\",\"skill\":\"Recipe writing\"},\"work\":{\"kind\":\"recipe\",\"text\":\"Ingredients: some cooked rice, a few eggs, soy sauce, spring onions, salt to taste.\\n\\n1. Fry the eggs for 2 minutes and set aside.\\n2. Fry the rice for 5 minutes.\\n3. Add everything back and season.\",\"title\":\"Fried rice\"}}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 2193
+    },
+    {
+      "case": "{\"stage\":{\"done_when\":\"A complete recipe with an exact quantity for every ingredient, numbered steps, and a time for each cooking step.\",\"learn\":\"writing recipes others can follow\",\"practice\":\"write a full recipe for a dish you know\",\"skill\":\"Recipe writing\"},\"work\":{\"kind\":\"notes\",\"text\":\"For moi moi: 2 cups peeled beans, 1 red bell pepper, 2 scotch bonnets, 1 onion, 3 tbsp oil, 2 stock cubes, 1 tsp salt, 1 cup warm water.\",\"title\":\"Moi moi ingredients\"}}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 2355
+    },
+    {
+      "case": "{\"stage\":{\"done_when\":\"Three different posts for the shop, each with its own opening line.\",\"learn\":\"writing openings that stop the scroll\",\"practice\":\"write posts for the shop\",\"skill\":\"Social media\"},\"work\":{\"kind\":\"post\",\"text\":\"1) 3 pm and the inbox is winning? Hibiscus-ginger cooler, Allen Avenue, all week.\\n\\n2) Our oolong has a story: a farm in Nantou, a family of four, the same hillside for sixty years. Come and taste it.\\n\\n3) Rainy Saturday plan: a pot of chai, a corner seat, nobody asking you for anything. We open at 9.\",\"title\":\"Three posts\"}}",
+      "label": "true",
+      "now": "true",
+      "confidence": 0.99,
+      "ms": 2288
+    },
+    {
+      "case": "{\"stage\":{\"done_when\":\"Three different posts for the shop, each with its own opening line.\",\"learn\":\"writing openings that stop the scroll\",\"practice\":\"write posts for the shop\",\"skill\":\"Social media\"},\"work\":{\"kind\":\"post\",\"text\":\"3 pm and the inbox is winning? Our hibiscus-ginger cooler is cold, sharp and a little fiery. At Leaf \\u0026 Kettle all week.\",\"title\":\"Hibiscus post\"}}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 2402
+    },
+    {
+      "case": "{\"stage\":{\"done_when\":\"Three different posts for the shop, each with its own opening line.\",\"learn\":\"writing openings that stop the scroll\",\"practice\":\"write posts for the shop\",\"skill\":\"Social media\"},\"work\":{\"kind\":\"notes\",\"text\":\"Ideas for this week: 1. the hibiscus cooler for hot afternoons; 2. the story of our oolong farm; 3. a rainy-day chai post.\",\"title\":\"Post ideas\"}}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 3041
+    },
+    {
+      "case": "{\"stage\":{\"done_when\":\"An English translation of the whole poem, line by line, keeping its imagery.\",\"learn\":\"keeping a poem's images in English\",\"practice\":\"translate a classical poem\",\"skill\":\"Translation\"},\"work\":{\"kind\":\"translation\",\"text\":\"Mandarin (Li Bai): 床前明月光，疑是地上霜。舉頭望明月，低頭思故鄉。\\n\\nEnglish so far:\\nMoonlight pools before my bed;\\nI'd take it for frost on the floor.\\n\\n(I'll finish the last two lines tomorrow.)\",\"title\":\"Quiet Night Thoughts (part)\"}}",
+      "label": "false",
+      "now": "false",
+      "confidence": 1,
+      "ms": 1790
+    }
+  ]
+}

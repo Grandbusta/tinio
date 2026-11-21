@@ -1,9 +1,7 @@
-# Never in the image: secrets, the person's own folder, and build leftovers.
+# Never in the image: secrets and build leftovers.
 .env
 .env.*
-!.env.example
-self/
 .git
-/tinio
 /bin
+/tinio
 .DS_Store

@@ -153,7 +153,7 @@ func Connect(ctx context.Context, cfg config.Tools, limit int, st Store, log *sl
 	for _, sc := range cfg.Servers {
 		s := &Server{Name: sc.Name, transport: transport(sc)}
 		c := Connected{Server: s}
-		c.Tools, c.Actions, c.Err = offered(ctx, s, sc, limit, st)
+		c.Tools, c.Actions, c.Err = offered(ctx, s, sc, nil, limit, st)
 		if c.Err == nil {
 			c.Watchers, c.Err = watchers(sc, c.Tools)
 		}
@@ -163,6 +163,18 @@ func Connect(ctx context.Context, cfg config.Tools, limit int, st Store, log *sl
 		out = append(out, c)
 	}
 	return out
+}
+
+// Remote reaches a hosted MCP server as one owner (client carries their
+// token) and offers only the tools kinds names (name → config.ToolRead or an
+// action class); those in alwaysAsk ask the owner whatever their class
+// allows. One it names that the server no longer has is left out, not an
+// error: a service may drop a tool.
+func Remote(ctx context.Context, name, about, url string, client *http.Client, kinds map[string]string, alwaysAsk map[string]bool, limit int, st Store) Connected {
+	s := &Server{Name: name, transport: func() mcp.Transport { return &mcp.StreamableClientTransport{Endpoint: url, HTTPClient: client} }}
+	c := Connected{Server: s}
+	c.Tools, c.Actions, c.Err = offered(ctx, s, config.ToolServer{Name: name, About: about, Tools: kinds}, alwaysAsk, limit, st)
+	return c
 }
 
 func transport(sc config.ToolServer) func() mcp.Transport {
@@ -195,8 +207,10 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 
 // offered lists the server's tools and keeps those the config names, each
 // checked against what the server says it does: a tool it marks as
-// destructive is never a reading tool, whatever the config says.
-func offered(ctx context.Context, s *Server, sc config.ToolServer, limit int, st Store) ([]Tool, []Action, error) {
+// destructive is never a reading tool, whatever the config says. With
+// alwaysAsk set (a reviewed hosted server), a named tool the server doesn't
+// have is skipped; without it, that's an error.
+func offered(ctx context.Context, s *Server, sc config.ToolServer, alwaysAsk map[string]bool, limit int, st Store) ([]Tool, []Action, error) {
 	cs, err := s.connect(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -214,6 +228,9 @@ func offered(ctx context.Context, s *Server, sc config.ToolServer, limit int, st
 	)
 	for _, name := range slices.Sorted(maps.Keys(sc.Tools)) {
 		t, ok := have[name]
+		if !ok && alwaysAsk != nil {
+			continue
+		}
 		if !ok {
 			return nil, nil, fmt.Errorf("%s has no tool %q (it has %s)", s.Name, name, strings.Join(slices.Sorted(maps.Keys(have)), ", "))
 		}
@@ -223,7 +240,7 @@ func offered(ctx context.Context, s *Server, sc config.ToolServer, limit int, st
 		}
 		kind := sc.Tools[name]
 		if kind != config.ToolRead {
-			acts = append(acts, Action{spec: sp, class: action.Class(kind)})
+			acts = append(acts, Action{spec: sp, class: action.Class(kind), reviewed: alwaysAsk != nil, alwaysAsk: alwaysAsk[name]})
 			continue
 		}
 		if a := t.Annotations; a != nil && a.DestructiveHint != nil && *a.DestructiveHint && !a.ReadOnlyHint {
@@ -338,7 +355,7 @@ func (t Tool) Prepare(ctx context.Context, a ability.Act) (ability.Material, err
 		return ability.Material{}, err
 	}
 	text, err := t.server.call(ctx, t.tool.Name, args)
-	if logErr := t.store.LogWeb(ctx, logKind, t.Name()+" "+cut(strings.TrimSpace(a.Query()), 500), 0, a.Now.UTC()); logErr != nil {
+	if logErr := Log(ctx, t.store, t.Name(), a.Query(), a.Now); logErr != nil {
 		return ability.Material{}, logErr
 	}
 	if err != nil {
@@ -353,6 +370,9 @@ func (t Tool) Prepare(ctx context.Context, a ability.Act) (ability.Material, err
 type Action struct {
 	spec
 	class action.Class
+	// reviewed: Tinio reviewed it (Remote), so alwaysAsk decides, and what the
+	// server says can only make it ask more.
+	reviewed, alwaysAsk bool
 }
 
 func (a Action) Describe() string { return a.describe("its arguments") }
@@ -361,9 +381,13 @@ func (a Action) Describe() string { return a.describe("its arguments") }
 func (a Action) Class() action.Class { return a.class }
 
 // Destructive is true unless its server says it only adds: a tool that says
-// nothing is taken to be destructive.
+// nothing is taken to be destructive. A reviewed one is as reviewed, unless
+// its server says it's destructive.
 func (a Action) Destructive() bool {
 	h := a.tool.Annotations
+	if a.reviewed {
+		return a.alwaysAsk || h != nil && !h.ReadOnlyHint && h.DestructiveHint != nil && *h.DestructiveHint
+	}
 	return h == nil || !h.ReadOnlyHint && (h.DestructiveHint == nil || *h.DestructiveHint)
 }
 
@@ -386,18 +410,26 @@ func (a Action) Do(ctx context.Context, raw string, at time.Time) (string, error
 	return text, err
 }
 
-// under checks that today's calls, across every server, are under the cap.
-func (t Tool) under(ctx context.Context, a ability.Act) error {
+func (t Tool) under(ctx context.Context, a ability.Act) error { return Under(ctx, t.store, a, t.limit) }
+
+// Under checks that today's calls, across every tool and server, are under
+// limit. Every reading tool's call is logged with Log.
+func Under(ctx context.Context, st Store, a ability.Act, limit int) error {
 	l := a.Now.In(a.Zone)
 	midnight := time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, a.Zone)
-	n, err := t.store.WebSince(ctx, logKind, midnight)
+	n, err := st.WebSince(ctx, logKind, midnight)
 	if err != nil {
 		return err
 	}
-	if n >= t.limit {
+	if n >= limit {
 		return fmt.Errorf("%d calls today: %w", n, ErrOverCap)
 	}
 	return nil
+}
+
+// Log keeps a reading tool's call (name and what it was given) in the web log.
+func Log(ctx context.Context, st Store, name, query string, at time.Time) error {
+	return st.LogWeb(ctx, logKind, name+" "+cut(strings.TrimSpace(query), 500), 0, at.UTC())
 }
 
 func orNone(q string) string {

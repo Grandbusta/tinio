@@ -2,6 +2,7 @@ package mind
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/Grandbusta/tinio/internal/decision"
 	"github.com/Grandbusta/tinio/internal/decision/questions"
 	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/perception"
 	"github.com/Grandbusta/tinio/internal/providers/system1"
 	"github.com/Grandbusta/tinio/internal/providers/system2"
 )
@@ -107,6 +109,49 @@ func TestWeeklyReview(t *testing.T) {
 	m.handle(context.Background(), tap(owner, asker.ids[0], true))
 	if len(s.dreams) != 2 || s.dreams[1].Text != "Tobi wants to write about Nigerian history" || s.dreams[1].Source != memory.DreamFromSelf {
 		t.Errorf("dreams = %+v", s.dreams)
+	}
+}
+
+// A request comes in parts for a card, and its owner can change its words
+// before saying yes: their version is the one kept. A request with nothing to
+// change (letting a dream go) keeps its own, whatever comes with the yes.
+func TestTheOwnersVersionOfARequestIsKept(t *testing.T) {
+	old := memory.Dream{ID: ulid.Make(), Text: "Tobi wants to be a DJ", Status: memory.DreamActive}
+	review := `{"title":"t","text":"x","goals":[],"new_goals":[],"projects":[],"dreams":[
+		{"action":"add","dream_id":"","text":"Tobi wants to write about Nigerian history","why":"reading Equiano moved me"},
+		{"action":"drop","dream_id":"` + old.ID.String() + `","text":"","why":"I prefer producing"}]}`
+	m, s, _, asker := reviewMind(review)
+	s.dreams = []memory.Dream{old}
+	if err := m.Review(context.Background(), at(25, 20, 0)); err != nil {
+		t.Fatal(err)
+	}
+	m.sendApprovals(context.Background())
+	if len(asker.requests) != 2 {
+		t.Fatalf("asked %d times, want 2", len(asker.requests))
+	}
+	add, drop := asker.requests[0], asker.requests[1]
+	if add.Title != "Add a dream?" || add.Quote != "Tobi wants to write about Nigerian history" || add.Why != "reading Equiano moved me" ||
+		!add.Editable || add.Expires.IsZero() {
+		t.Errorf("the request to add = %+v", add)
+	}
+	if drop.Quote != old.Text || drop.Editable {
+		t.Errorf("the request to let go = %+v", drop)
+	}
+
+	yours := func(id, text string) perception.Percept {
+		p := tap(owner, id, true)
+		p.Payload, _ = json.Marshal(perception.Answer{Approval: id, Approve: true, Text: text})
+		return p
+	}
+	m.handle(context.Background(), yours(asker.ids[0], "Tobi wants to write a history of Lagos music"))
+	m.handle(context.Background(), yours(asker.ids[1], "Tobi wants to be a DJ on Saturdays"))
+	var texts []string
+	for _, d := range s.dreams {
+		texts = append(texts, d.Status+": "+d.Text)
+	}
+	want := "dropped: Tobi wants to be a DJ|active: Tobi wants to write a history of Lagos music"
+	if strings.Join(texts, "|") != want {
+		t.Errorf("dreams = %q, want %q", texts, want)
 	}
 }
 
