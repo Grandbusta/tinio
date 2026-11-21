@@ -6,11 +6,10 @@ const (
 	SessionCookie = "tinio_session"
 	SessionTTL    = 30 * 24 * time.Hour
 
-	// A guard against abuse, beside the plan's weekly allowance (internal/usage).
+	// A guard against a loop running up the owner's bill, beside the week's cap (internal/usage).
 	MessagesPerDay = 200 // to one agent, in any 24 hours
 )
 
-// Pace is the rounds of its own work an agent does a day; 1 is like a person.
-// It comes with the account's plan, never from the owner's request: until there
-// are plans, every agent works like a person.
+// Pace is the rounds of its own work a new agent does a day: 1 is like a
+// person. The owner changes it in their settings.
 const Pace = 1

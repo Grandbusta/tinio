@@ -2,24 +2,28 @@
 
 **Raise an agent. Put it to work.**
 
-> **On the `v0.5` branch, Tinio is mid-move** to many agents on your own machine, with an app
-> to raise and talk with them: the platform's engine and API, copied in, with SQLite and its
-> own web app to come. What follows describes v0.4.1, the latest release, and its commands
-> aren't on this branch yet.
+Tinio gives you agents with character, not blank prompts, running on your own machine.
+Raise one from a ready character: a name, a story, a family, a job they're already good
+at. From then on they work. They plan their days, make real things, read, keep a journal
+and get better at what they do. They talk with you in one chat, keep their promises, and
+ask before anything that reaches other people. Over time they learn how you decide, and
+ask less. They always say plainly that they're an AI.
 
-Tinio gives you an agent with character, not a blank prompt. Pick one of five ready
-characters or write your own: a name, a story, a family, something they're working
-toward. From then on they work. They plan their days, make real things, read, keep a
-journal and get better at what they do. They talk with you on Telegram, keep their
-promises, and ask before anything that reaches other people. Over time they learn how you
-decide, and ask less. They always say plainly that they're an AI.
+Everything stays on your machine, in one file, except the calls to the models, on your
+own key.
+
+> **v0.5 is under way on this branch.** The engine and API run as one program on SQLite;
+> Tinio's own web app, which they'll be raised and talked to in, comes next, and a desktop
+> app after it. Until then the API is how to use it ([SETUP](docs/SETUP.md)). The latest
+> release, v0.4, runs one agent on Telegram.
 
 ## What makes them different
 
 - **Character.** The same agent every day, with one voice and one taste: a story they never
   contradict, a personality, a routine. Anything their story doesn't cover, like a
   favourite food or an opinion, they decide the first time it comes up, and remember.
-- **Memory.** You, the people in your life, what they made, and what you decided.
+- **Memory.** You, the people in your life, what they made, what you decided, and every
+  topic you have going: pick one up months later and they know where it stood.
 - **Initiative.** A plan each morning, work done before you ask, promises kept on time.
 - **Real work.** Writing, notes, reading notes on books and web pages, and files you can
   download: PDFs, Word documents, spreadsheets, calendar invites, music as MIDI.
@@ -31,99 +35,73 @@ decide, and ask less. They always say plainly that they're an AI.
 
 ## Get started
 
-You need a Telegram bot token from [@BotFather](https://t.me/BotFather), an OpenAI API key,
-and Postgres, or Docker so Tinio can start Postgres for you. Download Tinio from the
-[latest release](https://github.com/Grandbusta/tinio/releases/latest), or install it with Go:
+You need Go 1.27+ and an OpenAI API key. No database, no Docker.
 
 ```bash
-go install github.com/Grandbusta/tinio/cmd/tinio@latest
+go run ./cmd/tinio
 ```
 
-Then, in a folder for your agent:
+The first time, Tinio makes its data folder, its database and a key of its own, and
+waits for yours. Set your OpenAI key once; it's kept sealed and the agents start on it.
+On this machine there's no sign-in: it's yours. See [docs/SETUP.md](docs/SETUP.md) for
+the key, where your data is, reaching it from your phone, and every setting.
 
-```bash
-tinio new
-```
-
-Pick a character, paste your bot token and OpenAI key, message your bot once so it knows
-it's you, and say who you are to them. Tinio gives them their own database and starts them.
-The `.env` it writes holds only where that database is and the key to their secrets. After
-that, start them with:
-
-```bash
-tinio
-```
-
-`tinio doctor` checks everything they need and says what's wrong. `tinio backup` keeps
-everything about them in one file. For Docker, every setting and setting up by hand, see
-[docs/SETUP.md](docs/SETUP.md).
-
-**What it costs:** only your OpenAI usage. Their own day is capped by `budget_usd` in
-`work.yaml` ($0.05 a day at a human pace), and a message to them costs a fraction of a
-cent.
+**What it costs:** only your OpenAI usage, under a weekly cap you set ($5 to start). A
+reply costs a fraction of a cent, and an agent's own day about a cent at a human pace.
 
 ## The characters
 
-Five come ready in [characters](characters). Nothing about any of them is in the code.
+Six come ready in [characters](characters), each already good at a job, working in your
+time zone. Nothing about any of them is in the code.
 
-| | Where | Working toward |
-|---|---|---|
-| **Daniel** | Lagos | becoming a music producer people in Lagos know by name |
-| **Mei** | Taipei | a first collection of her poems, in both languages, side by side |
-| **Tomás** | Buenos Aires | teaching himself to code well enough to work anywhere |
-| **Priya** | Bengaluru | a cookbook of her grandmother's kitchen |
-| **Elsa** | Gothenburg | the history of her neighbourhood, before the people who remember it are gone |
+| | What they do |
+|---|---|
+| **Zara** | Social media: posts, content calendars and campaigns that sound like you. |
+| **Kenji** | Software: working code, design docs and honest code reviews. |
+| **Marcus** | Futures trading research: market briefs, trade plans and a risk sheet, for you to decide on. |
+| **Sofía** | Product: specs, roadmaps and what users actually said. |
+| **Henrik** | Bookkeeping and finance: budgets, cash-flow forecasts and clear books. |
+| **Ayesha** | Copywriting: articles, newsletters and pages that get read. |
 
-Or write your own. An agent is three files: `character.yaml` is who they are, `work.yaml`
-is how they work, and `judgment.yaml` is how you decide
-([making your own character](docs/SETUP.md#making-your-own-character)).
+All of them hand you drafts and plans: nothing they make leaves the chat without you.
 
 ## A day with them
 
 | When | What |
 |---|---|
-| **08:00** | They plan the day, mostly moving a goal forward through a project or a learning plan. |
-| **Through the day** | They do it, for real: making things, reading books and web pages, studying how others do it. Set a `pace` and they work faster than a person: at `pace: 10` their waking day runs in ten rounds, each planned from how the last went. |
+| **Morning** | They plan the day, mostly moving a goal forward through a project or a learning plan. |
+| **Through the day** | They do it, for real: making things, reading books and Wikipedia, studying how others do it. At a faster pace their waking day runs in more rounds, each planned from how the last went. |
 | **Any time** | Reminders you asked for, promises they made you, and now and then a check-in on something going on in your life. |
-| **22:00** | A journal entry. |
+| **Evening** | A journal entry. |
 | **Sunday** | A weekly review: goals updated, learning plans moved on, and a look back at how their decisions turned out. |
 
 ## Teach them
 
 - **Skills.** Give them know-how in the Agent Skills format (a folder with a `SKILL.md`):
-  how to write an invoice, your style guide, a cooking technique. `tinio skill add` teaches
-  one, and they use it whenever a chat or their work fits.
-- **Tools.** Connect an MCP server and they can read what you share, like a folder of notes
-  or a price list, and watch an inbox or a feed for something new.
+  how to write an invoice, your style guide, a technique. They use it whenever a chat or
+  their work fits.
+- **Connections.** Connect Google or Atlassian and they can read your calendar, a file you
+  pick or an issue, and propose changes that wait for your yes.
 - **Corrections.** "I live in Lekki, not Ikoyi", "forget what I told you about the bank",
-  "that verse was weak": they take it in.
+  "that draft was weak": they take it in.
 
 ## You stay in charge
 
-- **Approvals.** Messaging someone first, promising something, publishing a work, changing
-  a dream, running a tool that changes things: by default they ask, and you get the exact
-  thing on Telegram with **Approve** and **Deny**. Silence is no. Email and posts through a
-  tool ask every time, and money is never theirs to spend.
+- **Approvals.** Messaging someone first, promising something, changing a dream, using a
+  tool that changes things: by default they ask, with the exact thing, where, when and
+  whether it can be undone, and you can change it before you say yes. Silence is no. Money
+  is never theirs to spend.
 - **Your judgment.** Your principles, priorities, boundaries and past decisions shape their
-  choices. You choose which decisions they learn from, in the console.
-- **Your keys.** Their bot token, API keys and tokens are sealed in their database with a
-  key only you hold, and never reach the model, a log or an export.
-
-## See inside
-
-- **The mind console**, private and on your own machine: their mind lighting up live as
-  each decision flows through it, every decision and why, their memory, days, works,
-  growth and judgment.
-- **Their profile page**, public: a personal website they write themselves, with the works
-  they decide are fine to share. Facts about other people and their journal never appear
-  on it.
+  choices, and you choose which decisions they learn from.
+- **Your keys.** Your OpenAI key and the accounts you connect are sealed with a key only
+  your machine holds, and never reach the model, a log or the screen.
 
 ## Learn more
 
-- [Working with them](docs/GUIDE.md): talking, promises, their day, growth, judgment, the
-  console and every command.
-- [Setup and every setting](docs/SETUP.md): `tinio new`, Docker, an agent's files, the
-  config, developing.
+- [Working with them](docs/GUIDE.md): talking and topics, promises, their day, growth,
+  judgment and what they may do.
+- [Setup and every setting](docs/SETUP.md): running it, your key, your data, the settings,
+  developing.
 - [How it works inside](docs/ARCHITECTURE.md): the two-system mind, memory, and how the
   parts fit.
 - [What's changed](CHANGELOG.md).

@@ -2,21 +2,27 @@
 
 ## Unreleased (v0.5, under way)
 
-**Many agents, from the platform's engine**
-- The engine and API are a one-time copy of the platform's (`tinio-backend` at 0ccb7c5):
-  many agents in one database, a worker that runs them and lets them rest, the chat
-  through the database, topics, looking before replying, Wikipedia and books in a reply,
-  connections (Google, Atlassian), request cards you can change, quiet hours and pausing,
-  the week's usage meter (still on the platform's plans, until it's a cap you set), skills
-  with checks, and the six job-ready characters.
-- Left out, as the platform's own: the Skills market, admin, the invite-only beta,
-  feedback, and email through Resend.
-- The v0.4 commands (`tinio new`, `run`, `agent`, `secret`, `skill`, `doctor`, `backup`,
-  `restore`) and the five life characters are out until they come back per agent; they're
-  in git history.
-- Still to come before v0.5.0: SQLite instead of Postgres, one binary that serves the API,
-  runs the agents and serves its own web app, no sign-in on your own machine, `TINIO_KEY`
-  generated on first run, Telegram, local tools, backup and moving from v0.4.
+**Many agents, on your own machine**
+- One program, `tinio`: the API and every agent in one process, listening only on this
+  machine. Everything is in one SQLite file in your data folder (Application Support on
+  macOS, `%AppData%` on Windows, `~/.local/share/tinio` elsewhere): no Postgres, no Docker.
+- No sign-in on this machine; another device on your network gets in with
+  `TINIO_PASSCODE`. Tinio makes its key on first run and keeps it in the data folder.
+- You bring only your OpenAI key: set it once through the API, kept sealed and shown only
+  masked; the agents start on it, and again when it changes. The models have defaults.
+- The week is a spending cap you set ($5 to start, or no limit), with light mode past it.
+  No plans, no limit on agents, and every pace yours to choose.
+- The engine is a one-time copy of the platform's: topics, looking before replying,
+  Wikipedia and books in a reply, connections (Google, Atlassian), request cards you can
+  change, quiet hours and pausing, skills with checks, and the six job-ready characters.
+  The Skills market, admin, the beta, feedback and email are the platform's alone.
+
+**Still to come before v0.5.0:** Tinio's own web app, served by the same program; Telegram,
+local tools, backup and moving from v0.4, per agent; the desktop app.
+
+**Not here until they come back:** the v0.4 commands (`tinio new`, `agent`, `secret`,
+`skill`, `doctor`, `backup`, `restore`), Telegram, the public profile page, and the five
+life characters (in git history).
 
 ## Cheaper, never released as v0.4.1 (in v0.5)
 

@@ -1,14 +1,14 @@
 # AGENTS.md
 
 > **v0.5, under way.** This branch started as a one-time copy of the platform's engine and
-> API (`tinio-backend` at `0ccb7c5`, 21 November 2026), with the market, admin, the beta,
-> feedback and email through Resend taken out. Open-source Tinio is its own codebase from
-> here: nothing is shared with the platform, and a fix is ported by hand when it's wanted.
-> Next, per the plan: SQLite instead of Postgres, one binary that serves the API, runs the
-> agents and serves its own web app (React on Vite), no sign-in on localhost, `TINIO_KEY`
-> generated on first run; then Telegram, local tools, backup and the v0.4 importer back,
-> per agent; the desktop app on Wails. The v0.4 commands (`tinio new`, `run`, `agent`,
-> `secret`, `doctor`, `backup`) are in git history until then.
+> API (`tinio-backend` at `0ccb7c5`, 21 November 2026), without the market, admin, the beta,
+> feedback or email. Open-source Tinio is its own codebase from here: nothing is shared
+> with the platform, and a fix is ported by hand when it's wanted. Done: SQLite, one
+> program, no sign-in on this machine, the key made on first run, keys from the app, a
+> weekly cap. Next, per the plan: its own web app (React on Vite) served by the program;
+> Telegram, local tools, backup and the v0.4 importer back, per agent; the desktop app on
+> Wails. The v0.4 commands (`tinio new`, `agent`, `secret`, `doctor`, `backup`) are in git
+> history until then.
 
 How to work on Tinio: what it is, where things are, and the rules every change is
 reviewed against. Read this before changing code. For users' docs, see
@@ -31,36 +31,38 @@ character. The mind keeps its own words for how they live (the life loop, `Life`
 config). Never call them an "AI
 person", "assistant", "companion" or "clone" in what users read.
 
-It is one Go binary run two ways: the API (Gin), which the app talks to, and the worker
-(`api worker`), which runs the agents. They meet only in Postgres, one database for every
-account and agent; OpenAI gives the models (System 1, a fast decision model that answers
-typed questions; System 2, a reasoning model that writes). Always write the name as
-**Tinio**, and `tinio` in code.
+It is one Go program on its owner's own machine: the API (Gin), which the app talks to,
+and the agents, in one process, with everything in one SQLite file in the data folder.
+OpenAI gives the models, on the owner's own key (System 1, a fast decision model that
+answers typed questions; System 2, a reasoning model that writes). Always write the name
+as **Tinio**, and `tinio` for the command and in code.
 
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `api/` | The binary: the HTTP API (every route in `api/main.go`; controllers, models, middlewares) and, as `api worker`, the agents. |
+| `cmd/tinio` | The command: `api.Main`. |
+| `api/` | The API (every route in `api/main.go`; controllers, models, middlewares) and running the agents beside it (`work`); `tinio eval`. |
 | `.env.example` | Every setting, with what it is; copied to `.env`, which is never committed. |
-| `characters/<name>/` | The six ready characters, loaded into the `characters` table (a new version when one changes) when the API starts: `template.yaml` (how the app offers them), `character.yaml` (who, and when their day runs), `judgment.yaml` (how the owner decides). How every agent works is the platform's defaults, in `internal/config`, on the models the environment names. |
+| `characters/<name>/` | The six ready characters, loaded into the `characters` table (a new version when one changes) when the API starts: `template.yaml` (how the app offers them), `character.yaml` (who, and when their day runs), `judgment.yaml` (how the owner decides). How every agent works is the defaults in `internal/config`, on the models the environment names. |
 | `prompts/*.md` | Everything System 2 is told, as templates. |
-| `decisions/*.yaml` | System 1's question sets, versioned (`incoming_message@1`). A set's `model:` has it answered by that model as JSON, through the Responses API (`system1/reasoned`), not the Decisions API; its thresholds are then the ones `api eval` found for that model. |
-| `evals/<set>.jsonl` | Test cases for each set: what the mind gives System 1, and the right answer. `go run ./api eval` asks them and reports accuracy, how much is decided alone, cost and latency; check a set's model or threshold change with it. Leave out any case a careful person could label two ways. |
-| `evals/replies/<character>.yaml`, `evals/judge.md` | Conversations to have with a new agent raised from each ready character, what they must leave behind (reminders, promises, facts, what a reply must or mustn't say), and what a good reply does; the judge's rubric. `go run ./api eval -replies` has them on the real mind (`host.Talk`, their clock held still) in `EVAL_DATABASE_URL`, then checks and judges them: how the reply model is chosen. `go run ./api eval -day` has a new agent live a whole day on a clock it ticks, and reports what it cost. |
+| `decisions/*.yaml` | System 1's question sets, versioned (`incoming_message@1`). A set's `model:` has it answered by that model as JSON, through the Responses API (`system1/reasoned`), not the Decisions API; its thresholds are then the ones `tinio eval` found for that model. |
+| `evals/<set>.jsonl` | Test cases for each set: what the mind gives System 1, and the right answer. `go run ./cmd/tinio eval` asks them and reports accuracy, how much is decided alone, cost and latency; check a set's model or threshold change with it. Leave out any case a careful person could label two ways. |
+| `evals/replies/<character>.yaml`, `evals/judge.md` | Conversations to have with a new agent raised from each ready character, what they must leave behind (reminders, promises, facts, what a reply must or mustn't say), and what a good reply does; the judge's rubric. `go run ./cmd/tinio eval -replies` has them on the real mind (`host.Talk`, their clock held still) in a throwaway database of its own, then checks and judges them: how the reply model is chosen. `go run ./cmd/tinio eval -day` has a new agent live a whole day on a clock it ticks, and reports what it cost. |
 | `docs/` | Setup and settings, the guide to what owners notice, the architecture. |
 | `tinio.go` | Builds `prompts/`, `decisions/` and `characters/` into the binary (`tinio.Files`); a file on disk at the same path wins. Read them only through it. |
-| `deploy/Dockerfile` | One image: the API, or the worker with the argument `worker`. |
-| `.github/workflows/test.yml` | gofmt, vet, the tests with Postgres, and the Docker build. |
+| `.github/workflows/test.yml` | gofmt, vet and the tests. |
+| `.github/workflows/release.yml` | A `v*` tag: `cmd/tinio` built for each system, on a draft release. |
 
 ### Packages (`internal/`)
 
 | Package | What it does |
 |---|---|
-| `host` | The worker: many minds in one process, each agent leased so it runs in one place, fed their owner's chat from the database, resting when idle. |
+| `db` | The database: one SQLite file (pure Go, WAL), its one migration in `db/migrations` (goose), values converted both ways (times as fixed-width UTC text, lists as JSON, embeddings as BLOBs), the SQL functions `now`, `at_plus`, `greatest` and `least`, and what's notified in the process (`Notify`, `Listen`) in place of Postgres's NOTIFY. |
+| `host` | Running the agents: many minds in one process, each claimed while it runs, fed their owner's chat from the database, resting when idle. |
 | `channel/web` | The app's chat: replies, asks, calls and files are rows in `chat_messages`. |
 | `mind` | The person: everything they do. Two loops (see below); one file per part of life (`life.go`, `initiative.go`, `calls.go`, `review.go`, `growth.go`, `learning.go`, `judgment.go`, `works.go`, `files.go`, `music.go`, ...). |
-| `store` | All of Postgres; migrations in `store/migrations` (goose). |
+| `store` | An agent's memory in the database, every query scoped by their `agent_id`. |
 | `memory` | The data model: plain types, no behaviour beyond small methods like `Work.Carries`. |
 | `providers/system1`, `system2`, `embed` | Interfaces, each with an OpenAI implementation (`openai-go`); `openaiclient` shares the settings. |
 | `decision`, `decision/questions` | What a decision is; loading and checking question sets. |
@@ -105,16 +107,9 @@ go build ./... && go vet ./...
 go test ./...
 ```
 
-The store tests need a disposable Postgres, never a real one. Start a fresh one for
-each run (the tests leave rows behind and expect to be the newest):
-
-```bash
-docker run -d --rm --name tinio-test-pg -e POSTGRES_PASSWORD=test -e POSTGRES_DB=tinio_test -p 55432:5432 postgres:16-alpine
-TINIO_TEST_DATABASE_URL='postgres://postgres:test@localhost:55432/tinio_test?sslmode=disable' go test -race ./...
-docker rm -f tinio-test-pg
-```
-
-`gofmt -l .` must print nothing. CI runs vet, the tests with Postgres, and the Docker build.
+A test that needs a database opens a new SQLite file in its own temporary folder
+(`t.TempDir()`): nothing to start, nothing left behind. Run them with `-race` before a
+commit. `gofmt -l .` must print nothing. CI runs gofmt, vet and the tests.
 
 System 2's instructions are held to a size in bytes (`TestPromptBudget`, sizes in
 `internal/mind/testdata/prompt_budget.json`): a prompt that grows or shrinks fails until its
@@ -221,12 +216,18 @@ safe for concurrent use; a test of both loops orders every step through channels
   it is.
 - Skills are trusted like prompts, since the owner installs them, but grant no permission,
   and their scripts are never run.
-- The console listens on localhost unless a token of 16+ characters is set.
-- Everything particular to an agent is in the database under their `agent_id`, behind
-  row-level security, never in files or the code: their character, judgment, skills and
-  memory. The database role is never a superuser, which would skip that security.
-- Keys are only in the environment for now (sealed with `TINIO_KEY` in the database once
-  first run asks for them), and never reach System 2, a log or the app.
+- Only this machine gets in without signing in (`middlewares.FromThisMachine`: over
+  loopback, to localhost or a loopback address by name, not forwarded from elsewhere). It
+  listens on 127.0.0.1 unless `TINIO_ADDR` says otherwise; another device needs
+  `TINIO_PASSCODE`, 16 characters or more. Requests that change anything come only from
+  the app (`FromOurSite`).
+- Everything particular to an agent is in the database under their `agent_id`, never in
+  files or the code: their character, judgment, skills and memory. There's no row-level
+  security in SQLite, so every query names `agent_id` (the store passes it as `$1`).
+- The owner's keys (OpenAI, the accounts they connect) are sealed with the key in the data
+  folder (made on first run, readable only by its owner, or `TINIO_KEY`) before they're
+  stored, shown only masked, and never reach System 2, a log, an export or the app.
+- Nothing leaves the machine but calls to the models and the services the owner connects.
 
 ## Docs to keep in step
 

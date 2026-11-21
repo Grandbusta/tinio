@@ -50,7 +50,6 @@ var (
 	ErrNoSuchFact         = Problem{http.StatusNotFound, "no_such_fact", "That isn't something they remember.", nil}
 	ErrNoSuchVersion      = Problem{http.StatusNotFound, "no_such_version", "That isn't one of their versions.", nil}
 	ErrNoSuchSkill        = Problem{http.StatusNotFound, "no_such_skill", "They don't have that know-how.", nil}
-	ErrNoSuchMarketSkill  = Problem{http.StatusNotFound, "no_such_market_skill", "That skill isn't in the market.", nil}
 	ErrNoSuchPage         = Problem{http.StatusNotFound, "no_such_page", "There's nothing here.", nil}
 	ErrNoSuchPrinciple    = Problem{http.StatusNotFound, "no_such_principle", "That isn't one of their principles.", nil}
 	ErrNoSuchConnection   = Problem{http.StatusNotFound, "no_such_connection", "That isn't one of your connections.", nil}

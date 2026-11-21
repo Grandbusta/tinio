@@ -86,7 +86,7 @@ func discover(ctx context.Context, server, redirect string, hc *http.Client) (Gr
 		return Grant{}, errors.New("its authorization server doesn't let Tinio register")
 	}
 	reg, err := oauthex.RegisterClient(ctx, asm.RegistrationEndpoint, &oauthex.ClientRegistrationMetadata{
-		RedirectURIs: []string{redirect}, ClientName: "Tinio", ClientURI: "https://heytinio.com",
+		RedirectURIs: []string{redirect}, ClientName: "Tinio", ClientURI: "https://github.com/Grandbusta/tinio",
 		GrantTypes: []string{"authorization_code", "refresh_token"}, ResponseTypes: []string{"code"}, TokenEndpointAuthMethod: "none",
 	}, hc)
 	if err != nil {

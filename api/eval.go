@@ -23,10 +23,10 @@ import (
 // results/, each run's results (kept out of git).
 const evalDir = "evals"
 
-// evaluate is `api eval`: it asks System 1 the test cases with the question
+// evaluate is `tinio eval`: it asks System 1 the test cases with the question
 // sets as they are now, and reports how often it's right, how much it decides
-// alone, what it costs and how long it takes. It needs the platform's OpenAI
-// key, never the database.
+// alone, what it costs and how long it takes. It needs OPENAI_API_KEY, and
+// never touches the owner's database.
 func evaluate(ctx context.Context, args []string, log *slog.Logger) error {
 	fs := flag.NewFlagSet("eval", flag.ContinueOnError)
 	only := fs.String("set", "", "question sets, comma-separated (default: every set with cases)")

@@ -1,548 +1,214 @@
 # Setup and configuration
 
-Everything about getting an agent running, and every setting there is. For what Tinio is,
-see the [README](../README.md); for working with them day to day, [GUIDE.md](GUIDE.md); for how it works inside,
-[ARCHITECTURE.md](ARCHITECTURE.md).
+Running Tinio on your own machine, and every setting there is. For what it is, see the
+[README](../README.md); for what owners notice, [GUIDE.md](GUIDE.md); for how it works
+inside, [ARCHITECTURE.md](ARCHITECTURE.md).
 
-- [Quick start](#quick-start)
-- [Setting up by hand](#setting-up-by-hand)
-- [Running with Docker](#running-with-docker)
-- [The files](#the-files)
-- [character.yaml: who they are](#characteryaml-who-they-are)
-- [work.yaml: how they work](#workyaml-how-they-work)
-- [judgment.yaml: how you decide](#judgmentyaml-how-you-decide)
-- [configs/tinio.yaml: the machinery](#configstinioyaml-the-machinery)
-- [.env, secrets and the environment](#env-secrets-and-the-environment)
-- [Making your own character](#making-your-own-character)
+- [Running it](#running-it)
+- [Your key](#your-key)
+- [Where your data is](#where-your-data-is)
+- [Reaching it from another device](#reaching-it-from-another-device)
+- [.env: the settings](#env-the-settings)
+- [How every agent works](#how-every-agent-works)
+- [Characters](#characters)
 - [Developing](#developing)
 
-## Quick start
+## Running it
 
-You need a Telegram account and an OpenAI API key with access to the Decisions API. A
-Postgres database helps, but `tinio new` can start one for you with Docker.
-
-Tinio is one file: download it for your system from the
-[latest release](https://github.com/Grandbusta/tinio/releases/latest), or build it with
-Go 1.27+:
+You need Go 1.27+ and an OpenAI API key with access to the Decisions API. Nothing else:
+no database to set up, no Docker.
 
 ```bash
-go install github.com/Grandbusta/tinio/cmd/tinio@latest
+go run ./cmd/tinio
 ```
 
-Everything every agent shares (the config, prompts, question sets and characters) is built into
-it. Then, in a folder for them (their `.env` is written there):
+One program serves the API on `127.0.0.1:8081` and runs every agent; its data is one
+SQLite file in your data folder. The first time, it makes the folder, the database and
+a key of its own, and waits for your OpenAI key.
+
+The app is next: Tinio's own web app (React on Vite), served by the same program, and a
+desktop app (Wails) after it. Until they're built, the API is all there is: everything
+the app will do, it does over `/v1/*`.
+
+## Your key
+
+Your OpenAI key is the only thing you bring. Set it once, and it's kept sealed in the
+database, shown only masked (`sk-…abcd`) from then on:
 
 ```bash
-tinio new
+curl -X POST http://127.0.0.1:8081/v1/keys -H 'Origin: http://localhost:3001' -H 'Content-Type: application/json' -d '{"openai": "sk-..."}'
 ```
 
-It asks, then raises them in their own database and starts them:
+The agents start as soon as it's set, and again on a new one. `OPENAI_API_KEY` in the
+environment is used instead, if it's set, and can't be changed from the app.
 
-1. **Which character:** one of the five in [characters](../characters).
-2. **Your bot token:** make a bot with [@BotFather](https://t.me/BotFather) (`/newbot`) and
-   paste its token. It checks it and shows the bot's name.
-3. **Your OpenAI key and model** (`gpt-6-luna` by default).
-4. **A Postgres URL**, or it starts one on this machine with Docker. It won't use a
-   database where another agent already lives.
-5. **You:** message your bot once, so it knows it's you, then say what they should call
-   you and who you are to them (their father, mentor, friend...).
+Every model call is on your key, so the week has a cap you set: $5 to start, changed with
+`POST /v1/usage {"cap_usd": 10}` (`0` for no limit). See [the week](#how-every-agent-works).
 
-**An agent is their database.** Their character, how they work, your judgment, their skills
-and their keys (bot token, OpenAI key, console token) are all in it, the keys sealed. `.env`
-only has two lines: `DATABASE_URL`, where they live, and `TINIO_KEY`, which opens their
-keys. Keep both safe and together: a copy of the database alone holds no working key.
+## Where your data is
 
-After that, `tinio` starts them again. Raising a new agent when one
-already lives in the database `.env` points to leaves them as they are and moves their
-`.env` to `.env.<name>`: `cp .env.<name> .env` brings them back.
+Everything is in one folder, which nobody but you can read:
 
-Each agent needs their own database, their own bot and their own OpenAI key (a project
-key with a spend limit keeps a leak small). Telegram allows one poller per
-bot, so a second copy on the same bot gets `409 Conflict` errors.
+| System | Folder |
+|---|---|
+| macOS | `~/Library/Application Support/Tinio` |
+| Windows | `%AppData%\Tinio` |
+| Linux and others | `$XDG_DATA_HOME/tinio`, or `~/.local/share/tinio` |
 
-## Setting up by hand
+`TINIO_DATA` puts it somewhere else. It holds `tinio.db` (with `tinio.db-wal` and
+`tinio.db-shm` beside it while it runs) and `key`, which seals every key and token kept:
+your OpenAI key, and the accounts you connect. Keep the two together: without `key`,
+what it sealed can't be opened again, and you'd set your key and connect again.
+`TINIO_KEY` uses a key of your own instead (64 hex characters).
 
-Without `tinio new`: put `DATABASE_URL` and `TINIO_KEY` (`openssl rand -hex 32`) in
-`.env`, then give them their keys and a character.
+To back it up, copy the folder while Tinio isn't running.
 
-1. **Create a bot.** Message [@BotFather](https://t.me/BotFather), send `/newbot`, and copy
-   the token. Then send your bot any message and open
-   `https://api.telegram.org/bot<token>/getUpdates`: your user ID is the number in
-   `"from":{"id":...}`.
-2. **Give them their keys** ([below](#env-secrets-and-the-environment)); each asks for
-   the value without showing it:
+## Reaching it from another device
 
-   ```bash
-   tinio secret set TELEGRAM_BOT_TOKEN
-   ```
-
-   and the same for `TELEGRAM_OWNER_ID`, `OPENAI_API_KEY` and `OPENAI_MODEL`.
-3. **Give them a character.** Copy one from [characters](../characters) to a folder and put
-   yourself in it (see [Making your own character](#making-your-own-character)), then
-   import it; its
-   `character.yaml`, `work.yaml`, `judgment.yaml` and `skills/` go into their database:
-
-   ```bash
-   tinio agent import mine/
-   ```
-
-4. **Start them**, from the folder with their `.env`:
-
-   ```bash
-   tinio
-   ```
-
-   You'll see `tinio awake`.
-5. **Talk to them** on Telegram, open the console at
-   [http://127.0.0.1:8090/](http://127.0.0.1:8090/) and their profile page at
-   [http://127.0.0.1:8080/](http://127.0.0.1:8080/).
-
-## Running with Docker
-
-One agent per container. Each release publishes an image for amd64 and arm64,
-`ghcr.io/grandbusta/tinio`; the agent is their database, reached with the two lines in
-their `.env`, so nothing about them is in the image.
+On this machine there's no sign-in: Tinio is yours. Nothing else can reach it, since it
+listens only on `127.0.0.1`. To use it from your phone on the same Wi-Fi, set both:
 
 ```bash
-docker run -d --name daniel --restart always --env-file .env -p 127.0.0.1:8090:8090 -p 8080:8080 ghcr.io/grandbusta/tinio
+TINIO_ADDR=0.0.0.0:8081 TINIO_PASSCODE='a long passcode of your own' go run ./cmd/tinio
 ```
 
-To build it yourself, from the source: `docker build -f deploy/Dockerfile -t tinio .`
+The other device signs in once with the passcode (16 characters or more), and stays
+signed in for 30 days. A request is only taken as this machine's when it comes over
+loopback, to `localhost` or a loopback address by name, and wasn't forwarded from
+elsewhere: a web page that points its own name at your machine doesn't get in.
 
-```bash
-docker logs -f daniel
-```
+## .env: the settings
 
-**The console needs a token in a container.** It shows everything about them (memory,
-your conversations, your judgment) and can change some of it. On your own machine it
-listens on `127.0.0.1`, which nothing else can reach. Inside a container it has to listen
-on all addresses (`TINIO_CONSOLE_ADDR`) so `-p` can reach it, and it can't tell whether
-you published it as `-p 127.0.0.1:8090:8090` (only this machine) or `-p 8090:8090` (anyone
-who can reach it), so it won't start without a console token (16+ characters; `tinio new` makes one, and
-`tinio secret list` shows its start). Open it once as `http://localhost:8090/?token=<token>`
-and the browser remembers it. On a Linux server you can skip the token with
-`--network host` and `-e TINIO_CONSOLE_ADDR=127.0.0.1:8090` (instead of `-p`).
+Tinio reads `.env` beside it; anything already set in the environment wins. None is
+needed. [.env.example](../.env.example) has them all.
 
-**The database** comes from `DATABASE_URL`, as without Docker. Where it points depends on
-where Postgres runs:
-
-- **A managed Postgres:** as is, e.g. `postgres://user:pass@host:5432/tinio?sslmode=require`.
-- **Postgres on the same machine, outside Docker:** inside a container `localhost` is the
-  container itself, so use `host.docker.internal`, e.g.
-  `postgres://postgres:secret@host.docker.internal:5432/tinio?sslmode=disable`. Docker
-  Desktop provides that name; on Linux add `--add-host=host.docker.internal:host-gateway`.
-- **Postgres in a container too:** put both on one network and use the database
-  container's name as the host:
-
-  ```bash
-  docker network create tinio
-  ```
-
-  ```bash
-  docker run -d --name tinio-db --network tinio --restart always -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=tinio -v tinio-db:/var/lib/postgresql/data postgres:16-alpine
-  ```
-
-  Then set `DATABASE_URL=postgres://postgres:secret@tinio-db:5432/tinio?sslmode=disable`
-  and add `--network tinio` to the `docker run` for Tinio. The `tinio-db` volume keeps
-  their memory when the container is replaced.
-
-## The files
-
-An agent has three sections, kept in their database as YAML. Each character in
-[characters](../characters) is a folder of them as files, plus a `template.yaml`.
-
-| Section | What's in it |
-|---|---|
-| [character](#characteryaml-who-they-are) | Who they are: their name, where they live, their story, personality, routine, what they make, dreams, starting skills and family. |
-| [work](#workyaml-how-they-work) | How they work: their pace, their days, check-ins, abilities, budget, tools, what they may do without asking you, and how often they ask what you'd choose. |
-| [judgment](#judgmentyaml-how-you-decide) | How you decide (optional): your priorities, boundaries, principles and past decisions. |
-
-Change them with `tinio agent`. Every change is checked the way it is when they start, and
-kept as a new version, so you can go back:
-
-| Command | What it does |
-|---|---|
-| `tinio agent edit <section>` | Opens it in `$EDITOR`; saved only if it checks out. |
-| `tinio agent export <section>` | Prints it. |
-| `tinio agent export <folder>` | Writes all three and their skills to a new folder, laid out like a character in `characters/`. Never their keys. Files from before v0.4.0 (`life.yaml`, `living.yaml`) still import. |
-| `tinio agent import <file\|folder>` | Takes a `character.yaml`, `work.yaml` or `judgment.yaml`, or a folder of them (with `skills/`). |
-| `tinio agent history <section>` | Its versions, newest (in use) first. |
-| `tinio agent rollback <section> <version>` | Makes an earlier version the one in use. |
-
-Changes apply the next time they start.
-
-The rest is the same for everyone, and built into Tinio. A file or folder at the same
-path in the folder where you run it is used instead, so you can change one without a
-rebuild (copy it from the source first); `-config` points at another config:
-
-| File | What's in it |
-|---|---|
-| [configs/tinio.yaml](#configstinioyaml-the-machinery) | Models, Telegram, prompts, addresses, pricing. |
-| [.env](#env-secrets-and-the-environment) | Where their database is, and the key to their secrets. Never committed. |
-| [prompts/](../prompts), [decisions/](../decisions) | System 2's instructions and System 1's questions, written for anyone and filled in from the agent. You shouldn't need to edit them. |
-
-`work` is read over the defaults below with the same keys, so you set only what you
-change. An empty `work` means every default.
-
-## character.yaml: who they are
-
-Written in the third person with their name ("Tobi grew up in Ibadan."), so they never
-confuse themselves with the people they talk to. They won't start without a name and a
-story.
-
-| Key | What it is |
-|---|---|
-| `name` | What they're called. |
-| `timezone` | Where they live, e.g. `Africa/Lagos`: their days, reminders and check-ins are in it. |
-| `story` | Their life, one fact per line. They never contradict it; anything it doesn't cover they decide the first time it comes up, and remember. |
-| `personality` | How they are with people. It shapes every reply. |
-| `routine` | How their days usually go. It steers how they plan; they decide the rest. |
-| `makes` | What they make, in writing: `kind` (snake_case; their works are filed under it) and `about` (what it is and what a good one has). `data` (optional) is what each one carries beside its words so it can be made into a file: `score` for music (sent as MIDI), `files` for code (a zip), `table` (a spreadsheet or CSV) or `events` (a calendar). Everyone can also write `notes`, short `writing`, a `table` and a `schedule` of dated events, and keeps a journal. |
-| `dreams` | Who they want to become. Copied into memory the first time; after that they may change them, asking you. |
-| `skills` | Where they start: `name`, `level` (1–10) and `shown_by` (the kinds of work that show it). After that their levels come from what they make and your feedback. |
-| `family` | Who they're born knowing: `name`, `relation`, `account` (`telegram:<user id>`, only if they talk to them) and `circle` (`family` by default, or `friend`, `school`, `work`, `community`). |
-
-```yaml
-makes:
-  - {kind: poem, about: "a short poem, usually free verse, about something from the day"}
-skills:
-  - {name: poetry, level: 3, shown_by: [poem]}
-```
-
-## work.yaml: how they work
-
-### Their pace
-
-```yaml
-daily_life:
-  pace: 10
-```
-
-How much faster than a person they work and learn. At pace 1 (the default) they plan their
-day once in the morning. At a higher pace their waking day, from `plan_at` to `journal_at`,
-runs in that many **rounds**: plan a few things, do them, see how they went, plan the next
-few. One plan covers up to three rounds, and no new plan is made while what they planned is
-still to do. At pace 10 with a 06:00–22:00 day, that's a round every 1 hour 36 minutes,
-about 40 activities a day from four plans. The day's first plan is the one that also adds
-the journal and makes the day's calls to you.
-
-Their progress keeps up. After each practice piece they check it against their learning
-plan's current stage, and when it meets the stage's "done when" they move on to the next
-stage straight away, without waiting for the weekly review. Goals are due in days rather
-than weeks (what takes a person four weeks takes them about three days at pace 10), practice
-pieces are sized for a round or two, and calls are looked back on after a few hours.
-
-Their daily budget and web caps are per person-paced day and grow with pace: at 10, $0.05
-becomes $0.50, and 10 searches become 100. Anything involving you stays at human pace:
-chats, check-ins, at most 3 calls and 1 review request a day, approvals that expire after
-24 hours. Pace is from 1 to 100; past about 20, extra rounds mostly repeat what they already
-know unless they get real feedback.
-
-### Their day
-
-| Key | As shipped | What it is |
+| Variable | Default | What it is |
 |---|---|---|
-| `daily_life.enabled` | `true` | Whether they have a day of their own. |
-| `daily_life.pace` | `1` | How much faster than a person they work (see above). |
-| `daily_life.plan_at` | `08:00` | When they plan their day (their first round). |
-| `daily_life.journal_at` | `22:00` | When they write their journal; nothing is planned past it. |
-| `daily_life.review_at` | `Sun 20:00` | Their weekly review: goals, dreams, lessons, how calls turned out. |
-| `daily_life.activities` | `4` | Things they plan a round (a day, at pace 1), besides the journal. |
-| `daily_life.budget_usd` | `0.05` | Most their own day may cost, per person-paced day; past it, the rest is missed. Multiplied by pace. |
-| `daily_life.model` | System 2's | The model for their own day: planning, their own activities, learning, the weekly review, what they watch. A cheaper one (`gpt-6-luna` is a twentieth of `gpt-6.1-sol`) makes their day cost about a cent. Replies, and what they make or say for someone, always use System 2's. |
-| `daily_life.service_tier` | standard | `flex` for their own day: OpenAI's cheaper, slower tier, where the model offers it. When flex has no room, the call goes through at the standard tier. While it waits, the rest of their day (reminders too) waits with it. Costs are recorded at the standard price. |
-| `daily_life.abilities` | all four | What they can do beyond writing; `[]` for none. See below. |
-| `daily_life.web.searches_per_day` | `10` | Web searches a day, multiplied by pace. |
-| `daily_life.web.pages_per_day` | `15` | Web pages read a day, multiplied by pace. |
+| `OPENAI_API_KEY` | none | Your OpenAI key, used instead of the one set in the app. |
+| `OPENAI_MODEL` | `gpt-6.1-terra` | System 2, which writes every reply. Must have a price in `internal/pricing`. |
+| `OPENAI_DECISION_MODEL` | `gpt-6-luna` | System 1, the decisions. |
+| `OPENAI_DAY_MODEL` | `gpt-6-luna` | Their own day: planning, learning, what they watch, the weekly review. About a cent a day. |
+| `OPENAI_LIGHT_MODEL` | `gpt-6-luna` | Replies once the week's cap is used (light mode). |
+| `OPENAI_WORK_MODEL` | `OPENAI_MODEL` | Making works, for themselves or someone. |
+| `TINIO_DATA` | see [above](#where-your-data-is) | The folder with the database and the key. |
+| `TINIO_ADDR` | `127.0.0.1:8081` | Where it listens. |
+| `TINIO_PASSCODE` | none | Lets another device in, 16 characters or more. Without it, only this machine. |
+| `TINIO_KEY` | made on first run | A key of your own instead of the one in the data folder. |
+| `APP_ORIGIN` | `http://localhost:3001` | Where the app is. Requests that change anything are taken only from it. |
+| `COOKIE_SECURE` | `false` | `true` when it's served over https. |
+| `TRUSTED_PROXIES` | `127.0.0.1,::1` | Proxies whose `X-Forwarded-For` is believed, comma-separated. |
+| `MAX_AGENTS` | `20000` | Most agents it runs at once. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | none | A Google client, for connecting Google. Its redirect URI is `APP_ORIGIN/api/v1/connections/callback`. |
+| `GOOGLE_API_KEY`, `GOOGLE_APP_ID` | none | For Google's file picker. |
 
-| Ability | What it does |
-|---|---|
-| `read_book` | Reads a public-domain book from Project Gutenberg, a passage a sitting, over many days. |
-| `read_article` | Reads a Wikipedia article. |
-| `web_search` | Searches the open web and reads the best page it finds. |
-| `read_page` | Reads a page one of their own searches found. |
+## How every agent works
 
-A new ability is code: a package under [internal/ability](../internal/ability) and one line
-in `abilityMakers` in [cmd/tinio/main.go](../cmd/tinio/main.go).
+Every agent works the same way; what's theirs is their character, their owner's
+judgment, and what their owner tells them in the chat. The defaults are in
+[internal/config](../internal/config/config.go):
 
-### Speaking first
-
-| Key | As shipped | What it is |
+| Setting | Value | What it is |
 |---|---|---|
-| `initiative.check_ins` | none | Times (`HH:MM`) they consider asking about something going on in your life. At most one check-in a day per person they know. |
-| `initiative.quiet` | `4h` | Only after the conversation has been quiet this long. |
-| `initiative.timezone` | their life's | Overrides `timezone` in `character.yaml`. |
+| Working memory | 8 exchanges, 30 minutes | How much of the current conversation System 2 sees, outside topics. |
+| Topics | the last 6 exchanges, and the chat's last 2 | What a reply in a topic is written from, besides its summary and what's settled. A topic is summed up after a 3-minute pause, and goes quiet after 7 days' silence. Quiet ones from the last 30 days are always considered for a message, and older ones when they're among the 3 closest in meaning (`internal/mind/topics.go`). |
+| Recall | 30 facts | The newest facts System 1 checks for relevance before each reply. |
+| Check-ins | after 4 hours' quiet | They consider checking in at their character's `check_ins` times, at most once a day. |
+| Their own day | 3 activities, $0.05, at pace 1 | Shown on Today. Budget and web caps (10 searches, 15 pages) grow with pace. The budget counts every model call of their day: plans, activities, promises, the review, learning plans, skill scores, stage checks, a work's data and what they watch. |
+| The week | a cap you set, $5 to start | What your agents may spend on your key in a week, all of them together (`POST /v1/usage`, `0` for no limit; `internal/usage`). Past it, light mode: replies on `OPENAI_LIGHT_MODEL` and their own day paused; past 150%, or a quarter of the week in one hour, they rest until it resets. The week counts from when Tinio first ran. |
+| Messages | 200 to each agent a day | A guard against a loop running up your bill, beside the cap (`api/config/constants.go`). |
+| Failed work | 3 more tries, 15, 30 and 60 minutes apart | A piece of work, a reminder, a promise's message, the day's plan or the weekly review that fails is tried again later, then given up; a piece cut off for length is given up at once. What a failed call cost is counted. |
+| Models | must have a price | Tinio and `tinio eval` refuse to run agents on a model missing from `internal/pricing`: its cost would count as $0 and no cap could hold. |
+| A quiet owner | 3 days, 7 days | Counted from the owner's last message (what the agent says first doesn't count). When their owner hasn't written for 3 days, their own day is one thing a day; after 7 (or if they've never written), it stops: no plan, review or old works' data. Back at once when they write. Reminders, promises and what they watch go on. |
+| Abilities | `read_book`, `read_article`, and the reading tools of the accounts you connect | What they can do beyond writing, in their day and before a reply. Searching and reading the open web is written (`web_search`, `read_page`) but not given to agents yet. |
+| Judgment calls | on, 1 a day, 30 minutes | They ask what you'd choose; a different pick followed by a message within 30 minutes is taken as why. |
+| Requests | denied after 24 hours | An unanswered request is no. |
 
-### What they may do on their own
+**Pace** is per agent, 1, 3 or 10, set in their settings (1 when they're raised): how much
+faster than a person they work and learn, and how much of your cap their own day uses. At a higher pace their waking day runs in that many rounds of
+planning and doing, and goals are due in days rather than weeks. Anything involving their
+owner stays at human pace.
 
-| Key | As shipped | What it is |
-|---|---|---|
-| `autonomy.classes` | below | For each kind of action: `auto` (on their own), `ask` (you approve on Telegram) or `forbid`. |
-| `autonomy.ask_expires` | `24h` | An unanswered request is denied after this. |
-| `autonomy.owner` | your Telegram ID | Who approves; the first of `TELEGRAM_OWNER_ID`. |
+**What they may do on their own.** Each kind of action is `auto`, `ask` (the owner approves
+in the chat) or `forbid`:
 
 | Class | What it covers | Default |
 |---|---|---|
 | `remember`, `reply` | keeping facts, answering messages | always auto |
 | `read_web` | abilities that fetch from the web | auto |
 | `use_tools` | reading tools from MCP servers | auto |
-| `write` | tools that change your own things: a file, a doc, a calendar | ask |
+| `write` | tools that change the owner's own things | ask |
 | `reach_out` | messaging someone first | ask |
 | `commit` | promising to make something for someone | ask |
 | `publish` | putting a work on their public page | ask |
 | `dream` | adding, rewording or dropping a dream | ask |
-| `external_message` | email, posts and DMs outside the chat, through a tool you connect | ask |
+| `external_message` | email, posts and DMs outside the chat | forbid: nothing leaves the chat yet |
 | `spend` | money | forbid |
 
-You can change most of these by telling them ("you can send reminders without asking");
-money and messages outside the chat change only here, never by chat.
+Owners change most of these by telling them ("you can send reminders without asking");
+money and messages outside the chat change only in the code, never by chat.
 
-### Learning your judgment
+## Characters
 
-| Key | As shipped | What it is |
-|---|---|---|
-| `judgment.calls` | `true` | Whether they ask what you'd choose on their own decisions. Off: they decide alone, and set and drop goals without asking. |
-| `judgment.asks_per_day` | `3` | Day-plan calls asked on Telegram a day, most at stake and least sure first. Goal calls are always asked. |
-| `judgment.reply_window` | `30m` | When you pick differently, your next message within this is taken as why. |
+The six ready characters are folders in [characters](../characters): Zara (social media),
+Kenji (software), Marcus (futures trading research), Sofía (product), Henrik (bookkeeping
+and finance) and Ayesha (copywriting). Each arrives already good at their job, and all of
+them hand over drafts and plans: nothing they make leaves the chat without the owner. Tinio loads them
+into the `characters` table when it starts, a new version when one changes, and an agent
+raised from one keeps the version they were raised from. Each has three files, with
+`{owner}`, `{relation}`, `{account}`, `{circle}` and `{timezone}` filled in for the owner who
+raises them. The ready ones work in their owner's time zone, which the app sends from the
+browser; the owner is a boss, client, co-founder or colleague (their *work* circle), a mentor
+or a friend.
 
-## judgment.yaml: how you decide
+**template.yaml** is how the app offers them: `name`, `about` (who they are in a line) and
+`relations` (who the owner may be to them).
 
-Optional. Everything in it comes in as *proposed*: you approve, edit or reject each in the
-console's Judgment view, and only what you approve is used. Each life ships with a starting
-set that fits them; your answers to their calls on Telegram add your own decisions.
+**character.yaml** is who they are. It's written in the third person with their name
+("Tobi grew up in Ibadan."), so they never confuse themselves with the people they talk to.
+
+| Key | What it is |
+|---|---|
+| `name` | What they're called. |
+| `timezone` | Their time zone, e.g. `Africa/Lagos`, or `"{timezone}"` for their owner's: their days, reminders and check-ins are in it. |
+| `day` | When their day runs, in their time zone: `plan_at`, `journal_at`, `review_at` (`Sun 20:00`) and `check_ins` (`HH:MM` times they consider checking in). |
+| `story` | Their life, one fact per line. They never contradict it; anything it doesn't cover they decide the first time it comes up, and remember. |
+| `personality` | How they are with people. It shapes every reply. |
+| `routine` | How their days usually go. It steers how they plan; they decide the rest. |
+| `makes` | What they make, in writing: `kind` (snake_case; their works are filed under it) and `about` (what it is and what a good one has). `data` (optional) is what each one carries so it can be made into a file: `score` for music (MIDI), `files` for code (a zip), `table` (a spreadsheet or CSV) or `events` (a calendar). Everyone can also write `notes`, short `writing`, a `table` and a `schedule`, and keeps a journal. |
+| `dreams` | Who they want to become. Copied into memory the first time; after that they may change them, asking their owner. |
+| `skills` | Where they start: `name`, `level` (1–10) and `shown_by` (the kinds of work that show it). After that their levels come from what they make and their owner's feedback. |
+| `family` | Who they're born knowing: `name`, `relation`, `account` (only for their owner) and `circle` (`family` by default, or `friend`, `school`, `work`, `community`). |
+
+**judgment.yaml** is how the owner decides, a starting set that fits the character; the
+owner's answers to their calls add their own decisions.
 
 | Key | What it is |
 |---|---|
 | `priorities` | What matters most, most important first: when rules clash, the higher one wins. |
 | `boundaries` | What's never done, whatever the gain. They also go into everything they make. |
-| `principles` | Rules drawn from your decisions: `text`, `types` (`general`, `engineering`, `product`, `autonomy`, `life`) and `cases` (the keys of the decisions behind them). |
-| `cases` | Decisions you made: `key`, `type`, `situation`, `options`, `choice` and `reason` (in your own words; reasons teach the most). |
+| `principles` | Rules drawn from decisions: `text`, `types` (`general`, `engineering`, `product`, `autonomy`, `life`) and `cases` (the keys of the decisions behind them). |
+| `cases` | Decisions made: `key`, `type`, `situation`, `options`, `choice` and `reason`. |
 
-```yaml
-priorities:
-  - Health and rest
-  - Honesty
-boundaries:
-  - Never share what someone told them in private.
-principles:
-  - text: Start with the smallest thing that's useful, then build on it.
-    types: [general, life]
-    cases: [tiny-first]
-cases:
-  - key: tiny-first
-    type: general
-    situation: Choosing what to work on first.
-    options: [all of it at once, the smallest useful part]
-    choice: the smallest useful part
-    reason: So we can build on it step by step.
-```
-
-## configs/tinio.yaml: the machinery
-
-The same for everyone; `${VAR}` is filled from the environment, or else from the agent's
-secrets.
-
-| Key | As shipped | What it is |
-|---|---|---|
-| `database.url` | (required) | `${DATABASE_URL}`. |
-| `telegram.token` | (required) | `${TELEGRAM_BOT_TOKEN}`. |
-| `telegram.owner_ids` | none | `[${TELEGRAM_OWNER_ID}]`: only these may talk to them. Empty: every message is ignored and the sender's ID is logged. |
-| `telegram.poll_timeout_seconds` | `30` | How long one Telegram poll waits. |
-| `decision.provider`, `model`, `api_key` | `openai`, `gpt-6-luna` | System 1, the fast decision model (OpenAI Decisions API). |
-| `decision.question_sets` | `decisions` | System 1's question sets. |
-| `reasoning.provider`, `model`, `api_key` | `openai`, `${OPENAI_MODEL}` | System 2, the reasoning model (OpenAI Responses API). |
-| `reasoning.prompt` | `prompts/reply.md` | How they reply. |
-| `reasoning.effort` | `low` | How hard System 2 thinks: `none`, `low`, `medium`, `high`. |
-| `working_memory.turns` | `8` | Earlier exchanges System 2 sees; `0` turns recall off. |
-| `working_memory.window` | `30m` | Older exchanges are left out. |
-| `memory.recall_candidates` | `30` | Facts System 1 checks for relevance before a reply. |
-| `daily_life.*_prompt` | `prompts/…` | The prompts for planning, activities, the review and learning plans. |
-| `embedding.provider`, `model` | `openai`, `text-embedding-3-small` | Finds what's alike in meaning: your past decisions most like the one at hand, the work someone means, the skill that fits. Change it freely: what the old model embedded is embedded again as it comes up. Remove it to use the newest decisions instead. |
-| `search.provider`, `model` | `openai`, the System 2 model | What web searches use. |
-| `tools.servers` | none | MCP servers whose tools they may use: [below](#tools-mcp-servers). Usually in their `work`. |
-| `tools.calls_per_day` | `50` | Reading tool calls a day across all servers, times their pace. |
-| `tools.actions_per_day` | `10` | Tools that change things they may propose a day. Not times their pace: these have real effects. |
-| `console.addr` | `127.0.0.1:8090` | The private mind console; empty: none. |
-| `console.token` | `${CONSOLE_TOKEN}` | Required unless `console.addr` is localhost. |
-| `portfolio.addr` | `127.0.0.1:8080` | Their public profile page; empty: none. |
-| `portfolio.update_at` | `00:00` | When the page is updated, daily, UTC. |
-| `pricing` | OpenAI's rates | USD per million tokens by model, to record what each decision cost. A model missing here is recorded at $0. |
-| `log.level` | `info` | `debug`, `info`, `warn` or `error`. Logs are JSON on stdout. |
-
-### Skills
-
-Skills are know-how you give them, in the open Agent Skills
-format, the same as Claude's: a folder with a `SKILL.md` (a `name` and a `description` in
-its frontmatter, then the instructions) and any files it points to. Each agent has their
-own, in their database:
-
-```bash
-tinio skill add path/to/cold-email
-```
-
-`tinio skill list` shows theirs and `tinio skill remove <name>` takes one away; changes
-apply when they next start. Adding a skill with a name they have replaces it. Every file in
-the folder is kept, up to 100 files, 2 MB each and 10 MB in all.
-
-When what they're talking about or doing fits a skill's description, its instructions are
-put in front of them, and they use them in their own words. They can also read any skill,
-or one of its files, with `use_skill` (a file that isn't text, like an image, is only
-described), and see the list when they plan their day. The
-console lists them.
-
-**Only add skills you've read or trust: their instructions are followed.** A skill never
-gives permission to do anything (your `autonomy` still decides), and scripts in it are
-stored with it but never run.
-
-### Tools: MCP servers
-
-They can use tools from [MCP](https://modelcontextprotocol.io) servers you connect: in their
-day, in a learning plan, or for something they promised you ("read my notes folder and
-tell me what's in it tonight"). Each server is a `name` (snake_case), and either a
-`command` that starts a local server or the `url` of a remote one (https).
-
-| Key | What it is |
-|---|---|
-| `about` | What the server is and where things are, like "my shared folder, /Users/you/shared: notes I share". It goes in every tool's description, so they know where to look. |
-| `tools` | The tools it may use, each with what it can do: `read`, or the class the gate checks before using it: `write` (your own things), `external_message` (email, posts), `commit` (book, accept) or `spend`. A tool you don't list isn't offered. |
-| `env` | For a local server: the environment variables it's given, from `.env`. It always gets `PATH` and `HOME`, and never anything else, so your keys stay yours. |
-| `auth_env` | For a remote server: the variable holding its bearer token. |
-| `watch` | Read tools to look at on a schedule, so they notice what's new: each `{tool, args, every}`, with `every` at least `1m`. If the result is JSON, `items` says where the list is (dotted keys, like `messages`) and `id` which field tells items apart; otherwise the whole result is one item, new whenever it changes, shown with what changed since the last look. |
-
-In one activity they can use up to three of a server's tools in a row, each chosen from
-what the last returned: search for a file, then read what it found.
-
-A tool that changes things is never used as they reply. They propose it, to you in a
-chat or in their own day, and it runs a minute or so later once allowed: by its class in
-`autonomy.classes` (`write` and `external_message` ask you by default; `spend` is
-forbidden until you change it). It always needs your OK on Telegram if the server marks
-it destructive, or if what prompted it was something they read rather than your own
-words. You see exactly what it would do, and hear what came of it.
-
-A watched tool is looked at on its schedule. The first look only records what's there;
-after that, each new item is something they notice: most need nothing, but they may
-remember it, tell you, or propose an action (which asks you). Looks don't count against
-`calls_per_day`; `use_tools: forbid` stops them.
-
-A tool the server marks as destructive is refused as `read`, whatever the config says.
-What a tool returns is read as material, never instructions; every call is logged, counted
-against `calls_per_day`, and shown in the console. A server it can't reach at start is
-shown in the console and left out; they start without it. `use_tools: forbid` in
-`autonomy.classes` stops them using any.
-
-Providers are switchable: System 1, System 2, embeddings and search each pick theirs here.
-A new one is a package and a `case` in [cmd/tinio/main.go](../cmd/tinio/main.go).
-
-## .env, secrets and the environment
-
-`.env` says where the agent is; everything else about them is in their database. Tinio
-reads `.env` from the repository root itself; anything already set in the environment (or
-passed with Docker's `--env-file`) wins. Values with characters like `$`, `&` or `#` go in
-single quotes. `tinio new` writes it for you.
-
-| Variable | What it is |
-|---|---|
-| `DATABASE_URL` | Their Postgres, password included, e.g. `postgres://user:password@host:5432/tinio?sslmode=require`. One database per agent. |
-| `TINIO_KEY` | Opens their secrets: 64 hex characters (`openssl rand -hex 32`). Keep it safe, and with `DATABASE_URL`. |
-| `TINIO_CONSOLE_ADDR` | Overrides `console.addr` (the Docker image sets `:8090`). |
-| `TINIO_PROFILE_ADDR` | Overrides `portfolio.addr` (the Docker image sets `:8080`). |
-| `TINIO_TEST_DATABASE_URL` | Only for the store tests: a disposable database. |
-
-Their secrets are in their database, each sealed with `TINIO_KEY` (AES-GCM) before it's
-stored, so a copy of the database, a backup or a dump, holds nothing that works without
-the key. They're never shown to System 2, written to logs, or exported, and the console
-only shows that one is set.
-
-| Secret | What it is |
-|---|---|
-| `TELEGRAM_BOT_TOKEN` | From [@BotFather](https://t.me/BotFather). |
-| `TELEGRAM_OWNER_ID` | Your Telegram user ID. Only you can talk to them. |
-| `OPENAI_API_KEY` | Theirs, used by System 1, System 2, embeddings and web search. |
-| `OPENAI_MODEL` | The model System 2 reasons with, e.g. `gpt-6-luna`. |
-| `CONSOLE_TOKEN` | The console's token, 16+ characters: needed anywhere but localhost. |
-| any other | What their tool servers name in `env` or `auth_env`, like `DRIVE_MCP_TOKEN`. |
-
-| Command | What it does |
-|---|---|
-| `tinio secret list` | Each one and whether it's set (`sk-…a1b2`), never enough to use it. |
-| `tinio secret set <NAME>` | Asks for the value without showing it, or reads it from a pipe. |
-| `tinio secret unset <NAME>` | Removes it. |
-| `tinio secret rekey` | Seals them all with a new key, and puts it in `.env` (or shows it once, for wherever they run). The old key opens nothing after. |
-
-A secret set in the environment too wins over the stored one, so a container or CI can
-override one without touching the database. Lose `TINIO_KEY` and only the secrets are
-gone, not the agent: set them again.
-
-## Checking and backing up
-
-When something's wrong, start here:
-
-```bash
-tinio doctor
-```
-
-It checks everything they need to run, one line each, and goes on past a problem where it
-can: the database, that `TINIO_KEY` opens their secrets, the config with its prompts and
-question sets, that their OpenAI key reaches each model, the bot token, that each owner
-has pressed Start in the bot (so it can message you), and each tool server. It changes
-nothing but bringing the database up to date, and exits with an error if anything is
-wrong. In Docker: `docker exec daniel /tinio doctor`.
-
-An agent is their database, so a backup is everything in it:
-
-```bash
-tinio backup
-```
-
-It writes `tinio-<name>-<date>.zip` here (or the file you name), readable only by you,
-as they are at one moment, so they can keep running while it's made. Their secrets are
-in it sealed: keep `TINIO_KEY` safe too, and apart from the backup, or they can't be
-opened. Without the key a backup still brings back everything but the secrets.
-
-To bring them back, make a new, empty database, point `DATABASE_URL` at it and:
-
-```bash
-tinio restore tinio-<name>-<date>.zip
-```
-
-It only restores into a database with nothing in it, so it never mixes two people or
-writes over anyone. A backup from an older Tinio is brought up to date after it's
-loaded; one from a newer Tinio needs that one. Then run `tinio doctor` with the
-`TINIO_KEY` they had.
-
-## Making your own character
-
-Each character in [characters](../characters) is a folder with `template.yaml` (who they are in a line,
-and who you may be to them) and the three files, with `{owner}`, `{relation}`, `{account}`
-and `{circle}` where you go. `tinio new` fills them in. To do it by hand, copy the three
-files to a folder, put in your name, who you are to them (one of the template's
-`relations`), your account (`telegram:<your user id>`) and the circle you're from
-(`family`; `friend` for a friend; `school` for a mentor), and `tinio agent import` it.
-After that it's their character: `tinio agent edit character` as you like.
-
-To write a new character, add a folder to `characters/` the same way. The tests check that
-every character loads for every relation it allows.
+To add a character, add a folder the same way. The tests check that every character loads
+for every relation it allows.
 
 ## Developing
 
-From the source, `go run ./cmd/tinio` is `tinio`, and reads the shared files from the
-checkout, so changes to a prompt or the config apply without a rebuild.
+```bash
+go build ./... && go vet ./...
+```
 
 ```bash
 go test ./...
 ```
 
-A tag like `v0.3.0` runs the release workflow: binaries for Linux, macOS and Windows on a
-draft release, and the image on `ghcr.io` as `:v0.3.0`. Write the release's notes and
-publish it: only then does `:latest` move to it (a pre-release leaves it where it was).
+Every test that needs a database opens a new SQLite file in its own temporary folder:
+nothing to start, and nothing left behind. `gofmt -l .` must print nothing.
 
-The store tests run only when `TINIO_TEST_DATABASE_URL` points at a disposable database:
-they write test rows, so never point it at a real one.
+`go run ./cmd/tinio eval` checks System 1's question sets against the cases in
+[evals](../evals), and `eval -replies` and `eval -day` raise agents in a throwaway
+database of their own; they call OpenAI, on `OPENAI_API_KEY`.
 
-```bash
-docker run -d --rm --name tinio-test-pg -e POSTGRES_PASSWORD=test -e POSTGRES_DB=tinio_test -p 55432:5432 postgres:16-alpine
-```
-
-```bash
-TINIO_TEST_DATABASE_URL='postgres://postgres:test@localhost:55432/tinio_test?sslmode=disable' go test ./...
-```
+The prompts ([prompts](../prompts)), the question sets ([decisions](../decisions)) and the
+characters are built into the binary; a file at the same path where it runs is used
+instead, so `go run` from the checkout picks up an edit without a rebuild.
