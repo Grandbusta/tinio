@@ -18,7 +18,7 @@
   The Skills market, admin, the beta, feedback and email are the platform's alone.
 
 **The desktop app** (`desktop/`, built with Wails): the agents and the API run inside it,
-with no port and no sign-in. It asks for your OpenAI key first, then you raise an agent
+with no port and no sign-in. It asks for your OpenAI key first (or later, in Settings: until then the chats say nobody can reply), then you raise an agent
 and talk to them, with replies as they're written. Every page of the web app is there:
 their day, works, skills, topics, character, judgment, memory, mind, growth, tools and
 settings, and You, with your key and the week's cap. It keeps running when you close its

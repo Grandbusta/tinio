@@ -5,6 +5,7 @@ import { Button } from "@tinio/ui";
 import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Avatar, status, useFrame } from "@/components/app-frame";
 import { FileIcon, kindOf } from "@/components/file-icon";
+import { NoKey } from "@/components/first-run";
 import { resets, UsageBanner } from "@/components/usage";
 import { call, type ChatRow, type Topic } from "@/lib/api";
 
@@ -44,7 +45,7 @@ function shownTopic() {
 const namedWithin = 2500;
 
 export function Chat({ id }: { id: string }) {
-  const { account, agent, missing, about, aboutOpen, toggleAbout, refresh, usage } = useFrame();
+  const { account, agent, missing, about, aboutOpen, toggleAbout, refresh, usage, keySet } = useFrame();
   const [rows, setRows] = useState<ChatRow[] | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -330,7 +331,7 @@ export function Chat({ id }: { id: string }) {
           />
         )}
       </header>
-      <UsageBanner />
+      {keySet === false ? <NoKey name={agent?.name} /> : <UsageBanner />}
       {inTopic && (
         <section aria-label="Where this topic stands" className="border-b border-line bg-accent-soft/50 px-10 py-3.5 max-[900px]:px-3">
           <div className="flex max-w-[680px] flex-col gap-1">
@@ -412,12 +413,12 @@ export function Chat({ id }: { id: string }) {
             {draft}
           </div>
         )}
-        {thinking && agent && (
+        {thinking && agent && keySet !== false && (
           <span className={writing ? "sr-only" : "mt-3 self-start text-[13px] text-muted"} aria-live="polite">
             {all.length === 0 ? `${name} is saying hello…` : `${name} is writing…`}
           </span>
         )}
-        {waiting && !thinking && agent && (
+        {waiting && !thinking && agent && keySet !== false && (
           <span className="mt-3 self-start text-[13px] text-muted">
             {all.length === 0 ? `${name} hasn't said hello yet. They will when they're back.` : `No answer yet. ${name} will answer when they can.`}
           </span>

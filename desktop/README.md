@@ -21,7 +21,9 @@ wails build -skipbindings
 ```
 
 The app is in `build/bin` (`Tinio.app` on macOS). Open it, give it your OpenAI key, and
-raise your first agent.
+raise your first agent. The key can wait (Skip for now) and be added in Settings, but
+nobody can reply until it's there: their chats say so, and a hello waiting goes out once
+it is.
 
 ## While it runs
 

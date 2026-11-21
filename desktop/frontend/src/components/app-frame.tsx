@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTheme } from "@/components/theme";
+import { NoKey } from "@/components/first-run";
 import { MeterLine } from "@/components/usage";
 import { useAccount } from "@/lib/account";
 import { call, prefetch, type Account, type Character, type Overview, type Usage } from "@/lib/api";
@@ -20,6 +21,7 @@ type Frame = {
   account: Account | null;
   overview: Overview | null;
   usage: Usage | null; // the week your agents share
+  keySet: boolean | null; // whether your OpenAI key is set (null until known): without it, nobody can reply
   agent: Summary | null; // the open agent, once loaded
   missing: boolean; // the open agent isn't among yours
   about: (a: Summary) => string;
@@ -63,6 +65,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const account = useAccount();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [keySet, setKeySet] = useState<boolean | null>(null);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [aboutOpen, setAboutOpen] = useState(false);
   // showAbout opens or closes About with the same easing as moving between pages, where
@@ -80,6 +83,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const refresh = useCallback(() => {
     call<Overview>("/overview").then((res) => res.ok && setOverview(res.data));
     call<Usage>("/usage").then((res) => res.ok && setUsage(res.data));
+    call<{ openai: { set: boolean } }>("/keys").then((res) => res.ok && setKeySet(res.data.openai.set));
   }, []);
 
   // With no agents, the chats have nothing to show: raise one first. You and connections
@@ -105,6 +109,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
     account,
     overview,
     usage,
+    keySet,
     agent,
     missing: !!open && !!overview && !agent,
     about: (a) => characters.find((c) => c.key === a.character)?.about ?? "",
@@ -317,6 +322,7 @@ function List({ open, className }: { open?: string; className: string }) {
       </div>
 
       <div className="min-h-0 flex-auto overflow-y-auto border-t border-line">
+        {!open && <NoKey compact />}
         {shown.map((a) => (
           <Row key={a.id} agent={a} current={a.id === open} unread={unread(a)} onOpen={() => setKept(a.id)} />
         ))}
