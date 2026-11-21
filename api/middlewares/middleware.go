@@ -3,6 +3,9 @@ package middlewares
 
 import (
 	"log/slog"
+	"net"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -33,10 +36,15 @@ func LimitByAddress(l *utils.Limiter, log *slog.Logger) gin.HandlerFunc {
 
 const accountKey = "account"
 
-// SignedIn lets a request through only with a live session, and keeps its
+// SignedIn lets a request through as owner when it comes from this machine,
+// and otherwise only with a live session (from the passcode), keeping its
 // account for the controller (Account).
-func SignedIn(db models.DB, log *slog.Logger) gin.HandlerFunc {
+func SignedIn(db models.DB, owner models.Account, log *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if FromThisMachine(c.Request) {
+			c.Set(accountKey, owner)
+			return
+		}
 		token, _ := c.Cookie(config.SessionCookie)
 		acc, ok, err := models.SessionAccount(c, db, utils.TokenHash(token), time.Now().UTC())
 		switch {
@@ -48,6 +56,41 @@ func SignedIn(db models.DB, log *slog.Logger) gin.HandlerFunc {
 			c.Set(accountKey, acc)
 		}
 	}
+}
+
+// FromThisMachine is a request from a browser on this machine to this machine
+// by name: it came over loopback, through nothing that forwarded it from
+// elsewhere, and its Host is localhost or a loopback address, so a page that
+// rebinds its own name to 127.0.0.1 isn't taken for the owner.
+func FromThisMachine(r *http.Request) bool {
+	if !loopback(r.RemoteAddr) || !loopback(r.Host) {
+		return false
+	}
+	for _, h := range []string{"X-Forwarded-For", "X-Real-Ip", "Forwarded"} {
+		for _, v := range r.Header.Values(h) {
+			for _, part := range strings.Split(v, ",") {
+				part = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(part), "for="))
+				if part != "" && !loopback(strings.Trim(part, `"[]`)) {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+// loopback is whether hostport (or a bare host) names this machine.
+func loopback(hostport string) bool {
+	host := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]")
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // Account is the signed-in account; only behind SignedIn.

@@ -38,11 +38,8 @@ var (
 	ErrBadRequest         = Problem{http.StatusBadRequest, "bad_request", "That request isn't one we understand.", nil}
 	ErrWrongOrigin        = Problem{http.StatusForbidden, "wrong_origin", "This request has to come from Tinio's own site.", nil}
 	ErrSignedOut          = Problem{http.StatusUnauthorized, "signed_out", "You're not signed in.", nil}
-	ErrNotEmail           = Problem{http.StatusBadRequest, "not_email", "That doesn't look like an email address.", nil}
 	ErrSlowDown           = Problem{http.StatusTooManyRequests, "slow_down", "You've asked several times in a short time. Wait a few minutes, then try again.", nil}
-	ErrWrongCode          = Problem{http.StatusBadRequest, "wrong_code", "That code isn't right. Check the email and try again.", nil}
-	ErrExpired            = Problem{http.StatusBadRequest, "expired", "That code has expired. Codes work for 10 minutes; we can send you a new one.", nil}
-	ErrTooManyTries       = Problem{http.StatusBadRequest, "too_many_tries", "Too many wrong tries, so this code no longer works. Ask for a new one.", nil}
+	ErrWrongPasscode      = Problem{http.StatusUnauthorized, "wrong_passcode", "That isn't the passcode set on the computer Tinio runs on.", nil}
 	ErrNoSuchCharacter    = Problem{http.StatusNotFound, "no_such_character", "We don't have that character.", nil}
 	ErrNoSuchAgent        = Problem{http.StatusNotFound, "no_such_agent", "You don't have that agent.", nil}
 	ErrNoSuchFile         = Problem{http.StatusNotFound, "no_such_file", "That file isn't here.", nil}

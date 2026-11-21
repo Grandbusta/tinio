@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"bufio"
@@ -101,6 +101,7 @@ func TestTheOwnerWritesAndTheReplyIsStreamed(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL+"/v1/agents/"+zara+"/stream", nil)
+	req.Host = "tinio.test" // not this machine by name, so it's Ada's session that counts
 	req.AddCookie(ada)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {

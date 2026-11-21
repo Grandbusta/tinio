@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -43,38 +42,10 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
-// inbox keeps what would have been emailed.
-type inbox struct {
-	mu   sync.Mutex
-	sent []utils.Message
-}
-
-func (b *inbox) Send(_ context.Context, m utils.Message) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.sent = append(b.sent, m)
-	return nil
-}
-
-// code is the last code sent to email.
-func (b *inbox) code(t *testing.T, email string) string {
-	t.Helper()
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for i := len(b.sent) - 1; i >= 0; i-- {
-		if b.sent[i].To == email {
-			return strings.TrimPrefix(b.sent[i].Subject, "Your Tinio code: ")
-		}
-	}
-	t.Fatalf("no code sent to %s", email)
-	return ""
-}
-
 type testAPI struct {
 	router      *gin.Engine
 	connections *controllers.Connections
 	db          *tdb.DB
-	inbox       *inbox
 	auth        *controllers.Auth
 	now         time.Time
 }
@@ -87,11 +58,14 @@ func newTestAPI(t *testing.T) *testAPI {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	ta := &testAPI{db: db, inbox: &inbox{}, now: time.Now().UTC()}
-	cfg := config.Config{AppOrigin: site, CookieSecure: true, SigninSecret: []byte(strings.Repeat("s", 32))}
+	ta := &testAPI{db: db, now: time.Now().UTC()}
+	cfg := config.Config{AppOrigin: site, CookieSecure: true}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	auth := &controllers.Auth{DB: db, Mail: ta.inbox, Secret: cfg.SigninSecret, Secure: true, Log: log,
-		CodesPerEmail: utils.NewLimiter(3*time.Minute, 5), Now: func() time.Time { return ta.now }}
+	owner, err := models.Owner(context.Background(), db, ta.now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := &controllers.Auth{DB: db, Owner: owner, Passcode: testPasscode, Secure: true, Log: log, Now: func() time.Time { return ta.now }}
 	characters, err := controllers.LoadCharacters(context.Background(), db, tinio.Files)
 	if err != nil {
 		t.Fatal(err)
@@ -137,14 +111,6 @@ func (ta *testAPI) do(t *testing.T, method, path string, body any, cookie *http.
 	return rec, out
 }
 
-func (ta *testAPI) sendCode(t *testing.T, to string) string {
-	t.Helper()
-	if rec, _ := ta.do(t, "POST", "/v1/auth/code", map[string]string{"email": to}, nil, site); rec.Code != http.StatusAccepted {
-		t.Fatalf("sending a code: %d %s", rec.Code, rec.Body)
-	}
-	return ta.inbox.code(t, to)
-}
-
 // data is an answer's data, or nil.
 func data(out map[string]any) map[string]any {
 	d, _ := out["data"].(map[string]any)
@@ -160,143 +126,80 @@ func sessionOf(rec *httptest.ResponseRecorder) *http.Cookie {
 	return nil
 }
 
-func TestSigningUpThenIn(t *testing.T) {
+const testPasscode = "a passcode long enough"
+
+// On this machine the owner is let straight in. A page that rebinds its own
+// name to this machine, or a request forwarded from elsewhere, isn't.
+func TestThisMachineNeedsNoSignIn(t *testing.T) {
 	ta := newTestAPI(t)
-	to := email()
-
-	rec, out := ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": strings.ToUpper(to), "code": ta.sendCode(t, to)}, nil, site)
-	cookie := sessionOf(rec)
-	if rec.Code != http.StatusOK || out["status"] != "success" || data(out)["new"] != true || cookie == nil || !cookie.HttpOnly || !cookie.Secure {
-		t.Fatalf("signing up: %d %v, cookie %+v", rec.Code, out, cookie)
+	me := func(host, forwarded string) int {
+		t.Helper()
+		req := httptest.NewRequest("GET", "/v1/me", nil)
+		req.RemoteAddr, req.Host = "127.0.0.1:52000", host
+		if forwarded != "" {
+			req.Header.Set("X-Forwarded-For", forwarded)
+		}
+		rec := httptest.NewRecorder()
+		ta.router.ServeHTTP(rec, req)
+		return rec.Code
 	}
-	id := data(out)["account"].(map[string]any)["id"]
-	if rec, out := ta.do(t, "GET", "/v1/me", nil, cookie, ""); rec.Code != http.StatusOK || data(out)["account"].(map[string]any)["email"] != to {
-		t.Fatalf("me: %d %v", rec.Code, out)
+	if code := me("localhost:8081", ""); code != http.StatusOK {
+		t.Errorf("this machine: %d", code)
 	}
-
-	if rec, _ := ta.do(t, "POST", "/v1/auth/signout", nil, cookie, site); rec.Code != http.StatusOK {
-		t.Fatalf("signing out: %d", rec.Code)
+	if code := me("127.0.0.1:8081", "127.0.0.1"); code != http.StatusOK {
+		t.Errorf("this machine through its own proxy: %d", code)
 	}
-	if rec, _ := ta.do(t, "GET", "/v1/me", nil, cookie, ""); rec.Code != http.StatusUnauthorized {
-		t.Fatalf("the session still works after signing out: %d", rec.Code)
+	if code := me("rebound.example:8081", ""); code != http.StatusUnauthorized {
+		t.Errorf("a rebound name: %d", code)
 	}
-
-	rec, out = ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": to, "code": ta.sendCode(t, to)}, nil, site)
-	if rec.Code != http.StatusOK || data(out)["new"] != false || data(out)["account"].(map[string]any)["id"] != id {
-		t.Fatalf("signing in again: %d %v, want the same account", rec.Code, out)
+	if code := me("localhost:8081", "203.0.113.9"); code != http.StatusUnauthorized {
+		t.Errorf("forwarded from elsewhere: %d", code)
+	}
+	if rec, _ := ta.do(t, "GET", "/v1/me", nil, nil, ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("another device with no session: %d", rec.Code)
 	}
 }
 
-func TestWrongCodesLockTheCode(t *testing.T) {
+// Another device gets in with the passcode, and only with it.
+func TestAnotherDeviceSignsInWithThePasscode(t *testing.T) {
 	ta := newTestAPI(t)
-	to := email()
-	code := ta.sendCode(t, to)
-	wrong := "000000"
-	if code == wrong {
-		wrong = "111111"
-	}
-	for left := config.MaxTries - 1; left > 0; left-- {
-		rec, out := ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": to, "code": wrong}, nil, site)
-		if rec.Code != http.StatusBadRequest || out["status"] != "error" || out["code"] != "wrong_code" || data(out)["left"] != float64(left) {
-			t.Fatalf("a wrong code: %d %v, want %d tries left", rec.Code, out, left)
+	for _, wrong := range []string{"", "a passcode long enougH"} {
+		if rec, _ := ta.do(t, "POST", "/v1/auth/passcode", map[string]string{"passcode": wrong}, nil, site); rec.Code != http.StatusUnauthorized {
+			t.Errorf("passcode %q: %d", wrong, rec.Code)
 		}
 	}
-	if _, out := ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": to, "code": wrong}, nil, site); out["code"] != "too_many_tries" {
-		t.Fatalf("the last wrong try: %v", out)
+	if rec, _ := ta.do(t, "POST", "/v1/auth/passcode", map[string]string{"passcode": testPasscode}, nil, "https://evil.example"); rec.Code != http.StatusForbidden {
+		t.Errorf("from another site: %d", rec.Code)
 	}
-	if rec, out := ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": to, "code": code}, nil, site); out["code"] != "too_many_tries" || sessionOf(rec) != nil {
-		t.Fatalf("the right code after too many tries signed in: %v", out)
+	rec, _ := ta.do(t, "POST", "/v1/auth/passcode", map[string]string{"passcode": testPasscode}, nil, site)
+	session := sessionOf(rec)
+	if rec.Code != http.StatusOK || session == nil {
+		t.Fatalf("the passcode: %d", rec.Code)
 	}
-}
-
-func TestOnlyTheNewestUnexpiredCodeWorks(t *testing.T) {
-	ta := newTestAPI(t)
-	to := email()
-	first := ta.sendCode(t, to)
-	second := ta.sendCode(t, to)
-	if first != second {
-		if _, out := ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": to, "code": first}, nil, site); out["code"] != "wrong_code" {
-			t.Fatalf("a replaced code: %v", out)
-		}
+	if rec, out := ta.do(t, "GET", "/v1/me", nil, session, ""); rec.Code != http.StatusOK || data(out)["account"].(map[string]any)["id"] != ta.auth.Owner.ID {
+		t.Errorf("signed in as %v (%d)", out, rec.Code)
 	}
-	ta.now = ta.now.Add(config.CodeTTL)
-	if _, out := ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": to, "code": second}, nil, site); out["code"] != "expired" {
-		t.Fatalf("an expired code: %v", out)
-	}
-
-	ta.now = ta.now.Add(time.Minute)
-	code := ta.sendCode(t, to)
-	if rec, _ := ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": to, "code": code}, nil, site); rec.Code != http.StatusOK {
-		t.Fatalf("a fresh code: %d", rec.Code)
-	}
-	if _, out := ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": to, "code": code}, nil, site); out["code"] != "expired" {
-		t.Fatalf("a code used twice: %v", out)
+	ta.auth.Passcode = ""
+	if rec, _ := ta.do(t, "POST", "/v1/auth/passcode", map[string]string{"passcode": testPasscode}, nil, site); rec.Code != http.StatusUnauthorized {
+		t.Errorf("with no passcode set: %d", rec.Code)
 	}
 }
 
-// 000000 stands in for the code sent only when the development code is on.
-func TestTheDevelopmentCode(t *testing.T) {
-	ta := newTestAPI(t)
-	to := email()
-	if ta.sendCode(t, to) == "000000" {
-		t.Skip("the code sent happens to be 000000")
-	}
-	if rec, _ := ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": to, "code": "000000"}, nil, site); sessionOf(rec) != nil {
-		t.Fatal("000000 signed in with the development code off")
-	}
-	ta.auth.DevCode = true
-	ta.sendCode(t, to)
-	if rec, _ := ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": to, "code": "000000"}, nil, site); sessionOf(rec) == nil {
-		t.Fatalf("000000 didn't sign in with the development code on: %d %s", rec.Code, rec.Body)
-	}
-}
-
-func TestNoAnswerSaysWhetherAnEmailHasAnAccount(t *testing.T) {
-	ta := newTestAPI(t)
-	known := email()
-	ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": known, "code": ta.sendCode(t, known)}, nil, site)
-
-	a, _ := ta.do(t, "POST", "/v1/auth/code", map[string]string{"email": known}, nil, site)
-	b, _ := ta.do(t, "POST", "/v1/auth/code", map[string]string{"email": email()}, nil, site)
-	if a.Code != b.Code || a.Body.String() != b.Body.String() {
-		t.Fatalf("known: %d %s; unknown: %d %s", a.Code, a.Body, b.Code, b.Body)
-	}
-}
-
-func TestOnlyOurSiteCanSignIn(t *testing.T) {
-	ta := newTestAPI(t)
-	to := email()
-	for _, origin := range []string{"https://evil.example", ""} {
-		if rec, _ := ta.do(t, "POST", "/v1/auth/code", map[string]string{"email": to}, nil, origin); rec.Code != http.StatusForbidden {
-			t.Errorf("origin %q: %d, want refused", origin, rec.Code)
-		}
-	}
-	if len(ta.inbox.sent) != 0 {
-		t.Errorf("a code was sent for another site's request")
-	}
-}
-
-func TestCodesAreLimitedPerEmail(t *testing.T) {
-	ta := newTestAPI(t)
-	to := email()
-	for i := 0; i < 5; i++ {
-		ta.sendCode(t, to)
-	}
-	if rec, out := ta.do(t, "POST", "/v1/auth/code", map[string]string{"email": to}, nil, site); rec.Code != http.StatusTooManyRequests || out["code"] != "slow_down" {
-		t.Fatalf("a sixth code in a row: %d %v", rec.Code, out)
-	}
-}
-
-// signUp makes a new account and returns its session cookie.
+// signUp is a new account with a session, for the tests of who may reach
+// what: there's one owner, but the API keeps every agent to its account.
 func (ta *testAPI) signUp(t *testing.T) *http.Cookie {
 	t.Helper()
-	to := email()
-	rec, _ := ta.do(t, "POST", "/v1/auth/verify", map[string]string{"email": to, "code": ta.sendCode(t, to)}, nil, site)
-	if c := sessionOf(rec); c != nil {
-		return c
+	ctx := context.Background()
+	acc := models.Account{Email: email(), CreatedAt: ta.now}
+	if err := acc.Save(ctx, ta.db); err != nil {
+		t.Fatal(err)
 	}
-	t.Fatalf("signing up: %d %s", rec.Code, rec.Body)
-	return nil
+	token := utils.NewToken()
+	s := models.Session{AccountID: acc.ID, TokenHash: utils.TokenHash(token), CreatedAt: ta.now, ExpiresAt: ta.now.Add(config.SessionTTL)}
+	if err := s.Save(ctx, ta.db); err != nil {
+		t.Fatal(err)
+	}
+	return &http.Cookie{Name: config.SessionCookie, Value: token}
 }
 
 // onPlan puts the signed-in account on plan (a new one is on free, with room for one agent).

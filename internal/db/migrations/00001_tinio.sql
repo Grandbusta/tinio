@@ -265,18 +265,6 @@ CREATE TABLE goals (
     FOREIGN KEY (agent_id, dream_id) REFERENCES dreams(agent_id, id),
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 );
-CREATE TABLE identities (
-    id TEXT NOT NULL,
-    account_id TEXT NOT NULL,
-    provider TEXT NOT NULL,
-    subject TEXT NOT NULL,
-    email TEXT DEFAULT '' NOT NULL,
-    created_at TEXT NOT NULL,
-    last_used_at TEXT NOT NULL,
-    PRIMARY KEY (id),
-    UNIQUE (provider, subject),
-    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
-);
 CREATE TABLE intentions (
     agent_id TEXT NOT NULL,
     id TEXT NOT NULL,
@@ -391,19 +379,6 @@ CREATE TABLE lessons (
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
     FOREIGN KEY (agent_id, skill) REFERENCES skills(agent_id, name),
     FOREIGN KEY (agent_id, work_id) REFERENCES works(agent_id, id)
-);
-CREATE TABLE otps (
-    id TEXT NOT NULL,
-    type TEXT NOT NULL,
-    target TEXT NOT NULL,
-    account_id TEXT,
-    code_hash BLOB NOT NULL,
-    attempts INTEGER DEFAULT 0 NOT NULL,
-    expires_at TEXT NOT NULL,
-    used_at TEXT,
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (id),
-    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
 CREATE TABLE people (
     agent_id TEXT NOT NULL,
@@ -653,12 +628,10 @@ CREATE INDEX decisions_at ON decisions (agent_id, at DESC);
 CREATE INDEX decisions_percept ON decisions (agent_id, percept_id);
 CREATE INDEX facts_at ON facts (agent_id, at DESC);
 CREATE INDEX facts_subject ON facts (agent_id, subject, at DESC);
-CREATE INDEX identities_account ON identities (account_id);
 CREATE INDEX intentions_due ON intentions (agent_id, due_at) WHERE (status = 'pending');
 CREATE INDEX judgment_calls_answered ON judgment_calls (agent_id, type, answered_at DESC) WHERE (agreed IS NOT NULL);
 CREATE INDEX judgment_calls_status ON judgment_calls (agent_id, status, created_at DESC);
 CREATE INDEX lessons_active ON lessons (agent_id, skill, at DESC) WHERE (retired_at IS NULL);
-CREATE UNIQUE INDEX otps_live ON otps (type, target) WHERE (used_at IS NULL);
 CREATE INDEX percepts_by_speaker ON percepts (agent_id, speaker, kind, at DESC);
 CREATE INDEX percepts_thread ON percepts (agent_id, source, thread, at DESC);
 CREATE INDEX percepts_topic ON percepts (agent_id, topic_id, at DESC) WHERE (topic_id IS NOT NULL);
@@ -689,14 +662,12 @@ DROP TABLE principle_cases;
 DROP TABLE plan_stages;
 DROP TABLE percepts;
 DROP TABLE people;
-DROP TABLE otps;
 DROP TABLE lessons;
 DROP TABLE learning_plans;
 DROP TABLE labels;
 DROP TABLE judgment_cases;
 DROP TABLE judgment_calls;
 DROP TABLE intentions;
-DROP TABLE identities;
 DROP TABLE goals;
 DROP TABLE facts;
 DROP TABLE dreams;

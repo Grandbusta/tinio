@@ -1,14 +1,12 @@
-// Command api is the platform's backend. The app (apps/app, app.heytinio.com)
-// passes /api/* to its HTTP API as /v1/*, so the session cookie belongs to the
-// app alone.
+// Package api is Tinio's HTTP API and the agents behind it, run together by
+// the tinio command (Main):
 //
-//	api          serve the HTTP API
-//	api worker   run the agents: every one no other worker holds
-//	api eval     test System 1 on the cases in evals/ (flags: api eval -h)
+//	tinio        serve the API and run every agent, in one process
+//	tinio eval   test System 1 on the cases in evals/ (flags: tinio eval -h)
 //
-// They're apart so a deploy of one doesn't restart the other, and a busy
-// agent never slows the API. They meet only in the database.
-package main
+// The app passes /api/* to the API as /v1/*, so the session cookie belongs
+// to the app alone.
+package api
 
 import (
 	"context"
@@ -32,15 +30,16 @@ import (
 	"github.com/Grandbusta/tinio/api/config"
 	"github.com/Grandbusta/tinio/api/controllers"
 	"github.com/Grandbusta/tinio/api/middlewares"
+	"github.com/Grandbusta/tinio/api/models"
 	"github.com/Grandbusta/tinio/api/utils"
 	internalconfig "github.com/Grandbusta/tinio/internal/config"
 	"github.com/Grandbusta/tinio/internal/connect"
 	"github.com/Grandbusta/tinio/internal/decision/questions"
 	"github.com/Grandbusta/tinio/internal/host"
-	"github.com/Grandbusta/tinio/internal/secret"
 )
 
-func main() {
+// Main runs the tinio command, as os.Args say.
+func Main() {
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	cmd := ""
 	if len(os.Args) > 1 {
@@ -53,8 +52,8 @@ func main() {
 }
 
 func run(cmd string, log *slog.Logger) error {
-	if cmd != "" && cmd != "worker" && cmd != "eval" {
-		return fmt.Errorf("unknown command %q (want worker or eval, or none to serve the API)", cmd)
+	if cmd != "" && cmd != "eval" {
+		return fmt.Errorf("unknown command %q (want eval, or none to run Tinio)", cmd)
 	}
 	godotenv.Load() // a .env beside it, if there is one; the environment wins
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -69,18 +68,29 @@ func run(cmd string, log *slog.Logger) error {
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return err
 	}
+	if err := cfg.LoadKey(); err != nil {
+		return err
+	}
 	d, err := db.Open(ctx, cfg.DatabasePath())
 	if err != nil {
 		return err
 	}
 	defer d.Close()
-	if cmd == "worker" {
-		return work(ctx, d, log)
-	}
-	return serve(ctx, cfg, d, log)
+	log.Info("Tinio's data", "folder", cfg.DataDir)
+	// The API and the agents run side by side; when either stops, so does the other.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	worked := make(chan error, 1)
+	go func() {
+		defer cancel()
+		worked <- work(ctx, cfg, d, log)
+	}()
+	served := serve(ctx, cfg, d, log)
+	cancel()
+	return errors.Join(served, <-worked)
 }
 
-func work(ctx context.Context, d *db.DB, log *slog.Logger) error {
+func work(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) error {
 	models, err := host.OpenAI(log)
 	if err != nil {
 		return err
@@ -90,27 +100,20 @@ func work(ctx context.Context, d *db.DB, log *slog.Logger) error {
 		return err
 	}
 	h.Days = true
-	if k := os.Getenv(secret.EnvKey); k != "" {
-		key, err := secret.ParseKey(k)
-		if err != nil {
-			return err
-		}
-		h.Connections = &connect.Store{DB: d, Key: key}
-	} else {
-		log.Warn("TINIO_KEY isn't set: agents don't use the accounts their owners connect")
-	}
+	h.Connections = &connect.Store{DB: d, Key: *cfg.Key}
 	if s := os.Getenv("MAX_AGENTS"); s != "" {
 		if h.Max, err = strconv.Atoi(s); err != nil || h.Max < 1 {
 			return fmt.Errorf("MAX_AGENTS must be a whole number above 0, have %q", s)
 		}
 	}
-	log.Info("worker running agents", "most", h.Max)
+	log.Info("running agents", "most", h.Max)
 	return h.Run(ctx)
 }
 
 func serve(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) error {
-	if len(cfg.SigninSecret) < 32 {
-		return errors.New("SIGNIN_SECRET must be at least 32 characters")
+	owner, err := models.Owner(ctx, d, time.Now().UTC())
+	if err != nil {
+		return err
 	}
 	characters, err := controllers.LoadCharacters(ctx, d, tinio.Files)
 	if err != nil {
@@ -120,11 +123,7 @@ func serve(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) e
 	if err != nil {
 		return err
 	}
-	if cfg.DevCode {
-		log.Warn("000000 signs in with any email a code was sent to: development only")
-	}
-	auth := &controllers.Auth{DB: d, Mail: utils.LogMailer{Log: log}, Secret: cfg.SigninSecret, Secure: cfg.CookieSecure, DevCode: cfg.DevCode, Log: log,
-		CodesPerEmail: utils.NewLimiter(3*time.Minute, 5)}
+	auth := &controllers.Auth{DB: d, Owner: owner, Passcode: cfg.Passcode, Secure: cfg.CookieSecure, Log: log}
 	agents := &controllers.Agents{DB: d, Characters: characters}
 	hub := &controllers.ChatHub{DB: d, Log: log.With("component", "chat")}
 	go hub.Run(ctx)
@@ -137,7 +136,7 @@ func serve(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) e
 	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		return err
 	}
-	srv := &http.Server{Addr: ":" + cfg.Port, Handler: r, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: cfg.Addr, Handler: r, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -164,7 +163,7 @@ func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.
 
 	h := func(fn func(*gin.Context) error) gin.HandlerFunc { return utils.Handle(log, fn) }
 	ours := middlewares.FromOurSite(cfg.AppOrigin, log)
-	signedIn := middlewares.SignedIn(auth.DB, log)
+	signedIn := middlewares.SignedIn(auth.DB, auth.Owner, log)
 
 	v1 := r.Group("/v1")
 	v1.GET("/me", signedIn, h(auth.Me))
@@ -222,8 +221,7 @@ func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.
 	v1.GET("/connections/:connection/picker", signedIn, h(cn.PickFiles))
 	v1.POST("/connections/:connection/files", ours, signedIn, h(cn.Files))
 	authRoutes := v1.Group("/auth", ours)
-	authRoutes.POST("/code", middlewares.LimitByAddress(utils.NewLimiter(time.Minute, 20), log), h(auth.SendCode))
-	authRoutes.POST("/verify", middlewares.LimitByAddress(utils.NewLimiter(10*time.Second, 30), log), h(auth.Verify))
+	authRoutes.POST("/passcode", middlewares.LimitByAddress(utils.NewLimiter(10*time.Second, 5), log), h(auth.SignIn))
 	authRoutes.POST("/signout", h(auth.SignOut))
 	return r
 }

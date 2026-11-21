@@ -31,6 +31,25 @@ func (a *Account) Save(ctx context.Context, db DB) error {
 	return nil
 }
 
+// Owner is this machine's owner: the one account, made the first time.
+func Owner(ctx context.Context, db DB, now time.Time) (Account, error) {
+	var a Account
+	err := db.QueryRow(ctx, `SELECT id, email, name, created_at FROM accounts ORDER BY created_at, id LIMIT 1`).
+		Scan(&a.ID, &a.Email, &a.Name, &a.CreatedAt)
+	if errors.Is(err, tdb.ErrNoRows) {
+		a = Account{Email: OwnerEmail, CreatedAt: now}
+		return a, a.Save(ctx, db)
+	}
+	if err != nil {
+		return a, fmt.Errorf("load the owner: %w", err)
+	}
+	return a, nil
+}
+
+// OwnerEmail is the owner's account's email: there's one account, and no
+// email is sent.
+const OwnerEmail = "owner@localhost"
+
 // FindAccountByEmail is the account that writes to email, whatever it signs in with.
 func FindAccountByEmail(ctx context.Context, db DB, email string) (Account, bool, error) {
 	var a Account

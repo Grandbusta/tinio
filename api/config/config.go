@@ -4,29 +4,29 @@ package config
 
 import (
 	"errors"
-	"net"
-	"net/url"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Grandbusta/tinio/internal/connect"
 	"github.com/Grandbusta/tinio/internal/secret"
 )
 
 type Config struct {
-	Port           string   // PORT, default 8081
+	Addr           string   // TINIO_ADDR: where the API listens; this machine alone unless it says otherwise
 	DataDir        string   // TINIO_DATA: the folder with the database and the key; DefaultDataDir if not set
-	AppOrigin      string   // APP_ORIGIN: the app (app.heytinio.com), the only site that may change anything
-	CookieSecure   bool     // COOKIE_SECURE: false only for plain http on localhost
-	SigninSecret   []byte   // SIGNIN_SECRET: keys the sign-in codes' hashes (32+ characters); the API's alone
+	AppOrigin      string   // APP_ORIGIN: the app, the only site that may change anything
+	CookieSecure   bool     // COOKIE_SECURE=true: the session cookie only over https
 	TrustedProxies []string // TRUSTED_PROXIES: whose X-Forwarded-For is believed
-	// DevCode (SIGNIN_DEV_CODE=true) lets 000000 stand in for any code that was
-	// sent, for development. Only with the app on localhost over plain http.
-	DevCode bool
-	// Key (TINIO_KEY) seals the tokens of the accounts owners connect; without
-	// it, nothing can be connected.
+	// Passcode (TINIO_PASSCODE, 16 characters or more) lets another device in;
+	// "": only this machine.
+	Passcode string
+	// Key seals every key and token kept: TINIO_KEY if it's set, or else the
+	// one Tinio made in the data folder the first time it ran (LoadKey).
 	Key *secret.Key
 	// Google is Tinio's own Google client (GOOGLE_CLIENT_ID,
 	// GOOGLE_CLIENT_SECRET); GooglePicker is what the app's file picker needs
@@ -37,13 +37,12 @@ type Config struct {
 
 func Load() (Config, error) {
 	c := Config{
-		Port:           orDefault(os.Getenv("PORT"), "8081"),
+		Addr:           orDefault(os.Getenv("TINIO_ADDR"), "127.0.0.1:8081"),
 		DataDir:        os.Getenv("TINIO_DATA"),
 		AppOrigin:      orDefault(os.Getenv("APP_ORIGIN"), "http://localhost:3001"),
-		CookieSecure:   os.Getenv("COOKIE_SECURE") != "false",
-		SigninSecret:   []byte(os.Getenv("SIGNIN_SECRET")),
+		CookieSecure:   os.Getenv("COOKIE_SECURE") == "true",
 		TrustedProxies: strings.Split(orDefault(os.Getenv("TRUSTED_PROXIES"), "127.0.0.1,::1"), ","),
-		DevCode:        os.Getenv("SIGNIN_DEV_CODE") == "true",
+		Passcode:       os.Getenv("TINIO_PASSCODE"),
 		Google:         connect.Google{ClientID: os.Getenv("GOOGLE_CLIENT_ID"), ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET")},
 	}
 	c.GooglePicker.APIKey, c.GooglePicker.AppID = os.Getenv("GOOGLE_API_KEY"), os.Getenv("GOOGLE_APP_ID")
@@ -61,10 +60,38 @@ func Load() (Config, error) {
 		}
 		c.DataDir = dir
 	}
-	if c.DevCode && (c.CookieSecure || !local(c.AppOrigin)) {
-		return c, errors.New("SIGNIN_DEV_CODE is for development only: it needs COOKIE_SECURE=false and APP_ORIGIN on localhost")
+	if c.Passcode != "" && utf8.RuneCountInString(c.Passcode) < 16 {
+		return c, errors.New("TINIO_PASSCODE must be at least 16 characters")
 	}
 	return c, nil
+}
+
+// keyFile is where the key Tinio made is kept, in the data folder.
+const keyFile = "key"
+
+// LoadKey is the key in the data folder, made (32 random bytes) and kept
+// there, readable only by its owner, the first time; TINIO_KEY wins if it's
+// set. Lose it and every key and token kept can't be opened again.
+func (c *Config) LoadKey() error {
+	if c.Key != nil {
+		return nil
+	}
+	path := filepath.Join(c.DataDir, keyFile)
+	text, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		text = []byte(secret.NewKey())
+		if err := os.WriteFile(path, text, 0o600); err != nil {
+			return fmt.Errorf("keep the key: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("read the key: %w", err)
+	}
+	key, err := secret.ParseKey(strings.TrimSpace(string(text)))
+	if err != nil {
+		return fmt.Errorf("the key in %s: %w", path, err)
+	}
+	c.Key = &key
+	return nil
 }
 
 // DefaultDataDir is where Tinio keeps its data unless TINIO_DATA says:
@@ -90,15 +117,6 @@ func DefaultDataDir() (string, error) {
 
 // DatabasePath is the database's file in the data folder.
 func (c Config) DatabasePath() string { return filepath.Join(c.DataDir, "tinio.db") }
-
-func local(origin string) bool {
-	u, err := url.Parse(origin)
-	if err != nil {
-		return false
-	}
-	ip := net.ParseIP(u.Hostname())
-	return u.Scheme == "http" && (u.Hostname() == "localhost" || (ip != nil && ip.IsLoopback()))
-}
 
 func orDefault(s, def string) string {
 	if s == "" {
