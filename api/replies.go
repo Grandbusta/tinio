@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Grandbusta/tinio/internal/db"
 	"io"
 	"log/slog"
 	"os"
@@ -16,8 +17,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 	"gopkg.in/yaml.v3"
 
@@ -105,7 +104,7 @@ type judgement struct {
 
 // evaluateReplies is `api eval -replies`: each conversation in evals/replies
 // had with a new agent, on the real mind with their day held still, in a
-// database of its own (EVAL_DATABASE_URL, never a real one). What they leave
+// throwaway database of its own. What they leave
 // behind is checked, and a judge scores their voice.
 func evaluateReplies(ctx context.Context, models host.Models, o replyOptions, log *slog.Logger) error {
 	cfg := config.Load()
@@ -126,13 +125,13 @@ func evaluateReplies(ctx context.Context, models host.Models, o replyOptions, lo
 	if err != nil {
 		return err
 	}
-	db, err := evalDB(ctx)
+	d, done, err := evalDB(ctx)
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer done()
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil)) // the mind's logs would drown the report
-	h, err := host.New(db, tinio.Files, models, quiet)
+	h, err := host.New(d, tinio.Files, models, quiet)
 	if err != nil {
 		return err
 	}
@@ -171,7 +170,7 @@ func evaluateReplies(ctx context.Context, models host.Models, o replyOptions, lo
 		go func() {
 			defer wg.Done()
 			defer func() { <-slots }()
-			r := converse(ctx, db, h, j.tpl, j.c)
+			r := converse(ctx, d, h, j.tpl, j.c)
 			if r.Err == "" {
 				var err error
 				if r.Scores, r.JudgeUSD, err = judgeReply(ctx, judge, rubric, j.tpl, j.c, r); err != nil {
@@ -232,14 +231,14 @@ func loadReplyCases(only string, limit int) (map[string][]replyCase, error) {
 }
 
 // converse raises a new agent from tpl, has c with them, and checks what's left.
-func converse(ctx context.Context, db *pgxpool.Pool, h *host.Host, tpl character.Template, c replyCase) replyResult {
+func converse(ctx context.Context, d *db.DB, h *host.Host, tpl character.Template, c replyCase) replyResult {
 	r := replyResult{Character: tpl.Key, Case: c.Name}
 	fail := func(err error) replyResult { r.Err = err.Error(); return r }
 	relation := c.Relation
 	if relation == "" {
 		relation = tpl.Relations[0]
 	}
-	agent, account, err := raiseForEval(ctx, db, tpl, relation)
+	agent, account, err := raiseForEval(ctx, d, tpl, relation)
 	if err != nil {
 		return fail(err)
 	}
@@ -267,7 +266,7 @@ func converse(ctx context.Context, db *pgxpool.Pool, h *host.Host, tpl character
 		}
 		r.Turns = append(r.Turns, tr)
 	}
-	st := store.New(db).For(agent)
+	st := store.New(d).For(agent)
 	r.Failed = check(ctx, st, c, r.Turns, "account:"+account)
 	days, err := st.CostByDay(ctx, time.Time{}, time.UTC)
 	if err != nil {
@@ -355,9 +354,9 @@ func check(ctx context.Context, st *store.Store, c replyCase, turns []turnResult
 }
 
 // raiseForEval is what the API does for a new account raising tpl, as Ada.
-func raiseForEval(ctx context.Context, db *pgxpool.Pool, tpl character.Template, relation string) (agent, account string, err error) {
+func raiseForEval(ctx context.Context, d *db.DB, tpl character.Template, relation string) (agent, account string, err error) {
 	now := time.Now().UTC()
-	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+	err = d.WithTx(ctx, func(tx *db.Tx) error {
 		acc := models.Account{Name: evalOwner, CreatedAt: now}
 		acc.Email = "eval-" + strings.ToLower(ulid.Make().String()) + "@example.com"
 		if err := acc.Save(ctx, tx); err != nil {
@@ -369,9 +368,6 @@ func raiseForEval(ctx context.Context, db *pgxpool.Pool, tpl character.Template,
 		}
 		ag := models.Agent{AccountID: acc.ID, CharacterKey: tpl.Key, Name: tpl.Name, OwnerName: evalOwner, Relation: relation, Pace: 1, CreatedAt: now}
 		if err := ag.Save(ctx, tx); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `SELECT set_config('app.agent_id', $1, true)`, ag.ID); err != nil {
 			return err
 		}
 		for _, f := range character.Files {

@@ -2,13 +2,13 @@ package controllers
 
 import (
 	"fmt"
+	"github.com/Grandbusta/tinio/internal/db"
 	"net/http"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Grandbusta/tinio/api/config"
 	"github.com/Grandbusta/tinio/api/middlewares"
@@ -22,7 +22,7 @@ import (
 // Agents raises agents from the ready characters, and lists an account's own.
 // Both are behind middlewares.SignedIn.
 type Agents struct {
-	DB         *pgxpool.Pool
+	DB         *db.DB
 	Characters *Characters
 	Now        func() time.Time // nil: the clock
 }
@@ -77,12 +77,12 @@ func (a *Agents) Create(c *gin.Context) error {
 		return err
 	}
 	defer tx.Rollback(c)
-	// The account's row is locked while it counts, so two at once can't both pass.
+	// The transaction holds the database's write lock while it counts, so two at once can't both pass.
 	var (
 		plan string
 		have int
 	)
-	if err := tx.QueryRow(c, `SELECT plan, (SELECT count(*) FROM agents WHERE account_id = a.id) FROM accounts a WHERE id = $1 FOR UPDATE`,
+	if err := tx.QueryRow(c, `SELECT plan, (SELECT count(*) FROM agents WHERE account_id = a.id) FROM accounts a WHERE id = $1`,
 		account).Scan(&plan, &have); err != nil {
 		return err
 	}
@@ -90,10 +90,6 @@ func (a *Agents) Create(c *gin.Context) error {
 		return utils.ErrTooManyAgents
 	}
 	if err := ag.Save(c, tx); err != nil {
-		return err
-	}
-	// Its files are in the engine's tables, behind row-level security.
-	if _, err := tx.Exec(c, `SELECT set_config('app.agent_id', $1, true)`, ag.ID); err != nil {
 		return err
 	}
 	for _, f := range character.Files {
@@ -104,9 +100,7 @@ func (a *Agents) Create(c *gin.Context) error {
 		}
 	}
 	// A host starts them as soon as this commits.
-	if _, err := tx.Exec(c, `SELECT pg_notify($1, $2)`, host.Raised, ag.ID); err != nil {
-		return err
-	}
+	tx.Notify(host.Raised, ag.ID)
 	if err := tx.Commit(c); err != nil {
 		return err
 	}

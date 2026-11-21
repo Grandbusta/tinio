@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Grandbusta/tinio/internal/db"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/internal/memory"
@@ -16,15 +16,15 @@ import (
 // nothing. It returns false, changing nothing, if they have a life already.
 func (s *Store) Start(ctx context.Context, name string, vs []memory.SelfVersion, secrets map[string][]byte, skills []memory.AgentSkill,
 	at time.Time) (bool, error) {
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("start: %w", err)
 	}
 	defer tx.Rollback(ctx)
 	// Two starting at once: the second waits here, then finds the life.
 	var one int
-	switch err := tx.QueryRow(ctx, `SELECT 1 FROM agents WHERE id = $1 FOR UPDATE`, s.agent).Scan(&one); {
-	case errors.Is(err, pgx.ErrNoRows):
+	switch err := tx.QueryRow(ctx, `SELECT 1 FROM agents WHERE id = $1`, s.agent).Scan(&one); {
+	case errors.Is(err, db.ErrNoRows):
 		return false, fmt.Errorf("start: there's no agent %s", s.agent)
 	case err != nil:
 		return false, fmt.Errorf("start: %w", err)
@@ -86,7 +86,7 @@ func (s *Store) SelfHistory(ctx context.Context, section string, limit int) ([]m
 // SaveSelf adds new versions. name is the person's name in a character among
 // them ("" if none): the agent's name follows it.
 func (s *Store) SaveSelf(ctx context.Context, name string, vs ...memory.SelfVersion) error {
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return fmt.Errorf("save self: %w", err)
 	}
@@ -97,7 +97,7 @@ func (s *Store) SaveSelf(ctx context.Context, name string, vs ...memory.SelfVers
 	return tx.Commit(ctx)
 }
 
-func (s *Store) saveSelf(ctx context.Context, tx pgx.Tx, name string, vs []memory.SelfVersion) error {
+func (s *Store) saveSelf(ctx context.Context, tx *db.Tx, name string, vs []memory.SelfVersion) error {
 	for _, v := range vs {
 		if _, err := tx.Exec(ctx, `INSERT INTO agent_versions (agent_id, id, section, doc, source, at) VALUES ($1, $2, $3, $4, $5, $6)`,
 			s.agent, v.ID.String(), v.Section, v.Doc, v.Source, v.At); err != nil {
@@ -134,7 +134,7 @@ func (s *Store) Secrets(ctx context.Context) (map[string][]byte, error) {
 
 // SetSecrets sets them all or none, each replacing what was there.
 func (s *Store) SetSecrets(ctx context.Context, sealed map[string][]byte, at time.Time) error {
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return fmt.Errorf("set secrets: %w", err)
 	}
@@ -145,7 +145,7 @@ func (s *Store) SetSecrets(ctx context.Context, sealed map[string][]byte, at tim
 	return tx.Commit(ctx)
 }
 
-func (s *Store) setSecrets(ctx context.Context, tx pgx.Tx, sealed map[string][]byte, at time.Time) error {
+func (s *Store) setSecrets(ctx context.Context, tx *db.Tx, sealed map[string][]byte, at time.Time) error {
 	for name, v := range sealed {
 		if _, err := tx.Exec(ctx, `INSERT INTO secrets (agent_id, name, sealed, set_at) VALUES ($1, $2, $3, $4)
 			ON CONFLICT (agent_id, name) DO UPDATE SET sealed = EXCLUDED.sealed, set_at = EXCLUDED.set_at`, s.agent, name, v, at); err != nil {
@@ -191,7 +191,7 @@ func (s *Store) AgentSkills(ctx context.Context) ([]memory.AgentSkill, error) {
 
 // SaveAgentSkill replaces any skill of the same name, files and all.
 func (s *Store) SaveAgentSkill(ctx context.Context, sk memory.AgentSkill) error {
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return fmt.Errorf("save skill: %w", err)
 	}
@@ -202,7 +202,7 @@ func (s *Store) SaveAgentSkill(ctx context.Context, sk memory.AgentSkill) error 
 	return tx.Commit(ctx)
 }
 
-func (s *Store) saveSkill(ctx context.Context, tx pgx.Tx, sk memory.AgentSkill) error {
+func (s *Store) saveSkill(ctx context.Context, tx *db.Tx, sk memory.AgentSkill) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM agent_skills WHERE agent_id = $1 AND name = $2`, s.agent, sk.Name); err != nil {
 		return fmt.Errorf("save skill: %w", err)
 	}

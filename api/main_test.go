@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	tdb "github.com/Grandbusta/tinio/internal/db"
 	"io"
 	"log/slog"
 	"maps"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -18,7 +19,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio"
@@ -73,24 +73,20 @@ func (b *inbox) code(t *testing.T, email string) string {
 type testAPI struct {
 	router      *gin.Engine
 	connections *controllers.Connections
-	db          *pgxpool.Pool
+	db          *tdb.DB
 	inbox       *inbox
 	auth        *controllers.Auth
 	now         time.Time
 }
 
-// newTestAPI runs only when TINIO_TEST_DATABASE_URL points at a disposable database.
+// newTestAPI is the API on a new database of the test's own.
 func newTestAPI(t *testing.T) *testAPI {
 	t.Helper()
-	url := os.Getenv("TINIO_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("TINIO_TEST_DATABASE_URL not set")
-	}
-	db, err := config.NewDB(context.Background(), url)
+	db, err := tdb.Open(context.Background(), filepath.Join(t.TempDir(), "tinio.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(db.Close)
+	t.Cleanup(func() { db.Close() })
 	ta := &testAPI{db: db, inbox: &inbox{}, now: time.Now().UTC()}
 	cfg := config.Config{AppOrigin: site, CookieSecure: true, SigninSecret: []byte(strings.Repeat("s", 32))}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))

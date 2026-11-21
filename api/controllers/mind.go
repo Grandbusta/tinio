@@ -1,13 +1,13 @@
 package controllers
 
 import (
+	"github.com/Grandbusta/tinio/internal/db"
 	"net/http"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/api/middlewares"
@@ -24,7 +24,7 @@ import (
 // what System 1 asked itself. Their owner can say whether a read was right,
 // as in the console. Behind middlewares.OwnAgent.
 type Mind struct {
-	DB   *pgxpool.Pool
+	DB   *db.DB
 	Sets map[string]questions.Set // by id, for their questions' wording
 	Now  func() time.Time         // nil: the clock
 }

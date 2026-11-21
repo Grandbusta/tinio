@@ -142,7 +142,7 @@ func TestTheOwnerWritesAndTheReplyIsStreamed(t *testing.T) {
 		t.Fatalf("writing: %d %v", rec.Code, out)
 	}
 	var waiting bool
-	if err := ta.db.QueryRow(ctx, `SELECT wake_at = 'epoch' FROM agent_runs WHERE agent_id = $1`, zara).Scan(&waiting); err != nil || !waiting {
+	if err := ta.db.QueryRow(ctx, `SELECT wake_at = '0001-01-01T00:00:00.000000000Z' FROM agent_runs WHERE agent_id = $1`, zara).Scan(&waiting); err != nil || !waiting {
 		t.Errorf("writing didn't wake Zara first in line: %v %v", waiting, err)
 	}
 	if row := next("owner's message"); row["author"] != "owner" || row["text"] != "morning!" {

@@ -2,14 +2,12 @@
 // store bound to them, their files, their policy) in its own goroutines; what
 // they think with (the models, question sets, prompts and formats) is shared.
 //
-// An agent runs in one place, and only while they have something to do: a
-// worker claims them in agent_runs once they're due, with a lease it renews
-// while it runs them, and lets them go when they rest (mind.Resting), to be
-// claimed again when they're next due or their owner writes. If a worker dies,
-// its leases lapse within a minute and another worker claims those agents. Claims skip rows another worker is
-// claiming (FOR UPDATE SKIP LOCKED), so workers never wait on each other. What
-// agents hear and say goes through the database (store.SaveChat), so any
-// process can talk to any agent and nothing waits only in memory.
+// An agent runs only while they have something to do: the worker claims them
+// in agent_runs once they're due, with a lease it renews while it runs them,
+// and lets them go when they rest (mind.Resting), to be claimed again when
+// they're next due or their owner writes. What agents hear and say goes
+// through the database (store.SaveChat), and what's new is told in the
+// process (db.Notify), so nothing waits only in memory.
 package host
 
 import (
@@ -17,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Grandbusta/tinio/internal/db"
 	"hash/fnv"
 	"io/fs"
 	"log/slog"
@@ -29,8 +28,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/internal/connect"
@@ -48,9 +45,6 @@ const Raised = "agent_raised"
 // to start with it (mind.Reload); one resting already starts with it.
 const Changed = "agent_changed"
 
-// listens is what the worker's listening connection runs.
-const listens = "LISTEN " + Raised + "; LISTEN " + Changed + "; LISTEN " + store.ToAgent
-
 const (
 	lease      = time.Minute // how long a claim holds without renewal
 	renewEvery = 20 * time.Second
@@ -59,10 +53,7 @@ const (
 )
 
 type Host struct {
-	pool *pgxpool.Pool // the agents'
-	// own is the worker's own two connections, for claiming and renewing, so
-	// a busy crowd of agents never keeps a renewal waiting past its lease.
-	own    *pgxpool.Pool
+	pool   *db.DB
 	shared shared
 	log    *slog.Logger
 	id     string // this worker, in agent_runs
@@ -119,18 +110,12 @@ type agentRow struct {
 func (a agentRow) speaker() string { return "account:" + a.account }
 
 // New reads the question sets and prompts in files once, for every agent.
-func New(pool *pgxpool.Pool, files fs.FS, models Models, log *slog.Logger) (*Host, error) {
+func New(pool *db.DB, files fs.FS, models Models, log *slog.Logger) (*Host, error) {
 	sh, err := loadShared(files, models)
 	if err != nil {
 		return nil, err
 	}
-	cfg := pool.Config().Copy()
-	cfg.MaxConns, cfg.MinConns = 2, 0
-	own, err := pgxpool.NewWithConfig(context.Background(), cfg)
-	if err != nil {
-		return nil, err
-	}
-	return &Host{pool: pool, own: own, shared: sh, log: log, id: ulid.Make().String(), Max: 20000, RestAfter: 5 * time.Minute,
+	return &Host{pool: pool, shared: sh, log: log, id: ulid.Make().String(), Max: 20000, RestAfter: 5 * time.Minute,
 		http:  &http.Client{Timeout: time.Minute},
 		every: time.Minute, starting: make(chan struct{}, 32), claimSoon: make(chan struct{}, 1), agents: map[string]*runner{}}, nil
 }
@@ -142,7 +127,6 @@ func New(pool *pgxpool.Pool, files fs.FS, models Models, log *slog.Logger) (*Hos
 func (h *Host) Run(ctx context.Context) error {
 	// Deferred in this order: the agents are told to stop, waited for, and only
 	// then let go, so no one else runs them while they're still running here.
-	defer h.own.Close()
 	defer h.letGo()
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -151,7 +135,7 @@ func (h *Host) Run(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		h.listen(ctx, h.pool.Config().ConnConfig)
+		h.listen(ctx)
 	}()
 	claim, renew, poke := time.NewTicker(claimEvery), time.NewTicker(renewEvery), time.NewTicker(pokeEvery)
 	defer claim.Stop()
@@ -218,24 +202,34 @@ func (h *Host) claimWhere(ctx context.Context, wg *sync.WaitGroup, which string,
 	if limit <= 0 {
 		return 0, nil
 	}
-	rows, err := h.own.Query(ctx, `
-		UPDATE agent_runs r SET worker = $1, lease_until = now() + make_interval(secs => $2)
-		FROM agents a
-		WHERE a.id = r.agent_id AND r.agent_id IN (
-			SELECT agent_id FROM agent_runs WHERE (`+which+`)
-			AND agent_id NOT IN (SELECT id FROM agents WHERE paused_at IS NOT NULL) -- paused by their owner
-			ORDER BY wake_at LIMIT $3 FOR UPDATE SKIP LOCKED)
-		RETURNING r.agent_id, a.account_id, a.owner_name, a.pace, a.quiet_from, a.quiet_until, r.born_at IS NOT NULL, r.kept, r.wake_at = `+store.WaitingOwner+`,
-			EXISTS (SELECT 1 FROM characters c WHERE c.key = a.character_key AND c.account_id IS NULL)`,
-		h.id, lease.Seconds(), limit)
+	tx, err := h.pool.Begin(ctx)
 	if err != nil {
 		return 0, err
 	}
-	claimed, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (agentRow, error) {
+	defer tx.Rollback(ctx)
+	rows, err := tx.Query(ctx, `
+		SELECT r.agent_id, a.account_id, a.owner_name, a.pace, a.quiet_from, a.quiet_until, r.born_at IS NOT NULL, r.kept,
+			r.wake_at = `+store.WaitingOwner+`, EXISTS (SELECT 1 FROM characters c WHERE c.key = a.character_key AND c.account_id IS NULL)
+		FROM agent_runs r JOIN agents a ON a.id = r.agent_id
+		WHERE (`+which+`) AND a.paused_at IS NULL -- not paused by their owner
+		ORDER BY r.wake_at LIMIT $1`, limit)
+	if err != nil {
+		return 0, err
+	}
+	claimed, err := db.CollectRows(rows, func(r db.Scanner) (agentRow, error) {
 		var a agentRow
 		return a, r.Scan(&a.id, &a.account, &a.ownerName, &a.pace, &a.quietFrom, &a.quietUntil, &a.born, &a.kept, &a.ownerWaiting, &a.ready)
 	})
 	if err != nil {
+		return 0, err
+	}
+	for _, a := range claimed {
+		if _, err := tx.Exec(ctx, `UPDATE agent_runs SET worker = $1, lease_until = at_plus(now(), $2) WHERE agent_id = $3`,
+			h.id, lease.Seconds(), a.id); err != nil {
+			return 0, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return 0, err
 	}
 	for _, a := range claimed {
@@ -295,7 +289,7 @@ func (h *Host) start(ctx context.Context, wg *sync.WaitGroup, a agentRow) {
 				}
 				done = end
 				if !born && m.Seed(ctx) {
-					if _, err := h.own.Exec(ctx, `UPDATE agent_runs SET born_at = now() WHERE agent_id = $1`, a.id); err == nil {
+					if _, err := h.pool.Exec(ctx, `UPDATE agent_runs SET born_at = now() WHERE agent_id = $1`, a.id); err == nil {
 						born = true
 					}
 				}
@@ -334,12 +328,15 @@ func (h *Host) renew(ctx context.Context) error {
 	h.mu.Lock()
 	held := slices.Collect(maps.Keys(h.agents))
 	h.mu.Unlock()
-	rows, err := h.own.Query(ctx, `UPDATE agent_runs SET lease_until = now() + make_interval(secs => $2)
-		WHERE worker = $1 AND agent_id = ANY($3) RETURNING agent_id`, h.id, lease.Seconds(), held)
+	rows, err := h.pool.Query(ctx, `UPDATE agent_runs SET lease_until = at_plus(now(), $2)
+		WHERE worker = $1 AND agent_id IN (SELECT value FROM json_each($3)) RETURNING agent_id`, h.id, lease.Seconds(), held)
 	if err != nil {
 		return err
 	}
-	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	ids, err := db.CollectRows(rows, func(r db.Scanner) (string, error) {
+		var id string
+		return id, r.Scan(&id)
+	})
 	if err != nil {
 		return err
 	}
@@ -365,7 +362,7 @@ func (h *Host) rest(ctx context.Context, r *runner, rest *mind.Resting) {
 	defer r.stop()
 	kept, err := json.Marshal(rest.Kept)
 	if err == nil {
-		_, err = store.New(h.own).For(r.row.id).Rest(ctx, h.id, rest.Until, kept)
+		_, err = store.New(h.pool).For(r.row.id).Rest(ctx, h.id, rest.Until, kept)
 	}
 	if err != nil {
 		h.log.Warn("host: couldn't let them rest; they're free once their lease lapses", "agent", r.row.id, "err", err)
@@ -377,45 +374,30 @@ func (h *Host) rest(ctx context.Context, r *runner, rest *mind.Resting) {
 func (h *Host) letGo() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if _, err := h.own.Exec(ctx, `UPDATE agent_runs SET worker = NULL, lease_until = NULL WHERE worker = $1`, h.id); err != nil {
+	if _, err := h.pool.Exec(ctx, `UPDATE agent_runs SET worker = NULL, lease_until = NULL WHERE worker = $1`, h.id); err != nil {
 		h.log.Warn("host: couldn't let agents go; they're free once their leases lapse", "err", err)
 	}
 }
 
 // listen claims at once when an agent is raised, and wakes an agent when their
-// owner writes, listening again a moment after any failure. Reconnected, it
-// wakes everyone it holds and claims, for what was notified while it wasn't
-// listening; meanwhile the claims and pokes on the clock still do both.
-func (h *Host) listen(ctx context.Context, cfg *pgx.ConnConfig) {
-	for wait, again := time.Second, false; ; again = true {
-		connected, err := h.listenOnce(ctx, cfg, again)
-		if ctx.Err() != nil {
-			return
-		}
-		if connected {
-			wait = time.Second
-		}
-		h.log.Warn("host: not listening; trying again", "err", err, "in", wait)
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(wait):
-		}
-		wait = min(wait*2, time.Minute)
+// owner writes. If it falls behind, it wakes everyone it holds and claims, for
+// what it missed, and listens again; meanwhile the claims and pokes on the
+// clock still do both.
+func (h *Host) listen(ctx context.Context) {
+	for again := false; ctx.Err() == nil; again = true {
+		h.listenOnce(ctx, again)
 	}
 }
 
-// listenOnce listens until its connection fails; connected says it got as far
-// as listening. again: this isn't the first time.
-func (h *Host) listenOnce(ctx context.Context, cfg *pgx.ConnConfig, again bool) (connected bool, err error) {
-	conn, err := pgx.ConnectConfig(ctx, cfg.Copy())
-	if err != nil {
-		return false, err
-	}
-	defer conn.Close(context.Background())
-	if _, err = conn.Exec(ctx, listens); err != nil {
-		return false, err
-	}
+// listenOnce listens until it falls behind or ctx is done. again: this isn't
+// the first time.
+func (h *Host) listenOnce(ctx context.Context, again bool) {
+	raised, stopRaised := h.pool.Listen(Raised, 64)
+	defer stopRaised()
+	changed, stopChanged := h.pool.Listen(Changed, 64)
+	defer stopChanged()
+	written, stopWritten := h.pool.Listen(store.ToAgent, 1024)
+	defer stopWritten()
 	if again {
 		h.mu.Lock()
 		for _, r := range h.agents {
@@ -425,36 +407,43 @@ func (h *Host) listenOnce(ctx context.Context, cfg *pgx.ConnConfig, again bool) 
 		h.claimNow()
 	}
 	for {
-		n, err := conn.WaitForNotification(ctx)
-		if err != nil {
-			return true, err
-		}
-		switch n.Channel {
-		case Raised:
+		select {
+		case <-ctx.Done():
+			return
+		case _, ok := <-raised:
+			if !ok {
+				return
+			}
 			h.claimNow()
-		case Changed:
+		case agent, ok := <-changed:
+			if !ok {
+				return
+			}
 			h.mu.Lock()
-			r, ok := h.agents[n.Payload]
+			r, held := h.agents[agent]
 			h.mu.Unlock()
-			if ok {
+			if held {
 				if m := r.mind.Load(); m != nil { // nil: starting, so with the new character anyway
 					m.Reload()
 				}
 			}
-		case store.ToAgent:
+		case payload, ok := <-written:
+			if !ok {
+				return
+			}
+			agent, _, _ := strings.Cut(payload, ":")
 			h.mu.Lock()
-			agent, _, _ := strings.Cut(n.Payload, ":")
-			r, ok := h.agents[agent]
+			r, held := h.agents[agent]
 			h.mu.Unlock()
-			if ok {
+			if held {
 				r.poke()
 				select {
 				case r.hurry <- struct{}{}:
 				default:
 				}
-				break
+				continue
 			}
-			h.claimNow() // resting, or held elsewhere: whoever claims first wakes them
+			h.claimNow() // resting: claiming wakes them
 		}
 	}
 }

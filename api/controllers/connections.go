@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"github.com/Grandbusta/tinio/internal/db"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -9,8 +10,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/api/middlewares"
@@ -30,7 +29,7 @@ import (
 // the owner's own browser. An agent's connections reach them within a
 // minute (host.Changed).
 type Connections struct {
-	DB     *pgxpool.Pool
+	DB     *db.DB
 	Key    *secret.Key // nil: nothing can be connected
 	Google connect.Google
 	Picker struct{ APIKey, AppID string }
@@ -82,14 +81,14 @@ func (cn *Connections) List(c *gin.Context) error {
 func (cn *Connections) connections(c *gin.Context, account, id string) ([]connectionView, error) {
 	rows, err := cn.DB.Query(c, `
 		SELECT c.id, c.connector, c.label, c.access, c.state, c.created_at,
-			COALESCE(array_agg(g.agent_id) FILTER (WHERE g.agent_id IS NOT NULL), '{}')
+			COALESCE(json_group_array(g.agent_id) FILTER (WHERE g.agent_id IS NOT NULL), '[]')
 		FROM connections c LEFT JOIN connection_agents g ON g.connection_id = c.id
 		WHERE c.account_id = $1 AND ($2 = '' OR c.id = $2)
 		GROUP BY c.id ORDER BY c.created_at`, account, id)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (connectionView, error) {
+	return db.CollectRows(rows, func(r db.Scanner) (connectionView, error) {
 		var v connectionView
 		return v, r.Scan(&v.ID, &v.Connector, &v.Label, &v.Access, &v.State, &v.CreatedAt, &v.Agents)
 	})
@@ -178,7 +177,7 @@ func (cn *Connections) Callback(c *gin.Context) error {
 		c.Redirect(http.StatusSeeOther, cn.App+"/connections/"+url.PathEscape(connector)+"?"+query)
 		return nil
 	}
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		c.Redirect(http.StatusSeeOther, cn.App+"/connections?failed=expired")
 		return nil
 	}
@@ -200,11 +199,23 @@ func (cn *Connections) Callback(c *gin.Context) error {
 	}
 	now := time.Now().UTC()
 	id := ulid.Make().String()
+	// Signing in again keeps the files they picked and the folder made before.
+	var before connect.Access
+	err = cn.DB.QueryRow(c, `SELECT access FROM connections WHERE account_id = $1 AND connector = $2`, acc.ID, k.ID).Scan(&before)
+	if err != nil && !errors.Is(err, db.ErrNoRows) {
+		return err
+	}
+	if before.Files != nil {
+		access.Files = before.Files
+	}
+	if before.Folder != "" {
+		access.Folder = before.Folder
+	}
 	err = cn.DB.QueryRow(c, `
 		INSERT INTO connections (id, account_id, connector, label, access, secret, state, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, '', 'ok', $6, $6)
 		ON CONFLICT (account_id, connector) DO UPDATE SET label = excluded.label, state = 'ok', updated_at = excluded.updated_at,
-			access = excluded.access || jsonb_strip_nulls(jsonb_build_object('files', connections.access->'files', 'folder', connections.access->'folder'))
+			access = excluded.access
 		RETURNING id`, id, acc.ID, k.ID, label, access, now).Scan(&id)
 	if err != nil {
 		return err
@@ -230,8 +241,18 @@ func (cn *Connections) Callback(c *gin.Context) error {
 // tell has the agents of connection id, and those in also, load their
 // connections again.
 func (cn *Connections) tell(c *gin.Context, id string, also []string) error {
-	_, err := cn.DB.Exec(c, `SELECT pg_notify($1, a) FROM (
-		SELECT agent_id AS a FROM connection_agents WHERE connection_id = $2 UNION SELECT unnest($3::text[])) t`, host.Changed, id, also)
+	rows, err := cn.DB.Query(c, `SELECT agent_id FROM connection_agents WHERE connection_id = $1
+		UNION SELECT value FROM json_each($2)`, id, also)
+	if err != nil {
+		return err
+	}
+	agents, err := db.CollectRows(rows, func(r db.Scanner) (string, error) {
+		var a string
+		return a, r.Scan(&a)
+	})
+	for _, a := range agents {
+		cn.DB.Notify(host.Changed, a)
+	}
 	return err
 }
 

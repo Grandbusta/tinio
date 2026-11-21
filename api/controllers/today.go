@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"github.com/Grandbusta/tinio/internal/db"
 	"net/http"
 	"slices"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Grandbusta/tinio/api/middlewares"
 	"github.com/Grandbusta/tinio/api/utils"
@@ -24,7 +24,7 @@ import (
 // their journal, and how many of their requests wait for an answer. Behind
 // middlewares.OwnAgent.
 type Today struct {
-	DB  *pgxpool.Pool
+	DB  *db.DB
 	Now func() time.Time // nil: the clock
 }
 

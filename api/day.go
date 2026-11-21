@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Grandbusta/tinio/internal/db"
 	"io"
 	"log/slog"
 	"os"
@@ -14,11 +15,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/Grandbusta/tinio"
-	apiconfig "github.com/Grandbusta/tinio/api/config"
 	"github.com/Grandbusta/tinio/internal/character"
 	"github.com/Grandbusta/tinio/internal/host"
 )
@@ -46,19 +43,19 @@ type dayResult struct {
 
 // evaluateDays is `api eval -day`: a new agent raised from each ready
 // character lives one whole day of their own, today, on a clock ticking every
-// minute, in a database of its own (EVAL_DATABASE_URL), after their owner
+// minute, in a throwaway database of its own, after their owner
 // says good morning. It reports what the day cost, by what it was spent on.
 func evaluateDays(ctx context.Context, models host.Models, o dayOptions, log *slog.Logger) error {
-	db, err := evalDB(ctx)
+	d, done, err := evalDB(ctx)
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer done()
 	templates, err := character.Templates(tinio.Files, "characters")
 	if err != nil {
 		return err
 	}
-	h, err := host.New(db, tinio.Files, models, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	h, err := host.New(d, tinio.Files, models, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		return err
 	}
@@ -76,7 +73,7 @@ func evaluateDays(ctx context.Context, models host.Models, o dayOptions, log *sl
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i] = liveADay(ctx, db, h, t, o.pace)
+			results[i] = liveADay(ctx, d, h, t, o.pace)
 			log.Info("lived", "character", t.Key, "cost", fmt.Sprintf("$%.4f", results[i].CostUSD), "took", results[i].Took.Round(time.Second))
 		}()
 	}
@@ -85,11 +82,11 @@ func evaluateDays(ctx context.Context, models host.Models, o dayOptions, log *sl
 	return saveEval("day", fmt.Sprintf("pace%d", o.pace), results)
 }
 
-func liveADay(ctx context.Context, db *pgxpool.Pool, h *host.Host, tpl character.Template, pace int) dayResult {
+func liveADay(ctx context.Context, d *db.DB, h *host.Host, tpl character.Template, pace int) dayResult {
 	r := dayResult{Character: tpl.Key}
 	fail := func(err error) dayResult { r.Err = err.Error(); return r }
 	start := time.Now()
-	agent, account, err := raiseForEval(ctx, db, tpl, tpl.Relations[0])
+	agent, account, err := raiseForEval(ctx, d, tpl, tpl.Relations[0])
 	if err != nil {
 		return fail(err)
 	}
@@ -126,11 +123,8 @@ func liveADay(ctx context.Context, db *pgxpool.Pool, h *host.Host, tpl character
 		return fail(err)
 	}
 	r.Took = time.Since(start)
-	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `SELECT set_config('app.agent_id', $1, true)`, agent); err != nil {
-			return err
-		}
-		rows, err := tx.Query(ctx, `SELECT action, provider, count(*), coalesce(sum(cost_usd), 0)::float8 FROM decisions
+	err = d.WithTx(ctx, func(tx *db.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT action, provider, count(*), coalesce(sum(cost_usd), 0) FROM decisions
 			WHERE agent_id = $1 AND at >= $2 GROUP BY action, provider ORDER BY 4 DESC`, agent, from)
 		if err != nil {
 			return err
@@ -200,16 +194,18 @@ func writeDays(w io.Writer, o dayOptions, rs []dayResult) {
 		o.pace, avg, costs[0], costs[len(costs)-1], avg*30)
 }
 
-// evalDB is the throwaway database agents are raised in for a test, never a real one.
-func evalDB(ctx context.Context) (*pgxpool.Pool, error) {
-	url := os.Getenv("EVAL_DATABASE_URL")
-	if url == "" {
-		return nil, fmt.Errorf("eval: this raises agents: set EVAL_DATABASE_URL to a throwaway database")
+// evalDB is a throwaway database of its own, gone when the eval ends (done).
+func evalDB(ctx context.Context) (d *db.DB, done func(), err error) {
+	dir, err := os.MkdirTemp("", "tinio-eval-")
+	if err != nil {
+		return nil, nil, err
 	}
-	if url == os.Getenv("DATABASE_URL") {
-		return nil, fmt.Errorf("eval: EVAL_DATABASE_URL is DATABASE_URL; use a throwaway database")
+	d, err = db.Open(ctx, filepath.Join(dir, "tinio.db"))
+	if err != nil {
+		os.RemoveAll(dir)
+		return nil, nil, err
 	}
-	return apiconfig.NewDB(ctx, url)
+	return d, func() { d.Close(); os.RemoveAll(dir) }, nil
 }
 
 // saveEval keeps a run's results in evals/results, as <time>-<kind>-<label>.json.

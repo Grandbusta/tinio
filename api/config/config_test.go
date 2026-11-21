@@ -4,7 +4,7 @@ import "testing"
 
 // The development code can't be turned on anywhere but localhost over plain http.
 func TestTheDevelopmentCodeIsOnlyForLocalhost(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("TINIO_DATA", t.TempDir())
 	t.Setenv("SIGNIN_DEV_CODE", "true")
 	for _, c := range []struct {
 		secure, origin string

@@ -1,13 +1,13 @@
 package controllers
 
 import (
+	"github.com/Grandbusta/tinio/internal/db"
 	"net/http"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/api/middlewares"
@@ -20,7 +20,7 @@ import (
 // principles it may use (only those its owner kept), the calls its owner
 // answered, and how often it guessed them. Behind middlewares.OwnAgent.
 type Judgment struct {
-	DB  *pgxpool.Pool
+	DB  *db.DB
 	Now func() time.Time // nil: the clock
 }
 

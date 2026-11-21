@@ -35,10 +35,10 @@ func evaluate(ctx context.Context, args []string, log *slog.Logger) error {
 	limit := fs.Int("n", 0, "at most this many cases a set, or conversations a character (0: all)")
 	cases := fs.Bool("cases", false, "list every case, not only what each set adds up to")
 	model := fs.String("model", "", "the model under test: it answers every set, through the reasoning API, not the model each set names; with -replies, it writes the replies (default OPENAI_MODEL)")
-	replies := fs.Bool("replies", false, "have the conversations in evals/replies with new agents, in EVAL_DATABASE_URL, and check and judge their replies")
+	replies := fs.Bool("replies", false, "have the conversations in evals/replies with new agents, and check and judge their replies")
 	judge := fs.String("judge", "gpt-6-astra", "with -replies, the model that judges them")
 	characters := fs.String("character", "", "with -replies or -day, only these characters, comma-separated")
-	day := fs.Bool("day", false, "have a new agent from each ready character live a whole day of their own, in EVAL_DATABASE_URL, and report what it cost")
+	day := fs.Bool("day", false, "have a new agent from each ready character live a whole day of their own, and report what it cost")
 	pace := fs.Int("pace", 1, "with -day, their pace")
 	if err := fs.Parse(args); err != nil {
 		return err

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Grandbusta/tinio/internal/db"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -14,7 +15,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/api/config"
@@ -30,7 +30,7 @@ import (
 // into the agent's chat in the database, and what the agent says comes back
 // the same way. Every route is behind middlewares.OwnAgent.
 type Chat struct {
-	DB  *pgxpool.Pool
+	DB  *db.DB
 	Hub *ChatHub
 	// PerAccount limits how fast an account writes.
 	PerAccount *utils.Limiter
@@ -356,7 +356,7 @@ func (ch *Chat) Stream(c *gin.Context) error {
 // ChatHub tells the streams watching each agent's chat which rows changed:
 // one connection listening to Postgres per API process, however many watch.
 type ChatHub struct {
-	DB  *pgxpool.Pool
+	DB  *db.DB
 	Log *slog.Logger
 
 	mu       sync.Mutex
@@ -393,15 +393,11 @@ func (h *ChatHub) Watch(agent string) (changed <-chan change, stop func()) {
 	}
 }
 
-// Run listens until ctx is done, listening again a moment after any failure.
-// Each failure ends every stream: their browsers reconnect and catch up on
-// what was notified meanwhile.
+// Run listens until ctx is done. If it falls behind, every stream ends: their
+// browsers reconnect and catch up on what they missed.
 func (h *ChatHub) Run(ctx context.Context) {
-	for wait := time.Second; ; wait = min(wait*2, time.Minute) {
-		err := h.listen(ctx)
-		if ctx.Err() != nil {
-			return
-		}
+	for ctx.Err() == nil {
+		h.listen(ctx)
 		h.mu.Lock()
 		for _, chans := range h.watching {
 			for ch := range chans {
@@ -410,33 +406,38 @@ func (h *ChatHub) Run(ctx context.Context) {
 		}
 		h.watching = nil
 		h.mu.Unlock()
-		h.Log.Warn("chat hub: not listening; trying again", "err", err, "in", wait)
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(wait):
-		}
 	}
 }
 
-func (h *ChatHub) listen(ctx context.Context) error {
-	pooled, err := h.DB.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	conn := pooled.Hijack() // listening: never back in the pool
-	defer conn.Close(context.Background())
-	if _, err := conn.Exec(ctx, "LISTEN "+store.ToAgent+"; LISTEN "+store.FromAgent+"; LISTEN "+store.Drafting); err != nil {
-		return err
-	}
+// listen hands on what's said in every agent's chat until it falls behind or
+// ctx is done.
+func (h *ChatHub) listen(ctx context.Context) {
+	toAgent, stopTo := h.DB.Listen(store.ToAgent, 1024)
+	defer stopTo()
+	fromAgent, stopFrom := h.DB.Listen(store.FromAgent, 1024)
+	defer stopFrom()
+	drafting, stopDraft := h.DB.Listen(store.Drafting, 1024)
+	defer stopDraft()
 	for {
-		n, err := conn.WaitForNotification(ctx)
-		if err != nil {
-			return err
+		var (
+			payload string
+			ok      bool
+			draft   bool
+		)
+		select {
+		case <-ctx.Done():
+			return
+		case payload, ok = <-toAgent:
+		case payload, ok = <-fromAgent:
+		case payload, ok = <-drafting:
+			draft = true
 		}
-		agent, rest, _ := strings.Cut(n.Payload, ":")
+		if !ok {
+			return
+		}
+		agent, rest, _ := strings.Cut(payload, ":")
 		c := change{row: rest}
-		if n.Channel == store.Drafting {
+		if draft {
 			c = change{draft: rest}
 		}
 		h.mu.Lock()

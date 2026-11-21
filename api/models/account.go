@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	tdb "github.com/Grandbusta/tinio/internal/db"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -43,7 +43,7 @@ func FindAccountByEmail(ctx context.Context, db DB, email string) (Account, bool
 func found(err error) bool { return err == nil }
 
 func notFoundIsNil(err error, what string) error {
-	if err == nil || errors.Is(err, pgx.ErrNoRows) {
+	if err == nil || errors.Is(err, tdb.ErrNoRows) {
 		return nil
 	}
 	return fmt.Errorf("%s: %w", what, err)

@@ -3,20 +3,18 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"github.com/Grandbusta/tinio/internal/db"
 	"io"
 	"log/slog"
-	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio"
-	"github.com/Grandbusta/tinio/api/config"
 	"github.com/Grandbusta/tinio/internal/channel/web"
 	"github.com/Grandbusta/tinio/internal/character"
 	"github.com/Grandbusta/tinio/internal/decision"
@@ -27,24 +25,19 @@ import (
 	"github.com/Grandbusta/tinio/internal/store"
 )
 
-func openPool(t *testing.T) *pgxpool.Pool {
+func openPool(t *testing.T) *db.DB {
 	t.Helper()
-	url := os.Getenv("TINIO_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("TINIO_TEST_DATABASE_URL not set")
-	}
-	t.Setenv("DATABASE_URL", url) // the shared config names it
-	pool, err := config.NewDB(context.Background(), url)
+	pool, err := db.Open(context.Background(), filepath.Join(t.TempDir(), "tinio.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(pool.Close)
+	t.Cleanup(func() { pool.Close() })
 	return pool
 }
 
 // raise is what the API does: a new account's agent from a ready character,
 // their files rendered for the owner, Ada, and the hosts told.
-func raise(t *testing.T, pool *pgxpool.Pool, key string) string {
+func raise(t *testing.T, pool *db.DB, key string) string {
 	t.Helper()
 	ts, err := character.Templates(tinio.Files, "characters")
 	if err != nil {
@@ -62,16 +55,13 @@ func raise(t *testing.T, pool *pgxpool.Pool, key string) string {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	err = pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+	err = pool.WithTx(ctx, func(tx *db.Tx) error {
 		if _, err := tx.Exec(ctx, `INSERT INTO accounts (id, email, terms_accepted_at, adult_at, created_at) VALUES ($1, $2, $3, $3, $3)`,
 			account, strings.ToLower(account)+"@example.com", now); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO agents (id, account_id, character_key, name, owner_name, relation, pace, created_at)
 			VALUES ($1, $2, $3, $4, 'Ada', $5, 1, $6)`, id, account, key, tpl.Name, tpl.Relations[0], now); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `SELECT set_config('app.agent_id', $1, true)`, id); err != nil {
 			return err
 		}
 		for _, f := range character.Files {
@@ -83,8 +73,8 @@ func raise(t *testing.T, pool *pgxpool.Pool, key string) string {
 		if _, err := tx.Exec(ctx, `INSERT INTO agent_runs (agent_id) VALUES ($1)`, id); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `SELECT pg_notify($1, $2)`, Raised, id)
-		return err
+		tx.Notify(Raised, id)
+		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -115,18 +105,21 @@ func (fakeSystem2) Reason(_ context.Context, req system2.Request) (system2.Respo
 	return system2.Response{Provider: "fake2/1", Text: "I'm " + name + "."}, nil
 }
 
-func newHost(t *testing.T, pool *pgxpool.Pool) *Host {
+func newHost(t *testing.T, pool *db.DB) *Host {
 	t.Helper()
 	h, err := New(pool, tinio.Files, Models{System1: fakeSystem1{}, System2: fakeSystem2{}},
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
+	// None rests unless a test says: a new agent with nothing due rests on
+	// their first tick, before a test could see them running.
+	h.RestAfter = 0
 	return h
 }
 
 // say is the owner writing to their agent, as the API will.
-func say(t *testing.T, pool *pgxpool.Pool, agent, text string) {
+func say(t *testing.T, pool *db.DB, agent, text string) {
 	t.Helper()
 	m := memory.ChatMessage{ID: ulid.Make().String(), Author: memory.ChatOwner, Text: text, At: time.Now().UTC()}
 	if err := store.New(pool).For(agent).SaveChat(context.Background(), m); err != nil {
@@ -135,7 +128,7 @@ func say(t *testing.T, pool *pgxpool.Pool, agent, text string) {
 }
 
 // reply waits for what the agent says in their chat.
-func reply(t *testing.T, pool *pgxpool.Pool, agent string) string {
+func reply(t *testing.T, pool *db.DB, agent string) string {
 	t.Helper()
 	var said string
 	waitUntil(t, "no reply in "+agent+"'s chat", func() bool {
@@ -233,7 +226,7 @@ func TestAnAgentRunsInOnePlace(t *testing.T) {
 
 	// The first can't reach the database and her lease lapses: the second
 	// takes her, and the first stops her when it next renews.
-	if _, err := pool.Exec(ctx, `UPDATE agent_runs SET lease_until = now() - interval '1 second' WHERE agent_id = $1`, zara); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE agent_runs SET lease_until = at_plus(now(), -1) WHERE agent_id = $1`, zara); err != nil {
 		t.Fatal(err)
 	}
 	if err := second.claim(secondCtx, &running); err != nil || !second.holds(zara) {
@@ -281,7 +274,7 @@ func TestAnAgentThatKeepsPanickingIsPaused(t *testing.T) {
 	}
 }
 
-func said(t *testing.T, pool *pgxpool.Pool, agent string) int {
+func said(t *testing.T, pool *db.DB, agent string) int {
 	t.Helper()
 	chat, err := store.New(pool).For(agent).Chat(context.Background(), "", 100)
 	if err != nil {
@@ -312,7 +305,7 @@ func TestAnAgentRestsAndWakesForTheirOwner(t *testing.T) {
 	waitUntil(t, "no first reply", func() bool { return said(t, pool, zara) == 1 })
 	waitUntil(t, "Zara never rested", func() bool {
 		var resting bool
-		if err := pool.QueryRow(ctx, `SELECT worker IS NULL AND wake_at > now() AND kept ? 'last_tick' FROM agent_runs WHERE agent_id = $1`,
+		if err := pool.QueryRow(ctx, `SELECT worker IS NULL AND wake_at > now() AND json_extract(kept, '$.last_tick') IS NOT NULL FROM agent_runs WHERE agent_id = $1`,
 			zara).Scan(&resting); err != nil {
 			t.Fatal(err)
 		}
@@ -334,7 +327,7 @@ func TestAMessageAsTheyRestStillWakesThem(t *testing.T) {
 	later := time.Now().Add(3 * time.Hour)
 	hold := func(agent string) *store.Store {
 		t.Helper()
-		if _, err := pool.Exec(ctx, `UPDATE agent_runs SET worker = 'w1', lease_until = now() + interval '1 minute' WHERE agent_id = $1`, agent); err != nil {
+		if _, err := pool.Exec(ctx, `UPDATE agent_runs SET worker = 'w1', lease_until = at_plus(now(), 60) WHERE agent_id = $1`, agent); err != nil {
 			t.Fatal(err)
 		}
 		return store.New(pool).For(agent)
@@ -374,7 +367,7 @@ func TestAMessageAsTheyRestStillWakesThem(t *testing.T) {
 	// Their owner waiting puts them ahead of anyone merely due, however long
 	// that one has waited.
 	sofia := raise(t, pool, "sofia")
-	if _, err := pool.Exec(ctx, `UPDATE agent_runs SET wake_at = now() - interval '1 hour' WHERE agent_id = $1`, sofia); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE agent_runs SET wake_at = at_plus(now(), -3600) WHERE agent_id = $1`, sofia); err != nil {
 		t.Fatal(err)
 	}
 	if !wakesAt(kenji).Before(wakesAt(sofia)) {
@@ -391,7 +384,7 @@ func TestAnOwnerWaitingIsClaimedPastTheCap(t *testing.T) {
 	// and other packages' tests write to it meanwhile.
 	holdBack := func(ours ...string) {
 		t.Helper()
-		if _, err := pool.Exec(ctx, `UPDATE agent_runs SET wake_at = now() + interval '1 day' WHERE worker IS NULL AND NOT agent_id = ANY($1)`,
+		if _, err := pool.Exec(ctx, `UPDATE agent_runs SET wake_at = at_plus(now(), 86400) WHERE worker IS NULL AND agent_id NOT IN (SELECT value FROM json_each($1))`,
 			ours); err != nil {
 			t.Fatal(err)
 		}
@@ -526,9 +519,9 @@ func TestATapOnARequestIsDecidedAndSettled(t *testing.T) {
 	}
 }
 
-// The worker listens again after losing its connection, and a message written
-// while it wasn't listening is answered at once, not at the next poke.
-func TestTheWorkerListensAgainAfterLosingItsConnection(t *testing.T) {
+// The worker listens again after falling behind on what it's told, and a
+// message written meanwhile is answered at once, not at the next poke.
+func TestTheWorkerListensAgainAfterFallingBehind(t *testing.T) {
 	pool := openPool(t)
 	h := newHost(t, pool)
 	zara := raise(t, pool, "zara")
@@ -538,13 +531,11 @@ func TestTheWorkerListensAgainAfterLosingItsConnection(t *testing.T) {
 	say(t, pool, zara, "hi")
 	waitUntil(t, "no first reply", func() bool { return said(t, pool, zara) == 1 })
 
-	var killed int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM (SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query = $1) k`,
-		listens).Scan(&killed); err != nil || killed == 0 {
-		t.Fatalf("killed %d listening connections: %v", killed, err)
+	for range 5000 { // more than it has room for
+		pool.Notify(store.ToAgent, "nobody:x")
 	}
 	say(t, pool, zara, "still there?")
-	waitUntil(t, "no reply after the worker lost its connection", func() bool { return said(t, pool, zara) == 2 })
+	waitUntil(t, "no reply after the worker fell behind", func() bool { return said(t, pool, zara) == 2 })
 	cancel()
 	if err := <-stopped; err != nil {
 		t.Fatal(err)
@@ -563,7 +554,7 @@ func TestAPausedAgentIsntClaimed(t *testing.T) {
 		t.Fatal(err)
 	}
 	say(t, pool, paused, "are you there?")
-	if _, err := pool.Exec(ctx, `UPDATE agent_runs SET wake_at = now() + interval '1 day' WHERE worker IS NULL AND NOT agent_id = ANY($1)`,
+	if _, err := pool.Exec(ctx, `UPDATE agent_runs SET wake_at = at_plus(now(), 86400) WHERE worker IS NULL AND agent_id NOT IN (SELECT value FROM json_each($1))`,
 		[]string{paused, other}); err != nil {
 		t.Fatal(err)
 	}

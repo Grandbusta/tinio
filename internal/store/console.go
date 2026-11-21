@@ -66,7 +66,7 @@ type Vitals struct {
 func (s *Store) Vitals(ctx context.Context, since time.Time) (Vitals, error) {
 	v := Vitals{ByTier: map[string]int{}}
 	rows, err := s.query(ctx, `SELECT tier, count(*), count(*) FILTER (WHERE action IN ('ask', 'escalate')),
-		coalesce(sum(cost_usd), 0)::float8, coalesce(avg(latency_ms) FILTER (WHERE latency_ms > 0), 0)::float8
+		coalesce(sum(cost_usd), 0), coalesce(avg(latency_ms) FILTER (WHERE latency_ms > 0), 0)
 		FROM decisions WHERE agent_id = $1 AND at >= $2 GROUP BY tier`, since)
 	if err != nil {
 		return v, fmt.Errorf("query vitals: %w", err)
@@ -100,7 +100,7 @@ type DayCost struct {
 // CostByDay returns each day since the given time, in zone, oldest first.
 func (s *Store) CostByDay(ctx context.Context, since time.Time, zone *time.Location) ([]DayCost, error) {
 	rows, err := s.query(ctx, `SELECT to_char(at AT TIME ZONE $3, 'YYYY-MM-DD') AS day,
-		coalesce(sum(cost_usd), 0)::float8, count(*) FROM decisions WHERE agent_id = $1 AND at >= $2 GROUP BY day ORDER BY day`,
+		coalesce(sum(cost_usd), 0), count(*) FROM decisions WHERE agent_id = $1 AND at >= $2 GROUP BY day ORDER BY day`,
 		since, zone.String())
 	if err != nil {
 		return nil, fmt.Errorf("query cost by day: %w", err)

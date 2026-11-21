@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Grandbusta/tinio/internal/db"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/internal/memory"
@@ -21,19 +21,14 @@ const (
 	Drafting  = "chat_draft"
 )
 
-// draftAtMost is the longest draft told, in bytes: a notification holds less
-// than 8000. A longer reply shows once it's sent.
-const draftAtMost = 7000
-
 // WaitingOwner is the wake_at of an agent whose owner is waiting on them (as
 // SQL): the earliest there is, so workers claim them before anyone who is only
 // due, and even when full (internal/host), so a crowd of those, like a
 // morning's check-ins, never holds up a reply.
-const WaitingOwner = `'epoch'::timestamptz`
+const WaitingOwner = `'0001-01-01T00:00:00.000000000Z'`
 
-// SaveChat keeps a chat row and, in the same statement, tells whoever listens
-// for that side. The owner's also wakes the agent, first in line, if they're
-// resting.
+// SaveChat keeps a chat row and, once kept, tells whoever listens for that
+// side. The owner's also wakes the agent, first in line, if they're resting.
 func (s *Store) SaveChat(ctx context.Context, m memory.ChatMessage) error {
 	channel := FromAgent
 	if m.Author == memory.ChatOwner {
@@ -42,53 +37,68 @@ func (s *Store) SaveChat(ctx context.Context, m memory.ChatMessage) error {
 	if m.Kind == "" {
 		m.Kind = memory.ChatMessageKind
 	}
-	_, err := s.exec(ctx, `
-		WITH m AS (INSERT INTO chat_messages (agent_id, id, author, kind, text, payload, at, topic_id, reply_to)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, nullif($9, ''), nullif($10, '')) RETURNING agent_id, id),
-		woken AS (UPDATE agent_runs SET wake_at = `+WaitingOwner+` WHERE agent_id = $1 AND $3 = 'owner')
-		SELECT pg_notify($8, agent_id || ':' || id) FROM m`, m.ID, m.Author, m.Kind, m.Text, nullJSON(m.Payload), m.At, channel,
-		m.Topic, m.ReplyTo)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return fmt.Errorf("save chat message: %w", err)
 	}
-	return nil
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `INSERT INTO chat_messages (agent_id, id, author, kind, text, payload, at, topic_id, reply_to)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, nullif($8, ''), nullif($9, ''))`,
+		s.agent, m.ID, m.Author, m.Kind, m.Text, nullJSON(m.Payload), m.At, m.Topic, m.ReplyTo); err != nil {
+		return fmt.Errorf("save chat message: %w", err)
+	}
+	if m.Author == memory.ChatOwner {
+		if _, err := tx.Exec(ctx, `UPDATE agent_runs SET wake_at = `+WaitingOwner+` WHERE agent_id = $1`, s.agent); err != nil {
+			return fmt.Errorf("save chat message: %w", err)
+		}
+	}
+	tx.Notify(channel, s.agent+":"+m.ID)
+	return tx.Commit(ctx)
 }
 
 // Hello asks the agent to introduce themselves, once: their owner has opened
 // their chat for the first time. Like the owner's other rows, it wakes them.
 // False if it's been asked before.
 func (s *Store) Hello(ctx context.Context, at time.Time) (bool, error) {
-	tag, err := s.exec(ctx, `
-		WITH m AS (INSERT INTO chat_messages (agent_id, id, author, kind, text, at) VALUES ($1, $2, 'owner', $3, '', $4)
-			ON CONFLICT DO NOTHING RETURNING agent_id, id),
-		woken AS (UPDATE agent_runs SET wake_at = `+WaitingOwner+` WHERE agent_id = $1 AND EXISTS (SELECT 1 FROM m))
-		SELECT pg_notify('`+ToAgent+`', agent_id || ':' || id) FROM m`, memory.HelloID, memory.ChatHello, at)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("hello: %w", err)
 	}
-	return tag.RowsAffected() == 1, nil
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx, `INSERT INTO chat_messages (agent_id, id, author, kind, text, at) VALUES ($1, $2, 'owner', $3, '', $4)
+		ON CONFLICT DO NOTHING`, s.agent, memory.HelloID, memory.ChatHello, at)
+	if err != nil {
+		return false, fmt.Errorf("hello: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	if _, err := tx.Exec(ctx, `UPDATE agent_runs SET wake_at = `+WaitingOwner+` WHERE agent_id = $1`, s.agent); err != nil {
+		return false, fmt.Errorf("hello: %w", err)
+	}
+	tx.Notify(ToAgent, s.agent+":"+memory.HelloID)
+	return true, tx.Commit(ctx)
 }
 
 // Settle ends an ask or a choice, its text now saying how, and tells the app.
 func (s *Store) Settle(ctx context.Context, id, text string, at time.Time) error {
-	_, err := s.exec(ctx, `
-		WITH m AS (UPDATE chat_messages SET text = $3, settled_at = $4 WHERE agent_id = $1 AND id = $2 RETURNING agent_id, id)
-		SELECT pg_notify('`+FromAgent+`', agent_id || ':' || id) FROM m`, id, text, at)
+	tag, err := s.exec(ctx, `UPDATE chat_messages SET text = $3, settled_at = $4 WHERE agent_id = $1 AND id = $2`, id, text, at)
 	if err != nil {
 		return fmt.Errorf("settle chat message: %w", err)
+	}
+	if tag.RowsAffected() == 1 {
+		s.db.Notify(FromAgent, s.agent+":"+id)
 	}
 	return nil
 }
 
 // Draft tells the app what the agent is writing, all of it so far. Nothing is
 // kept: the reply's row replaces it.
-func (s *Store) Draft(ctx context.Context, text string) error {
-	if len(text) > draftAtMost {
-		return nil
+func (s *Store) Draft(_ context.Context, text string) error {
+	if s.agent == "" {
+		return errUnbound
 	}
-	if _, err := s.exec(ctx, `SELECT pg_notify('`+Drafting+`', $1 || ':' || $2)`, text); err != nil {
-		return fmt.Errorf("draft: %w", err)
-	}
+	s.db.Notify(Drafting, s.agent+":"+text)
 	return nil
 }
 
@@ -124,7 +134,7 @@ func (s *Store) ChatInTopic(ctx context.Context, topic, before string, limit int
 // TopicThings is the files and asks in the topics, newest first, at most limit.
 func (s *Store) TopicThings(ctx context.Context, topics []string, limit int) ([]memory.ChatMessage, error) {
 	return s.queryChat(ctx, `SELECT `+chatColumns+` FROM chat_messages
-		WHERE agent_id = $1 AND topic_id = ANY($2) AND kind IN ($3, $4, $5) ORDER BY id DESC LIMIT $6`,
+		WHERE agent_id = $1 AND topic_id IN (SELECT value FROM json_each($2)) AND kind IN ($3, $4, $5) ORDER BY id DESC LIMIT $6`,
 		nonNil(topics), memory.ChatFile, memory.ChatAsk, memory.ChatChoice, limit)
 }
 
@@ -147,7 +157,7 @@ func (s *Store) queryChat(ctx context.Context, sql string, args ...any) ([]memor
 	if err != nil {
 		return nil, fmt.Errorf("load chat: %w", err)
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (memory.ChatMessage, error) {
+	return db.CollectRows(rows, func(r db.Scanner) (memory.ChatMessage, error) {
 		var m memory.ChatMessage
 		var payload []byte
 		var settled *time.Time
@@ -174,7 +184,7 @@ func (s *Store) File(ctx context.Context, id string) (memory.SentFile, bool, err
 	f := memory.SentFile{ID: id}
 	err := s.queryRow(ctx, `SELECT name, content_type, data, at FROM chat_files WHERE agent_id = $1 AND id = $2`, id).
 		Scan(&f.Name, &f.ContentType, &f.Data, &f.At)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return f, false, nil
 	}
 	if err != nil {
@@ -185,18 +195,18 @@ func (s *Store) File(ctx context.Context, id string) (memory.SentFile, bool, err
 
 // Rest lets the agent go until until, keeping kept for when they wake, if
 // worker still holds them (false if not); at once, first in line, instead if
-// their owner wrote something they haven't heard. Their row is locked first, so the check for
-// unheard messages, in a statement of its own, sees one being saved meanwhile;
-// one saved just after finds them resting and wakes them (SaveChat).
+// their owner wrote something they haven't heard. It holds the database's
+// write lock throughout (an immediate transaction), so a message saved just
+// after finds them resting and wakes them (SaveChat).
 func (s *Store) Rest(ctx context.Context, worker string, until time.Time, kept []byte) (bool, error) {
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("rest: %w", err)
 	}
 	defer tx.Rollback(ctx)
 	var held bool
-	err = tx.QueryRow(ctx, `SELECT true FROM agent_runs WHERE agent_id = $1 AND worker = $2 FOR UPDATE`, s.agent, worker).Scan(&held)
-	if errors.Is(err, pgx.ErrNoRows) {
+	err = tx.QueryRow(ctx, `SELECT true FROM agent_runs WHERE agent_id = $1 AND worker = $2`, s.agent, worker).Scan(&held)
+	if errors.Is(err, db.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
@@ -218,14 +228,14 @@ func (s *Store) NextDue(ctx context.Context, now time.Time, promiseLead, askExpi
 	sumAfter time.Duration) (time.Time, bool, error) {
 	var due *time.Time
 	err := s.queryRow(ctx, `SELECT least(
-		(SELECT min(CASE WHEN kind = $5 THEN due_at - make_interval(secs => $3) ELSE due_at END)
+		(SELECT min(CASE WHEN kind = $5 THEN at_plus(due_at, -$3) ELSE due_at END)
 			FROM intentions WHERE agent_id = $1 AND status = $6),
-		(SELECT min(CASE WHEN sent_at IS NULL AND $8 THEN $2 ELSE asked_at + make_interval(secs => $4) END)
+		(SELECT min(CASE WHEN sent_at IS NULL AND $8 THEN $2 ELSE at_plus(asked_at, $4) END)
 			FROM approvals WHERE agent_id = $1 AND status = $7),
-		(SELECT min(asked_at + make_interval(secs => $4)) FROM judgment_calls WHERE agent_id = $1 AND status = $9),
-		(SELECT $2::timestamptz FROM actions WHERE agent_id = $1 AND status = $10 LIMIT 1),
-		(SELECT min(last_at + make_interval(secs => $11)) FROM topics
-			WHERE agent_id = $1 AND $11 > 0 AND last_at > coalesce(summed_at, '-infinity')))`,
+		(SELECT min(at_plus(asked_at, $4)) FROM judgment_calls WHERE agent_id = $1 AND status = $9),
+		(SELECT $2 FROM actions WHERE agent_id = $1 AND status = $10 LIMIT 1),
+		(SELECT min(at_plus(last_at, $11)) FROM topics
+			WHERE agent_id = $1 AND $11 > 0 AND last_at > coalesce(summed_at, '')))`,
 		now, promiseLead.Seconds(), askExpires.Seconds(), memory.IntentionTask, memory.IntentionPending, memory.ApprovalPending,
 		canAsk, memory.CallAsked, memory.ActionApproved, sumAfter.Seconds()).Scan(&due)
 	if err != nil {

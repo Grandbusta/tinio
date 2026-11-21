@@ -1,13 +1,13 @@
 package controllers
 
 import (
+	"github.com/Grandbusta/tinio/internal/db"
 	"net/http"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 	"gopkg.in/yaml.v3"
 
@@ -26,7 +26,7 @@ import (
 // born, and live there now: they're shown, not changed, here. Behind
 // middlewares.OwnAgent.
 type Character struct {
-	DB *pgxpool.Pool
+	DB *db.DB
 }
 
 const (
@@ -168,9 +168,7 @@ func (ch *Character) keep(c *gin.Context, st *store.Store, l character.Character
 		At: time.Now().UTC()}); err != nil {
 		return err
 	}
-	if _, err := ch.DB.Exec(c, `SELECT pg_notify($1, $2)`, host.Changed, middlewares.Owned(c).ID); err != nil {
-		return err
-	}
+	ch.DB.Notify(host.Changed, middlewares.Owned(c).ID)
 	return ch.Get(c)
 }
 

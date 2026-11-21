@@ -4,13 +4,13 @@ package controllers
 
 import (
 	"crypto/hmac"
+	"github.com/Grandbusta/tinio/internal/db"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Grandbusta/tinio/api/config"
 	"github.com/Grandbusta/tinio/api/middlewares"
@@ -23,7 +23,7 @@ import (
 // works. Nothing it answers says whether an email has an account, or an
 // invite while the beta is on: an email that may not join is told so by email.
 type Auth struct {
-	DB     *pgxpool.Pool
+	DB     *db.DB
 	Mail   utils.Mailer
 	Secret []byte // keys the codes' hashes: config.SigninSecret
 	Secure bool   // the session cookie only over https

@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Grandbusta/tinio/internal/db"
 	"log/slog"
 	"net/http"
 	"os"
@@ -25,7 +26,6 @@ import (
 	_ "time/tzdata" // agents' time zones work without the system's database, as in a slim container
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
 	"github.com/Grandbusta/tinio"
@@ -66,23 +66,26 @@ func run(cmd string, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	db, err := config.NewDB(ctx, cfg.DatabaseURL)
+	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
+		return err
+	}
+	d, err := db.Open(ctx, cfg.DatabasePath())
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer d.Close()
 	if cmd == "worker" {
-		return work(ctx, db, log)
+		return work(ctx, d, log)
 	}
-	return serve(ctx, cfg, db, log)
+	return serve(ctx, cfg, d, log)
 }
 
-func work(ctx context.Context, db *pgxpool.Pool, log *slog.Logger) error {
+func work(ctx context.Context, d *db.DB, log *slog.Logger) error {
 	models, err := host.OpenAI(log)
 	if err != nil {
 		return err
 	}
-	h, err := host.New(db, tinio.Files, models, log)
+	h, err := host.New(d, tinio.Files, models, log)
 	if err != nil {
 		return err
 	}
@@ -92,7 +95,7 @@ func work(ctx context.Context, db *pgxpool.Pool, log *slog.Logger) error {
 		if err != nil {
 			return err
 		}
-		h.Connections = &connect.Store{DB: db, Key: key}
+		h.Connections = &connect.Store{DB: d, Key: key}
 	} else {
 		log.Warn("TINIO_KEY isn't set: agents don't use the accounts their owners connect")
 	}
@@ -105,11 +108,11 @@ func work(ctx context.Context, db *pgxpool.Pool, log *slog.Logger) error {
 	return h.Run(ctx)
 }
 
-func serve(ctx context.Context, cfg config.Config, db *pgxpool.Pool, log *slog.Logger) error {
+func serve(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) error {
 	if len(cfg.SigninSecret) < 32 {
 		return errors.New("SIGNIN_SECRET must be at least 32 characters")
 	}
-	characters, err := controllers.LoadCharacters(ctx, db, tinio.Files)
+	characters, err := controllers.LoadCharacters(ctx, d, tinio.Files)
 	if err != nil {
 		return err
 	}
@@ -120,16 +123,16 @@ func serve(ctx context.Context, cfg config.Config, db *pgxpool.Pool, log *slog.L
 	if cfg.DevCode {
 		log.Warn("000000 signs in with any email a code was sent to: development only")
 	}
-	auth := &controllers.Auth{DB: db, Mail: utils.LogMailer{Log: log}, Secret: cfg.SigninSecret, Secure: cfg.CookieSecure, DevCode: cfg.DevCode, Log: log,
+	auth := &controllers.Auth{DB: d, Mail: utils.LogMailer{Log: log}, Secret: cfg.SigninSecret, Secure: cfg.CookieSecure, DevCode: cfg.DevCode, Log: log,
 		CodesPerEmail: utils.NewLimiter(3*time.Minute, 5)}
-	agents := &controllers.Agents{DB: db, Characters: characters}
-	hub := &controllers.ChatHub{DB: db, Log: log.With("component", "chat")}
+	agents := &controllers.Agents{DB: d, Characters: characters}
+	hub := &controllers.ChatHub{DB: d, Log: log.With("component", "chat")}
 	go hub.Run(ctx)
-	chat := &controllers.Chat{DB: db, Hub: hub, PerAccount: utils.NewLimiter(2*time.Second, 30)}
-	r := setupRouter(cfg, auth, agents, chat, &controllers.Today{DB: db}, &controllers.Works{DB: db, Formats: host.Formats()},
-		&controllers.Growth{DB: db}, &controllers.Judgment{DB: db}, &controllers.Mind{DB: db, Sets: sets},
-		&controllers.Memory{DB: db}, &controllers.Character{DB: db}, &controllers.Settings{DB: db}, &controllers.Skills{DB: db},
-		&controllers.Connections{DB: db, Key: cfg.Key, Google: cfg.Google, Picker: cfg.GooglePicker, App: cfg.AppOrigin,
+	chat := &controllers.Chat{DB: d, Hub: hub, PerAccount: utils.NewLimiter(2*time.Second, 30)}
+	r := setupRouter(cfg, auth, agents, chat, &controllers.Today{DB: d}, &controllers.Works{DB: d, Formats: host.Formats()},
+		&controllers.Growth{DB: d}, &controllers.Judgment{DB: d}, &controllers.Mind{DB: d, Sets: sets},
+		&controllers.Memory{DB: d}, &controllers.Character{DB: d}, &controllers.Settings{DB: d}, &controllers.Skills{DB: d},
+		&controllers.Connections{DB: d, Key: cfg.Key, Google: cfg.Google, Picker: cfg.GooglePicker, App: cfg.AppOrigin,
 			HTTP: &http.Client{Timeout: 30 * time.Second}, Log: log.With("component", "connections")}, log)
 	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		return err

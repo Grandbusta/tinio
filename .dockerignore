@@ -1,7 +1,0 @@
-# Never in the image: secrets and build leftovers.
-.env
-.env.*
-.git
-/bin
-/tinio
-.DS_Store

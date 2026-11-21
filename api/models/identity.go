@@ -36,9 +36,11 @@ func (i *Identity) Save(ctx context.Context, db DB) error {
 func SignInWith(ctx context.Context, db DB, provider, subject string, at time.Time) (Account, bool, error) {
 	var a Account
 	err := db.QueryRow(ctx, `
-		UPDATE identities i SET last_used_at = $3 FROM accounts a
-		WHERE i.provider = $1 AND i.subject = $2 AND a.id = i.account_id
-		RETURNING a.id, a.email, a.name, a.created_at`, provider, subject, at).
+		SELECT a.id, a.email, a.name, a.created_at FROM identities i JOIN accounts a ON a.id = i.account_id
+		WHERE i.provider = $1 AND i.subject = $2`, provider, subject).
 		Scan(&a.ID, &a.Email, &a.Name, &a.CreatedAt)
+	if err == nil {
+		_, err = db.Exec(ctx, `UPDATE identities SET last_used_at = $3 WHERE provider = $1 AND subject = $2`, provider, subject, at)
+	}
 	return a, found(err), notFoundIsNil(err, "find identity")
 }

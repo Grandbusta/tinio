@@ -4,40 +4,33 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/url"
-	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/tinio/api/config"
+	"github.com/Grandbusta/tinio/internal/db"
 	"github.com/Grandbusta/tinio/internal/decision"
 	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/perception"
 )
 
-// openTestStore is a new agent's store, in the database TINIO_TEST_DATABASE_URL
-// points at (a disposable one); without it the test is skipped.
+// openTestStore is a new agent's store, in a new database of the test's own.
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
-	url := os.Getenv("TINIO_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("TINIO_TEST_DATABASE_URL not set")
-	}
-	pool, err := config.NewDB(context.Background(), url)
+	d, err := db.Open(context.Background(), filepath.Join(t.TempDir(), "tinio.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(pool.Close)
-	return New(pool).For(newAgent(t, pool))
+	t.Cleanup(func() { d.Close() })
+	return New(d).For(newAgent(t, d))
 }
 
 // newAgent is a new account's agent, Tobi.
-func newAgent(t *testing.T, pool *pgxpool.Pool) string {
+func newAgent(t *testing.T, pool *db.DB) string {
 	t.Helper()
 	ctx, id, now := context.Background(), ulid.Make().String(), time.Now().UTC()
 	if _, err := pool.Exec(ctx, `INSERT INTO accounts (id, email, terms_accepted_at, adult_at, created_at) VALUES ($1, $2, $3, $3, $3)`,
@@ -53,7 +46,7 @@ func newAgent(t *testing.T, pool *pgxpool.Pool) string {
 
 func TestAnAgentSeesOnlyTheirOwn(t *testing.T) {
 	s := openTestStore(t)
-	other := s.For(newAgent(t, s.pool))
+	other := s.For(newAgent(t, s.db))
 	ctx := context.Background()
 	p := perception.Percept{ID: ulid.Make(), Source: "test", ExternalID: "same", Kind: "message", Text: "hi", At: time.Now().UTC()}
 	for _, st := range []*Store{s, other} {
@@ -75,7 +68,7 @@ func TestAnAgentSeesOnlyTheirOwn(t *testing.T) {
 		t.Errorf("own facts = %+v", got)
 	}
 
-	unbound := New(s.pool)
+	unbound := New(s.db)
 	if _, err := unbound.RecentFacts(ctx, 10); !errors.Is(err, errUnbound) {
 		t.Errorf("unbound read: %v", err)
 	}
@@ -940,7 +933,7 @@ func TestWorkData(t *testing.T) {
 	if err := s.SetWorkData(ctx, old.ID, "score", json.RawMessage(`{"bpm":90}`)); err != nil {
 		t.Fatal(err)
 	}
-	if w, _, _ := s.Work(ctx, old.ID); string(w.Data) != `{"bpm": 90}` || w.DataKind != "score" {
+	if w, _, _ := s.Work(ctx, old.ID); string(w.Data) != `{"bpm":90}` || w.DataKind != "score" {
 		t.Errorf("set data = %s %q", w.Data, w.DataKind)
 	}
 }
@@ -974,84 +967,5 @@ func TestActions(t *testing.T) {
 	if i := slices.IndexFunc(recent, func(x memory.Action) bool { return x.ID == a.ID }); i < 0 || recent[i].Status != memory.ActionDone ||
 		recent[i].Result != "wrote plan.md" || !recent[i].DoneAt.Equal(at) {
 		t.Errorf("recent = %+v", recent)
-	}
-}
-
-// Row-level security is a second wall: the database itself shows a transaction
-// only the rows of the agent it says it's for, even to a query with no agent_id
-// filter. Superusers pass it, so this connects as an ordinary role.
-func TestTheDatabaseHidesOtherAgentsRows(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	other := s.For(newAgent(t, s.pool))
-	for _, st := range []*Store{s, other} {
-		p := perception.Percept{ID: ulid.Make(), Source: "test", ExternalID: ulid.Make().String(), Kind: "message", Text: "hi", At: time.Now().UTC()}
-		if _, err := st.SavePercept(ctx, p); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if _, err := s.pool.Exec(ctx, `DO $$ BEGIN
-		IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'tinio_rls_test') THEN
-			CREATE ROLE tinio_rls_test LOGIN PASSWORD 'test' NOSUPERUSER;
-		END IF; END $$`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.pool.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO tinio_rls_test;
-		GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO tinio_rls_test`); err != nil {
-		t.Fatal(err)
-	}
-	u, _ := url.Parse(os.Getenv("TINIO_TEST_DATABASE_URL"))
-	u.User = url.UserPassword("tinio_rls_test", "test")
-	plain, err := pgxpool.New(ctx, u.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer plain.Close()
-
-	count := func(agent string) (n, theirs int) {
-		t.Helper()
-		tx, err := plain.Begin(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer tx.Rollback(ctx)
-		if agent != "" {
-			tx.Exec(ctx, `SELECT set_config('app.agent_id', $1, true)`, agent)
-		}
-		if err := tx.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE agent_id = $1) FROM percepts`, agent).Scan(&n, &theirs); err != nil {
-			t.Fatal(err)
-		}
-		return n, theirs
-	}
-	// The store's own path, as the ordinary role: its writes pass the policy's
-	// check and its reads see the rows only if it said which agent it's for.
-	mine := New(plain).For(s.agent)
-	p := perception.Percept{ID: ulid.Make(), Source: "rls", ExternalID: ulid.Make().String(), Kind: "message", At: time.Now().UTC()}
-	if isNew, err := mine.SavePercept(ctx, p); err != nil || !isNew {
-		t.Fatalf("the store wrote its own agent's percept: new=%v err=%v", isNew, err)
-	}
-	if seen, err := mine.SeenFrom(ctx, "rls"); err != nil || !seen {
-		t.Errorf("the store read its own agent's percept: %v %v", seen, err)
-	}
-	if n, theirs := count(s.agent); n == 0 || n != theirs {
-		t.Errorf("an agent's transaction saw %d percepts, %d of them theirs", n, theirs)
-	}
-	if n, _ := count(""); n != 0 {
-		t.Errorf("a transaction that says no agent saw %d percepts", n)
-	}
-
-	tx, _ := plain.Begin(ctx)
-	tx.Exec(ctx, `SELECT set_config('app.agent_id', $1, true)`, s.agent)
-	_, err = tx.Exec(ctx, `INSERT INTO percepts (agent_id, id, source, external_id, kind, at) VALUES ($1, $2, 'test', $2, 'message', now())`,
-		other.agent, ulid.Make().String())
-	tx.Rollback(ctx)
-	if err == nil {
-		t.Error("an agent's transaction wrote a row for another agent")
-	}
-
-	if _, err := New(plain).For(s.agent).SavePercept(ctx, perception.Percept{ID: ulid.Make(), Source: "test", ExternalID: ulid.Make().String(),
-		Kind: "message", Text: "hello", At: time.Now().UTC()}); err != nil {
-		t.Errorf("the store, as an ordinary role: %v", err)
 	}
 }

@@ -43,7 +43,7 @@ func LiveOTP(ctx context.Context, db DB, typ, target string) (OTP, bool, error) 
 	var o OTP
 	err := db.QueryRow(ctx, `
 		SELECT id, type, target, code_hash, attempts, expires_at, created_at
-		FROM otps WHERE type = $1 AND target = $2 AND used_at IS NULL FOR UPDATE`, typ, target).
+		FROM otps WHERE type = $1 AND target = $2 AND used_at IS NULL`, typ, target).
 		Scan(&o.ID, &o.Type, &o.Target, &o.CodeHash, &o.Attempts, &o.ExpiresAt, &o.CreatedAt)
 	return o, found(err), notFoundIsNil(err, "load code")
 }

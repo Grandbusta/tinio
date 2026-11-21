@@ -5,9 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	tdb "github.com/Grandbusta/tinio/internal/db"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/Grandbusta/tinio/internal/character"
 )
@@ -34,7 +33,7 @@ func SyncReady(ctx context.Context, db DB, ts []character.Template, now time.Tim
 		var last Character
 		err := scanCharacter(db.QueryRow(ctx, `SELECT `+characterColumns+` FROM characters
 			WHERE key = $1 AND account_id IS NULL ORDER BY version DESC LIMIT 1`, t.Key), &last)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		if err != nil && !errors.Is(err, tdb.ErrNoRows) {
 			return fmt.Errorf("sync characters: %w", err)
 		}
 		if last.Visibility == "ready" && sameDocs(last.Docs, t.Docs) {
@@ -48,7 +47,7 @@ func SyncReady(ctx context.Context, db DB, ts []character.Template, now time.Tim
 		}
 	}
 	if _, err := db.Exec(ctx, `UPDATE characters SET visibility = 'retired'
-		WHERE account_id IS NULL AND visibility = 'ready' AND NOT (key = ANY($1))`, keys); err != nil {
+		WHERE account_id IS NULL AND visibility = 'ready' AND NOT (key IN (SELECT value FROM json_each($1)))`, keys); err != nil {
 		return fmt.Errorf("sync characters: %w", err)
 	}
 	return nil
@@ -82,21 +81,20 @@ func CharacterFor(ctx context.Context, db DB, account, key string) (Character, b
 // offered, though agents raised from it keep their copy.
 func queryCharacters(ctx context.Context, db DB, account, key string) ([]Character, error) {
 	rows, err := db.Query(ctx, `
-		SELECT * FROM (
-			SELECT DISTINCT ON (key) `+characterColumns+` FROM characters
+		SELECT `+characterColumns+` FROM (
+			SELECT *, row_number() OVER (PARTITION BY key ORDER BY version DESC) AS n FROM characters
 			WHERE (account_id IS NULL OR account_id = $1) AND ($2 = '' OR key = $2)
-			ORDER BY key, version DESC
-		) newest WHERE visibility <> 'retired' ORDER BY visibility = 'private', key`, account, key)
+		) newest WHERE n = 1 AND visibility <> 'retired' ORDER BY visibility = 'private', key`, account, key)
 	if err != nil {
 		return nil, fmt.Errorf("load characters: %w", err)
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Character, error) {
+	return tdb.CollectRows(rows, func(r tdb.Scanner) (Character, error) {
 		var c Character
 		return c, scanCharacter(r, &c)
 	})
 }
 
-func scanCharacter(row pgx.Row, c *Character) error {
+func scanCharacter(row tdb.Scanner, c *Character) error {
 	var tmpl, char, judgment string
 	if err := row.Scan(&c.Key, &c.Version, &c.AccountID, &c.Visibility, &tmpl, &char, &judgment, &c.CreatedAt); err != nil {
 		return err

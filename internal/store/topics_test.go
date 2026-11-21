@@ -85,7 +85,7 @@ func TestTopics(t *testing.T) {
 	}
 
 	// Quiet for months, it's still found with its embedding, until it's summed up again.
-	if _, err := s.pool.Exec(ctx, `UPDATE topics SET state = 'quiet', last_at = $3 WHERE agent_id = $1 AND id = $2`,
+	if _, err := s.db.Exec(ctx, `UPDATE topics SET state = 'quiet', last_at = $3 WHERE agent_id = $1 AND id = $2`,
 		s.agent, gift.ID, now.AddDate(0, -3, 0)); err != nil {
 		t.Fatal(err)
 	}

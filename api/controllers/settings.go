@@ -1,13 +1,13 @@
 package controllers
 
 import (
+	"github.com/Grandbusta/tinio/internal/db"
 	"net/http"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/api/middlewares"
@@ -24,7 +24,7 @@ import (
 // pausing them and deleting them. A change reaches them within a minute
 // (host.Changed). Behind middlewares.OwnAgent.
 type Settings struct {
-	DB *pgxpool.Pool
+	DB *db.DB
 }
 
 // settable are the classes the owner sets here, in the order the app shows
@@ -194,9 +194,7 @@ func (s *Settings) Save(c *gin.Context) error {
 		changed = true
 	}
 	if changed {
-		if _, err := s.DB.Exec(c, `SELECT pg_notify($1, $2)`, host.Changed, ag.ID); err != nil {
-			return err
-		}
+		s.DB.Notify(host.Changed, ag.ID)
 	}
 	return s.answer(c, ag)
 }
@@ -229,9 +227,7 @@ func (s *Settings) Pause(c *gin.Context) error {
 			}
 			notify = host.Raised
 		}
-		if _, err := tx.Exec(c, `SELECT pg_notify($1, $2)`, notify, ag.ID); err != nil {
-			return err
-		}
+		tx.Notify(notify, ag.ID)
 		if err := tx.Commit(c); err != nil {
 			return err
 		}
@@ -257,9 +253,7 @@ func (s *Settings) Delete(c *gin.Context) error {
 		return err
 	}
 	// A worker running them stops at their next tick.
-	if _, err := s.DB.Exec(c, `SELECT pg_notify($1, $2)`, host.Changed, ag.ID); err != nil {
-		return err
-	}
+	s.DB.Notify(host.Changed, ag.ID)
 	utils.SuccessWithData(c, http.StatusOK, gin.H{"deleted": ag.ID})
 	return nil
 }

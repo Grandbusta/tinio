@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"github.com/Grandbusta/tinio/internal/db"
 	"mime"
 	"net/http"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/api/middlewares"
@@ -26,7 +26,7 @@ import (
 // for their owner, never the journal or reviews (store.WorksFor). Behind
 // middlewares.OwnAgent.
 type Works struct {
-	DB      *pgxpool.Pool
+	DB      *db.DB
 	Formats *render.Set
 }
 

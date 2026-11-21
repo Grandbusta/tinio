@@ -1,4 +1,4 @@
-// Package store persists percepts, decisions and memory in PostgreSQL.
+// Package store persists percepts, decisions and memory in Tinio's SQLite database.
 package store
 
 import (
@@ -10,141 +10,89 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/oklog/ulid/v2"
 
+	"github.com/Grandbusta/tinio/internal/db"
 	"github.com/Grandbusta/tinio/internal/decision"
 	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/perception"
 	"github.com/Grandbusta/tinio/internal/search"
 )
 
-// Store is one agent's memory in the platform's database: every row it reads
-// or writes is that agent's (sources excepted, which every agent shares).
+// Store is one agent's memory in Tinio's database: every row it reads or
+// writes is that agent's (sources excepted, which every agent shares).
 type Store struct {
-	pool  *pgxpool.Pool
+	db    *db.DB
 	agent string
 }
 
 // New is unbound: it touches no agent's rows until bound with For.
-func New(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
+func New(d *db.DB) *Store { return &Store{db: d} }
 
-func (s *Store) For(agent string) *Store { return &Store{pool: s.pool, agent: agent} }
+func (s *Store) For(agent string) *Store { return &Store{db: s.db, agent: agent} }
 
 var errUnbound = errors.New("store: not bound to an agent")
 
 // exec, query, queryRow and begin are the only ways to the database. The first
 // three pass the agent as $1, so a query's own arguments start at $2; in a
-// transaction from begin, pass s.agent as $1 the same way. Each says first
-// which agent it's for (app.agent_id), which the tables' row-level security
-// reads: a query that forgets its agent_id filter still sees only this agent's
-// rows. exec, query and queryRow send that and the query together, in one round
-// trip: a batch is one implicit transaction, so the setting holds for the query
-// and ends with it, and each query stands alone, as a failed one in a shared
-// transaction would spoil the rest.
-func (s *Store) exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
-	br, err := s.send(ctx, sql, args)
-	if err != nil {
-		return pgconn.CommandTag{}, err
+// transaction from begin, pass s.agent as $1 the same way. Every query names
+// its agent_id: nothing else keeps one agent's rows from another's.
+func (s *Store) exec(ctx context.Context, sql string, args ...any) (db.Result, error) {
+	if s.agent == "" {
+		return db.Result{}, errUnbound
 	}
-	tag, err := br.Exec()
-	return tag, errors.Join(err, br.Close())
+	return s.db.Exec(ctx, sql, append([]any{s.agent}, args...)...)
 }
 
-func (s *Store) query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
-	br, err := s.send(ctx, sql, args)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := br.Query()
-	if err != nil {
-		br.Close()
-		return nil, err
-	}
-	return batchRows{Rows: rows, br: br}, nil
-}
-
-func (s *Store) queryRow(ctx context.Context, sql string, args ...any) pgx.Row {
-	return batchRow{s: s, ctx: ctx, sql: sql, args: args}
-}
-
-const setAgent = `SELECT set_config('app.agent_id', $1, true)`
-
-// send queues the agent's setting and the query, and reads the setting's
-// result: what's left is the query's.
-func (s *Store) send(ctx context.Context, sql string, args []any) (pgx.BatchResults, error) {
+func (s *Store) query(ctx context.Context, sql string, args ...any) (*db.Rows, error) {
 	if s.agent == "" {
 		return nil, errUnbound
 	}
-	b := &pgx.Batch{}
-	b.Queue(setAgent, s.agent)
-	b.Queue(sql, append([]any{s.agent}, args...)...)
-	br := s.pool.SendBatch(ctx, b)
-	if _, err := br.Exec(); err != nil {
-		br.Close()
-		return nil, err
-	}
-	return br, nil
+	return s.db.Query(ctx, sql, append([]any{s.agent}, args...)...)
 }
 
-func (s *Store) begin(ctx context.Context, opts pgx.TxOptions) (pgx.Tx, error) {
+func (s *Store) queryRow(ctx context.Context, sql string, args ...any) db.Scanner {
+	if s.agent == "" {
+		return failedRow{errUnbound}
+	}
+	return s.db.QueryRow(ctx, sql, append([]any{s.agent}, args...)...)
+}
+
+func (s *Store) begin(ctx context.Context) (*db.Tx, error) {
 	if s.agent == "" {
 		return nil, errUnbound
 	}
-	tx, err := s.pool.BeginTx(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := tx.Exec(ctx, setAgent, s.agent); err != nil {
-		tx.Rollback(ctx)
-		return nil, err
-	}
-	return tx, nil
+	return s.db.Begin(ctx)
 }
 
-// batchRows ends its batch when the rows are closed.
-type batchRows struct {
-	pgx.Rows
-	br pgx.BatchResults
-}
+type failedRow struct{ err error }
 
-func (r batchRows) Close() {
-	r.Rows.Close()
-	r.br.Close()
-}
-
-// batchRow sends its query when it's scanned.
-type batchRow struct {
-	s    *Store
-	ctx  context.Context
-	sql  string
-	args []any
-}
-
-func (r batchRow) Scan(dest ...any) error {
-	br, err := r.s.send(r.ctx, r.sql, r.args)
-	if err != nil {
-		return err
-	}
-	return errors.Join(br.QueryRow().Scan(dest...), br.Close())
-}
+func (r failedRow) Scan(...any) error { return r.err }
 
 // SavePercept reports whether p was new: one already seen from the same source
 // (same ExternalID) is not stored again. A new one in a topic is its newest word.
 func (s *Store) SavePercept(ctx context.Context, p perception.Percept) (bool, error) {
-	tag, err := s.exec(ctx, `
-		WITH p AS (INSERT INTO percepts (agent_id, id, source, external_id, thread, speaker, kind, text, payload, at, topic_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, nullif($11, ''))
-			ON CONFLICT (agent_id, source, external_id) DO NOTHING RETURNING topic_id, at),
-		t AS (UPDATE topics SET last_at = greatest(last_at, p.at), state = 'open' FROM p WHERE topics.agent_id = $1 AND topics.id = p.topic_id)
-		SELECT 1 FROM p`,
-		p.ID.String(), p.Source, p.ExternalID, p.Thread, p.Speaker, p.Kind, p.Text, nullJSON(p.Payload), p.At, p.Topic)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("save percept: %w", err)
 	}
-	return tag.RowsAffected() == 1, nil
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx, `INSERT INTO percepts (agent_id, id, source, external_id, thread, speaker, kind, text, payload, at, topic_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, nullif($11, ''))
+		ON CONFLICT (agent_id, source, external_id) DO NOTHING`,
+		s.agent, p.ID.String(), p.Source, p.ExternalID, p.Thread, p.Speaker, p.Kind, p.Text, nullJSON(p.Payload), p.At, p.Topic)
+	if err != nil {
+		return false, fmt.Errorf("save percept: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	if p.Topic != "" {
+		if err := touchTopic(ctx, tx, s.agent, p.Topic, p.At); err != nil {
+			return false, fmt.Errorf("save percept: %w", err)
+		}
+	}
+	return true, tx.Commit(ctx)
 }
 
 func (s *Store) SaveDecision(ctx context.Context, d decision.Decision) error {
@@ -167,33 +115,47 @@ func (s *Store) SaveDecision(ctx context.Context, d decision.Decision) error {
 		parent = &id
 	}
 	// What it cost is counted against its account's week and hour in the same
-	// statement, so the meter never misses one (a decision from an earlier week
-	// or hour than the counter's is left out of it).
-	_, err = s.exec(ctx, `
-		WITH d AS (
-			INSERT INTO decisions (agent_id, id, parent_id, at, percept_id, set_id, tier, provider, answers,
-			                       action, reply, gate, latency_ms, cost_usd, outcome, affect)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-			RETURNING agent_id, at, cost_usd)
-		INSERT INTO account_usage AS u (account_id, week_start, week_usd, hour_start, hour_usd)
-		SELECT g.account_id, a.created_at + floor(extract(epoch FROM d.at - a.created_at) / 604800) * interval '7 days',
-		       d.cost_usd, date_trunc('hour', d.at), d.cost_usd
-		FROM d JOIN agents g ON g.id = d.agent_id JOIN accounts a ON a.id = g.account_id
-		WHERE d.cost_usd > 0
-		ON CONFLICT (account_id) DO UPDATE SET
-			week_usd = CASE WHEN u.week_start = excluded.week_start THEN u.week_usd + excluded.week_usd
-			                WHEN u.week_start < excluded.week_start THEN excluded.week_usd ELSE u.week_usd END,
-			week_start = greatest(u.week_start, excluded.week_start),
-			hour_usd = CASE WHEN u.hour_start = excluded.hour_start THEN u.hour_usd + excluded.hour_usd
-			                WHEN u.hour_start < excluded.hour_start THEN excluded.hour_usd ELSE u.hour_usd END,
-			hour_start = greatest(u.hour_start, excluded.hour_start)`,
-		d.ID.String(), parent, d.At, nullULID(d.PerceptID), d.SetID, string(d.Tier), d.Provider,
-		answers, d.Action, nullString(d.Reply), string(d.Gate), float64(d.Latency)/float64(time.Millisecond),
-		d.CostUSD, nullJSON(outcome), nullJSON(d.Affect))
+	// transaction, so the meter never misses one (a decision from an earlier
+	// week or hour than the counter's is left out of it).
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return fmt.Errorf("save decision: %w", err)
 	}
-	return nil
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `INSERT INTO decisions (agent_id, id, parent_id, at, percept_id, set_id, tier, provider, answers,
+			action, reply, gate, latency_ms, cost_usd, outcome, affect)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+		s.agent, d.ID.String(), parent, d.At, nullULID(d.PerceptID), d.SetID, string(d.Tier), d.Provider,
+		string(answers), d.Action, nullString(d.Reply), string(d.Gate), float64(d.Latency)/float64(time.Millisecond),
+		d.CostUSD, nullJSON(outcome), nullJSON(d.Affect)); err != nil {
+		return fmt.Errorf("save decision: %w", err)
+	}
+	if d.CostUSD > 0 {
+		var account string
+		var started time.Time
+		err := tx.QueryRow(ctx, `SELECT a.id, a.created_at FROM agents g JOIN accounts a ON a.id = g.account_id WHERE g.id = $1`,
+			s.agent).Scan(&account, &started)
+		if err != nil && !errors.Is(err, db.ErrNoRows) {
+			return fmt.Errorf("save decision: %w", err)
+		}
+		if err == nil {
+			const week = 7 * 24 * time.Hour
+			weekStart := started.Add(d.At.Sub(started) / week * week)
+			if _, err := tx.Exec(ctx, `INSERT INTO account_usage AS u (account_id, week_start, week_usd, hour_start, hour_usd)
+				VALUES ($1, $2, $3, $4, $3)
+				ON CONFLICT (account_id) DO UPDATE SET
+					week_usd = CASE WHEN u.week_start = excluded.week_start THEN u.week_usd + excluded.week_usd
+					                WHEN u.week_start < excluded.week_start THEN excluded.week_usd ELSE u.week_usd END,
+					week_start = greatest(u.week_start, excluded.week_start),
+					hour_usd = CASE WHEN u.hour_start = excluded.hour_start THEN u.hour_usd + excluded.hour_usd
+					                WHEN u.hour_start < excluded.hour_start THEN excluded.hour_usd ELSE u.hour_usd END,
+					hour_start = greatest(u.hour_start, excluded.hour_start)`,
+				account, weekStart, d.CostUSD, d.At.UTC().Truncate(time.Hour)); err != nil {
+				return fmt.Errorf("save decision: %w", err)
+			}
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) RecentDecisions(ctx context.Context, n int) ([]decision.Decision, error) {
@@ -214,10 +176,10 @@ func (s *Store) RecentDecisions(ctx context.Context, n int) ([]decision.Decision
 }
 
 const decisionColumns = `d.id, d.parent_id, d.at, d.percept_id, d.set_id, d.tier, d.provider, d.answers,
-	d.action, coalesce(d.reply, ''), d.gate, d.latency_ms, d.cost_usd::float8, d.outcome, d.affect`
+	d.action, coalesce(d.reply, ''), d.gate, d.latency_ms, d.cost_usd, d.outcome, d.affect`
 
 // scanDecision reads decisionColumns, then into extra any columns after them.
-func scanDecision(row pgx.Row, extra ...any) (decision.Decision, error) {
+func scanDecision(row db.Scanner, extra ...any) (decision.Decision, error) {
 	var (
 		d                        decision.Decision
 		id                       string
@@ -278,13 +240,10 @@ func (s *Store) TopicExchanges(ctx context.Context, topic string, after time.Tim
 func (s *Store) exchanges(ctx context.Context, where string, exclude ulid.ULID, limit int, args ...any) ([]memory.Exchange, error) {
 	n := len(args) + 2
 	rows, err := s.query(ctx, `
-		SELECT p.at, p.text, coalesce(r.reply, ''), coalesce(p.topic_id, '')
-		FROM percepts p
-		LEFT JOIN LATERAL (
-			SELECT d.reply FROM decisions d
+		SELECT p.at, p.text, coalesce((SELECT d.reply FROM decisions d
 			WHERE d.agent_id = p.agent_id AND d.percept_id = p.id AND d.reply IS NOT NULL
-			ORDER BY d.at DESC LIMIT 1
-		) r ON true
+			ORDER BY d.at DESC LIMIT 1), ''), coalesce(p.topic_id, '')
+		FROM percepts p
 		WHERE p.agent_id = $1 AND `+where+fmt.Sprintf(` AND p.id <> $%d
 		  AND (p.text <> '' OR p.kind IN ($%d, $%d, $%d, $%d))
 		ORDER BY p.at DESC, p.id DESC
@@ -332,14 +291,15 @@ func (s *Store) RecentFacts(ctx context.Context, limit int) ([]memory.Fact, erro
 // rest, newest first within each group.
 func (s *Store) RecallCandidates(ctx context.Context, subjects, areas []string, limit int) ([]memory.Fact, error) {
 	return s.queryFacts(ctx, `SELECT `+factColumns+` FROM facts
-		WHERE agent_id = $1 AND subject = ANY($2)
-		ORDER BY (areas && $3) DESC, at DESC, id DESC LIMIT $4`, nonNil(subjects), nonNil(areas), limit)
+		WHERE agent_id = $1 AND subject IN (SELECT value FROM json_each($2))
+		ORDER BY EXISTS (SELECT 1 FROM json_each(facts.areas) a WHERE a.value IN (SELECT value FROM json_each($3))) DESC,
+			at DESC, id DESC LIMIT $4`, nonNil(subjects), nonNil(areas), limit)
 }
 
 // UnlabelledFacts returns facts with no areas yet, oldest first.
 func (s *Store) UnlabelledFacts(ctx context.Context, limit int) ([]memory.Fact, error) {
 	return s.queryFacts(ctx, `SELECT `+factColumns+` FROM facts
-		WHERE agent_id = $1 AND areas = '{}' ORDER BY at, id LIMIT $2`, limit)
+		WHERE agent_id = $1 AND areas = '[]' ORDER BY at, id LIMIT $2`, limit)
 }
 
 func (s *Store) SetFactAreas(ctx context.Context, id ulid.ULID, areas []string) error {
@@ -375,7 +335,7 @@ func (s *Store) PublicFacts(ctx context.Context, limit int) ([]memory.Fact, erro
 // is false if it never has been.
 func (s *Store) Profile(ctx context.Context) (page []byte, inputs string, at time.Time, ok bool, err error) {
 	err = s.queryRow(ctx, `SELECT page, inputs, written_at FROM profile WHERE agent_id = $1`).Scan(&page, &inputs, &at)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return nil, "", time.Time{}, false, nil
 	}
 	if err != nil {
@@ -632,7 +592,7 @@ func (s *Store) queryProjects(ctx context.Context, sql string, args ...any) ([]m
 // Sources are shared by every agent, so they're not scoped.
 func (s *Store) SaveSource(ctx context.Context, src memory.Source) (ulid.ULID, error) {
 	var id string
-	err := s.pool.QueryRow(ctx, `
+	err := s.db.QueryRow(ctx, `
 		INSERT INTO sources (id, kind, title, author, url, text, chars, fetched_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url RETURNING id`,
 		src.ID.String(), src.Kind, src.Title, src.Author, src.URL, src.Text, len(src.Text), src.FetchedAt).Scan(&id)
@@ -644,14 +604,14 @@ func (s *Store) SaveSource(ctx context.Context, src memory.Source) (ulid.ULID, e
 
 func (s *Store) SourceText(ctx context.Context, id ulid.ULID) (string, error) {
 	var text string
-	if err := s.pool.QueryRow(ctx, `SELECT text FROM sources WHERE id = $1`, id.String()).Scan(&text); err != nil {
+	if err := s.db.QueryRow(ctx, `SELECT text FROM sources WHERE id = $1`, id.String()).Scan(&text); err != nil {
 		return "", fmt.Errorf("load source: %w", err)
 	}
 	return text, nil
 }
 
 const workColumns = `id, intention_id, project_id, kind, title, text, created_at, public, coalesce(public_by, ''),
-	coalesce(data::text, ''), data_kind`
+	coalesce(data, ''), data_kind`
 
 // shareableWork is the condition for a work (aliased w) that may ever be
 // public: not its journal, and made for itself, not for someone (a promise).
@@ -704,9 +664,9 @@ func (s *Store) AwaitWorkPublic(ctx context.Context, id ulid.ULID) error {
 // (PublicBySystem1) never overrides its owner, and a work that may never be
 // public can't be made public.
 func (s *Store) SetWorkPublic(ctx context.Context, id ulid.ULID, public bool, by string) (bool, error) {
-	tag, err := s.exec(ctx, `UPDATE works w SET public = $3, public_by = $4
+	tag, err := s.exec(ctx, `UPDATE works AS w SET public = $3, public_by = $4
 		WHERE w.agent_id = $1 AND w.id = $2 AND (NOT $3 OR `+shareableWork+`)
-		  AND ($4 = '`+memory.PublicByOwner+`' OR w.public_by IS DISTINCT FROM '`+memory.PublicByOwner+`')`,
+		  AND ($4 = '`+memory.PublicByOwner+`' OR w.public_by IS NOT '`+memory.PublicByOwner+`')`,
 		id.String(), public, by)
 	if err != nil {
 		return false, fmt.Errorf("set work public: %w", err)
@@ -777,7 +737,7 @@ func (s *Store) SetWorkData(ctx context.Context, id ulid.ULID, kind string, data
 // WorksMissingData returns up to limit works of kinds that carry no data,
 // newest first.
 func (s *Store) WorksMissingData(ctx context.Context, kinds []string, limit int) ([]memory.Work, error) {
-	return s.queryWorks(ctx, `SELECT `+workColumns+` FROM works WHERE agent_id = $1 AND data IS NULL AND kind = ANY($2)
+	return s.queryWorks(ctx, `SELECT `+workColumns+` FROM works WHERE agent_id = $1 AND data IS NULL AND kind IN (SELECT value FROM json_each($2))
 		ORDER BY created_at DESC, id DESC LIMIT $3`, kinds, limit)
 }
 
@@ -841,8 +801,8 @@ func (s *Store) queryWorksWith(ctx context.Context, embedded bool, sql string, a
 
 func (s *Store) CostSince(ctx context.Context, since time.Time, actions []string) (float64, error) {
 	var cost float64
-	err := s.queryRow(ctx, `SELECT coalesce(sum(cost_usd), 0)::float8 FROM decisions
-		WHERE agent_id = $1 AND at >= $2 AND action = ANY($3)`, since, actions).Scan(&cost)
+	err := s.queryRow(ctx, `SELECT coalesce(sum(cost_usd), 0) FROM decisions
+		WHERE agent_id = $1 AND at >= $2 AND action IN (SELECT value FROM json_each($3))`, since, actions).Scan(&cost)
 	if err != nil {
 		return 0, fmt.Errorf("query cost: %w", err)
 	}
@@ -853,11 +813,11 @@ func (s *Store) CostSince(ctx context.Context, since time.Time, actions []string
 // thread of their latest message and when anything was last said in it.
 func (s *Store) Conversations(ctx context.Context) ([]memory.Conversation, error) {
 	rows, err := s.query(ctx, `
-		SELECT DISTINCT ON (p.speaker) p.speaker, p.source, p.thread, p.payload,
-		       (SELECT max(q.at) FROM percepts q WHERE q.agent_id = p.agent_id AND q.source = p.source AND q.thread = p.thread)
-		FROM percepts p
-		WHERE p.agent_id = $1 AND p.kind = 'message' AND p.speaker <> '' AND p.thread <> ''
-		ORDER BY p.speaker, p.at DESC`)
+		SELECT speaker, source, thread, payload,
+		       (SELECT max(q.at) FROM percepts q WHERE q.agent_id = $1 AND q.source = newest.source AND q.thread = newest.thread)
+		FROM (SELECT p.speaker, p.source, p.thread, p.payload, row_number() OVER (PARTITION BY p.speaker ORDER BY p.at DESC) AS n
+			FROM percepts p WHERE p.agent_id = $1 AND p.kind = 'message' AND p.speaker <> '' AND p.thread <> '') newest
+		WHERE n = 1 ORDER BY speaker`)
 	if err != nil {
 		return nil, fmt.Errorf("query conversations: %w", err)
 	}
@@ -899,7 +859,7 @@ func (s *Store) MarkFactsAsked(ctx context.Context, ids []ulid.ULID, at time.Tim
 	for i, id := range ids {
 		keys[i] = id.String()
 	}
-	if _, err := s.exec(ctx, `UPDATE facts SET asked_at = $3 WHERE agent_id = $1 AND id = ANY($2)`, keys, at); err != nil {
+	if _, err := s.exec(ctx, `UPDATE facts SET asked_at = $3 WHERE agent_id = $1 AND id IN (SELECT value FROM json_each($2))`, keys, at); err != nil {
 		return fmt.Errorf("mark facts asked: %w", err)
 	}
 	return nil
@@ -1061,8 +1021,8 @@ func (s *Store) StaleApprovals(ctx context.Context, before time.Time, limit int)
 // RecentApprovals returns the pending approvals, oldest first, then the newest
 // decided ones.
 func (s *Store) RecentApprovals(ctx context.Context, limit int) ([]memory.Approval, error) {
-	return s.queryApprovals(ctx, `(SELECT `+approvalColumns+` FROM approvals WHERE agent_id = $1 AND status = $2 ORDER BY asked_at, id)
-		UNION ALL (SELECT `+approvalColumns+` FROM approvals WHERE agent_id = $1 AND status <> $2 ORDER BY decided_at DESC, id DESC LIMIT $3)`,
+	return s.queryApprovals(ctx, `SELECT * FROM (SELECT `+approvalColumns+` FROM approvals WHERE agent_id = $1 AND status = $2 ORDER BY asked_at, id)
+		UNION ALL SELECT * FROM (SELECT `+approvalColumns+` FROM approvals WHERE agent_id = $1 AND status <> $2 ORDER BY decided_at DESC, id DESC LIMIT $3)`,
 		memory.ApprovalPending, limit)
 }
 
@@ -1119,7 +1079,7 @@ func (s *Store) SaveAutonomyRule(ctx context.Context, class, verdict, by string,
 
 // AutonomyRules returns the owner's newest change per class.
 func (s *Store) AutonomyRules(ctx context.Context) (map[string]string, error) {
-	rows, err := s.query(ctx, `SELECT DISTINCT ON (class) class, verdict FROM autonomy_rules WHERE agent_id = $1 ORDER BY class, at DESC, id DESC`)
+	rows, err := s.query(ctx, `SELECT class, verdict FROM autonomy_rules WHERE agent_id = $1 ORDER BY at, id`) // the newest is kept
 	if err != nil {
 		return nil, fmt.Errorf("query autonomy rules: %w", err)
 	}
@@ -1169,7 +1129,7 @@ func (s *Store) Labels(ctx context.Context, decisions []ulid.ULID) ([]memory.Lab
 	for i, id := range decisions {
 		ids[i] = id.String()
 	}
-	rows, err := s.query(ctx, `SELECT decision_id, question, value, source, at FROM labels WHERE agent_id = $1 AND decision_id = ANY($2)`, ids)
+	rows, err := s.query(ctx, `SELECT decision_id, question, value, source, at FROM labels WHERE agent_id = $1 AND decision_id IN (SELECT value FROM json_each($2))`, ids)
 	if err != nil {
 		return nil, fmt.Errorf("query labels: %w", err)
 	}
@@ -1199,7 +1159,7 @@ func (s *Store) LastRead(ctx context.Context, setID, source, thread string, befo
 	err := s.queryRow(ctx, `SELECT d.id FROM decisions d JOIN percepts p ON p.agent_id = d.agent_id AND p.id = d.percept_id
 		WHERE d.agent_id = $1 AND d.set_id LIKE $2 AND p.source = $3 AND p.thread = $4 AND p.at < $5 AND p.kind = 'message'
 		ORDER BY p.at DESC, d.at LIMIT 1`, setID+"@%", source, thread, before).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return ulid.ULID{}, false, nil
 	}
 	if err != nil {
@@ -1220,7 +1180,7 @@ type Example struct {
 // LabelledExamples returns the newest decisions of setID (any version) with a
 // label on question.
 func (s *Store) LabelledExamples(ctx context.Context, setID, question string, limit int) ([]Example, error) {
-	rows, err := s.query(ctx, `SELECT d.id, split_part(d.set_id, ',', 1), p.text, d.answers -> $3, l.value
+	rows, err := s.query(ctx, `SELECT d.id, CASE WHEN instr(d.set_id, ',') > 0 THEN substr(d.set_id, 1, instr(d.set_id, ',') - 1) ELSE d.set_id END, p.text, d.answers -> $3, l.value
 		FROM labels l JOIN decisions d ON d.agent_id = l.agent_id AND d.id = l.decision_id
 		JOIN percepts p ON p.agent_id = d.agent_id AND p.id = d.percept_id
 		WHERE l.agent_id = $1 AND l.question = $3 AND d.set_id LIKE $2 AND p.text <> ''
@@ -1463,7 +1423,7 @@ func (s *Store) AskedForReview(ctx context.Context, since time.Time) (memory.Wor
 }
 
 func (s *Store) SavePlan(ctx context.Context, p memory.LearningPlan) error {
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return fmt.Errorf("save plan: %w", err)
 	}
@@ -1544,7 +1504,7 @@ func (s *Store) AdvancePlan(ctx context.Context, plan ulid.ULID, at time.Time) e
 		WHERE agent_id = $1 AND plan_id = $2 AND n = (SELECT stage FROM learning_plans WHERE agent_id = $1 AND id = $2)`, plan.String(), at); err != nil {
 		return fmt.Errorf("advance plan: %w", err)
 	}
-	if _, err := s.exec(ctx, `UPDATE learning_plans p SET stage = p.stage + 1, updated_at = $3,
+	if _, err := s.exec(ctx, `UPDATE learning_plans AS p SET stage = p.stage + 1, updated_at = $3,
 			status = CASE WHEN p.stage + 1 >= (SELECT count(*) FROM plan_stages WHERE agent_id = p.agent_id AND plan_id = p.id) THEN $4 ELSE p.status END
 		WHERE p.agent_id = $1 AND p.id = $2`, plan.String(), at, memory.PlanDone); err != nil {
 		return fmt.Errorf("advance plan: %w", err)
@@ -1635,7 +1595,7 @@ func (s *Store) Found(ctx context.Context, url string) (search.Result, bool, err
 	var r search.Result
 	err := s.queryRow(ctx, `SELECT url, title, snippet FROM web_found WHERE agent_id = $1 AND url = $2`, strings.TrimSpace(url)).
 		Scan(&r.URL, &r.Title, &r.Snippet)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return search.Result{}, false, nil
 	}
 	if err != nil {
@@ -1673,7 +1633,7 @@ func (s *Store) LogWeb(ctx context.Context, kind, what string, costUSD float64, 
 func (s *Store) LastFrom(ctx context.Context, source string) (string, bool, error) {
 	var text string
 	err := s.queryRow(ctx, `SELECT text FROM percepts WHERE agent_id = $1 AND source = $2 ORDER BY at DESC, id DESC LIMIT 1`, source).Scan(&text)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return "", false, nil
 	}
 	if err != nil {
@@ -1705,8 +1665,8 @@ func (s *Store) SaveAction(ctx context.Context, a memory.Action) error {
 // late expiry can't move it again. It reports whether it moved.
 func (s *Store) SetAction(ctx context.Context, id ulid.ULID, from []string, status, result string, at time.Time) (bool, error) {
 	tag, err := s.exec(ctx, `UPDATE actions SET status = $4, result = $5,
-		done_at = CASE WHEN $4 IN ('done', 'failed', 'denied') THEN $6::timestamptz ELSE done_at END
-		WHERE agent_id = $1 AND id = $2 AND status = ANY($3)`, id.String(), from, status, result, at)
+		done_at = CASE WHEN $4 IN ('done', 'failed', 'denied') THEN $6 ELSE done_at END
+		WHERE agent_id = $1 AND id = $2 AND status IN (SELECT value FROM json_each($3))`, id.String(), from, status, result, at)
 	if err != nil {
 		return false, fmt.Errorf("set action: %w", err)
 	}
@@ -1715,7 +1675,7 @@ func (s *Store) SetAction(ctx context.Context, id ulid.ULID, from []string, stat
 
 // Actions returns, oldest first, up to limit actions with one of statuses.
 func (s *Store) Actions(ctx context.Context, statuses []string, limit int) ([]memory.Action, error) {
-	return s.queryActions(ctx, `SELECT `+actionColumns+` FROM actions WHERE agent_id = $1 AND status = ANY($2) ORDER BY proposed_at, id LIMIT $3`,
+	return s.queryActions(ctx, `SELECT `+actionColumns+` FROM actions WHERE agent_id = $1 AND status IN (SELECT value FROM json_each($2)) ORDER BY proposed_at, id LIMIT $3`,
 		statuses, limit)
 }
 
@@ -1775,7 +1735,11 @@ func (s *Store) WebLog(ctx context.Context, kind string, limit int) ([]WebEntry,
 	if err != nil {
 		return nil, fmt.Errorf("query web log: %w", err)
 	}
-	return pgx.CollectRows(rows, pgx.RowToStructByPos[WebEntry])
+	return db.CollectRows(rows, func(r db.Scanner) (WebEntry, error) {
+		var e WebEntry
+		err := r.Scan(&e.What, &e.At)
+		return e, err
+	})
 }
 
 func (s *Store) WebSince(ctx context.Context, kind string, since time.Time) (int, error) {
@@ -1790,7 +1754,7 @@ func (s *Store) WebSince(ctx context.Context, kind string, since time.Time) (int
 // before (by key), and each principle not seeded before (by its seed text, so an
 // edited or rejected one isn't seeded again). It returns how many of each it added.
 func (s *Store) SeedJudgment(ctx context.Context, cases []memory.JudgmentCase, principles []memory.Principle) (int, int, error) {
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return 0, 0, fmt.Errorf("seed judgment: %w", err)
 	}
@@ -1817,7 +1781,7 @@ func (s *Store) SeedJudgment(ctx context.Context, cases []memory.JudgmentCase, p
 		}
 		np++
 		if _, err := tx.Exec(ctx, `INSERT INTO principle_cases (agent_id, principle_id, case_id)
-			SELECT $1, $2, id FROM judgment_cases WHERE agent_id = $1 AND key = ANY($3) ON CONFLICT DO NOTHING`, s.agent, p.ID.String(), nonNil(p.Cases)); err != nil {
+			SELECT $1, $2, id FROM judgment_cases WHERE agent_id = $1 AND key IN (SELECT value FROM json_each($3)) ON CONFLICT DO NOTHING`, s.agent, p.ID.String(), nonNil(p.Cases)); err != nil {
 			return 0, 0, fmt.Errorf("link principle's cases: %w", err)
 		}
 	}
@@ -1828,7 +1792,7 @@ func (s *Store) SeedJudgment(ctx context.Context, cases []memory.JudgmentCase, p
 // keys of the cases behind them; status "" is all.
 func (s *Store) Principles(ctx context.Context, status string) ([]memory.Principle, error) {
 	rows, err := s.query(ctx, `SELECT p.id, p.text, p.kind, p.rank, p.types, p.status, p.source, COALESCE(p.seed, ''), p.created_at, p.updated_at,
-			COALESCE(array_agg(c.key ORDER BY c.at, c.key) FILTER (WHERE c.key IS NOT NULL), '{}')
+			COALESCE(json_group_array(c.key ORDER BY c.at, c.key) FILTER (WHERE c.key IS NOT NULL), '[]')
 		FROM principles p
 		LEFT JOIN principle_cases pc ON pc.agent_id = p.agent_id AND pc.principle_id = p.id
 		LEFT JOIN judgment_cases c ON c.agent_id = pc.agent_id AND c.id = pc.case_id
@@ -1859,7 +1823,7 @@ func (s *Store) Principles(ctx context.Context, status string) ([]memory.Princip
 func (s *Store) JudgmentCases(ctx context.Context, status string, types []string) ([]memory.JudgmentCase, error) {
 	rows, err := s.query(ctx, `SELECT id, key, type, situation, options, choice, reason, status, source, outcome, at, updated_at,
 			embedding, embedded_with
-		FROM judgment_cases WHERE agent_id = $1 AND ($2 = '' OR status = $2) AND (cardinality($3::text[]) = 0 OR type = ANY($3))
+		FROM judgment_cases WHERE agent_id = $1 AND ($2 = '' OR status = $2) AND (json_array_length($3) = 0 OR type IN (SELECT value FROM json_each($3)))
 		ORDER BY at, key`, status, nonNil(types))
 	if err != nil {
 		return nil, fmt.Errorf("query judgment cases: %w", err)
@@ -1907,7 +1871,7 @@ func (s *Store) ReviewCase(ctx context.Context, id ulid.ULID, status, reason str
 }
 
 func (s *Store) SavePrinciple(ctx context.Context, p memory.Principle) error {
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return fmt.Errorf("save principle: %w", err)
 	}
@@ -1918,7 +1882,7 @@ func (s *Store) SavePrinciple(ctx context.Context, p memory.Principle) error {
 		return fmt.Errorf("save principle: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO principle_cases (agent_id, principle_id, case_id)
-		SELECT $1, $2, id FROM judgment_cases WHERE agent_id = $1 AND key = ANY($3) ON CONFLICT DO NOTHING`, s.agent, p.ID.String(), nonNil(p.Cases)); err != nil {
+		SELECT $1, $2, id FROM judgment_cases WHERE agent_id = $1 AND key IN (SELECT value FROM json_each($3)) ON CONFLICT DO NOTHING`, s.agent, p.ID.String(), nonNil(p.Cases)); err != nil {
 		return fmt.Errorf("link principle's cases: %w", err)
 	}
 	return tx.Commit(ctx)
@@ -1938,7 +1902,7 @@ func (s *Store) SaveCall(ctx context.Context, c memory.Call) error {
 	return nil
 }
 
-func scanCalls(rows pgx.Rows) ([]memory.Call, error) {
+func scanCalls(rows *db.Rows) ([]memory.Call, error) {
 	defer rows.Close()
 	var out []memory.Call
 	for rows.Next() {
@@ -2064,7 +2028,7 @@ func (s *Store) WaitingCall(ctx context.Context, since time.Time) (memory.Call, 
 // AnsweredAt and Waiting. With asCase, the answer is also kept as one of their
 // decisions (approved: it's theirs). It returns false if already answered.
 func (s *Store) AnswerCall(ctx context.Context, c memory.Call, asCase bool) (bool, error) {
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("answer call: %w", err)
 	}
@@ -2099,7 +2063,7 @@ func (s *Store) AnswerCall(ctx context.Context, c memory.Call, asCase bool) (boo
 // GiveCallReason also sets the reason on the case the call became, and stops
 // waiting for one.
 func (s *Store) GiveCallReason(ctx context.Context, id ulid.ULID, reason string, at time.Time) error {
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return fmt.Errorf("call reason: %w", err)
 	}
@@ -2150,7 +2114,7 @@ func kindOf(p memory.Principle) string {
 // RankPriority shifts the others to make room, and returns whether there was
 // such a priority. Rank 1 is first.
 func (s *Store) RankPriority(ctx context.Context, id ulid.ULID, rank int, at time.Time) (bool, error) {
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("rank priority: %w", err)
 	}
@@ -2192,7 +2156,7 @@ func (s *Store) RankPriority(ctx context.Context, id ulid.ULID, rank int, at tim
 // weekly review judges.
 func (s *Store) CallsToLookBack(ctx context.Context, types []string, from, to time.Time, limit int) ([]memory.Call, error) {
 	rows, err := s.query(ctx, `SELECT `+callColumns+` FROM judgment_calls
-		WHERE agent_id = $1 AND outcome = '' AND type = ANY($2) AND created_at >= $3 AND created_at < $4 AND status <> $5
+		WHERE agent_id = $1 AND outcome = '' AND type IN (SELECT value FROM json_each($2)) AND created_at >= $3 AND created_at < $4 AND status <> $5
 		ORDER BY created_at, id LIMIT $6`, nonNil(types), from, to, memory.CallAsked, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query calls to look back on: %w", err)
@@ -2204,7 +2168,7 @@ func (s *Store) CallsToLookBack(ctx context.Context, types []string, from, to ti
 // owner's verdict stands: its review never overrides it. It returns whether it
 // was recorded.
 func (s *Store) SetOutcome(ctx context.Context, id ulid.ULID, outcome, verdict, note, by string, at time.Time) (bool, error) {
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("set outcome: %w", err)
 	}
@@ -2217,7 +2181,7 @@ func (s *Store) SetOutcome(ctx context.Context, id ulid.ULID, outcome, verdict, 
 			outcome_by = $6, outcome_at = $7
 		WHERE agent_id = $1 AND id = $2 AND (outcome_by <> $8 OR $6 = $8) RETURNING case_id, outcome_note`, s.agent,
 		id.String(), outcome, verdict, note, by, at, memory.OutcomeByOwner).Scan(&caseID, &kept)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
@@ -2317,7 +2281,7 @@ func (s *Store) Whose(ctx context.Context) (string, time.Time, bool, error) {
 		at   time.Time
 	)
 	err := s.queryRow(ctx, `SELECT name, created_at FROM agents WHERE id = $1`).Scan(&name, &at)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return "", time.Time{}, false, nil
 	}
 	if err != nil {

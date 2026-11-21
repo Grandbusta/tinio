@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"github.com/Grandbusta/tinio/internal/db"
 	"io/fs"
 	"net/http"
 	"strconv"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Grandbusta/tinio/api/middlewares"
 	"github.com/Grandbusta/tinio/api/models"
@@ -32,7 +32,7 @@ type CharacterInfo struct {
 // Characters are what each account may raise: Tinio's ready ones and their
 // own, from the database (models.CharactersFor).
 type Characters struct {
-	DB *pgxpool.Pool
+	DB *db.DB
 
 	mu     sync.Mutex
 	parsed map[string]parsedCharacter // by key@version: a version never changes
@@ -45,7 +45,7 @@ type parsedCharacter struct {
 
 // LoadCharacters brings the ready characters in the database up to date with
 // those in files (characters/), at start.
-func LoadCharacters(ctx context.Context, db *pgxpool.Pool, files fs.FS) (*Characters, error) {
+func LoadCharacters(ctx context.Context, db *db.DB, files fs.FS) (*Characters, error) {
 	ts, err := character.Templates(files, "characters")
 	if err != nil {
 		return nil, err

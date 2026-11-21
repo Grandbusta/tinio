@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	tdb "github.com/Grandbusta/tinio/internal/db"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -71,7 +71,7 @@ func AgentsOf(ctx context.Context, db DB, account string) ([]Agent, error) {
 func AgentOf(ctx context.Context, db DB, account, id string) (Agent, bool, error) {
 	var a Agent
 	err := db.QueryRow(ctx, `SELECT `+agentColumns+` FROM agents WHERE id = $1 AND account_id = $2`, id, account).Scan(a.fields()...)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, tdb.ErrNoRows) {
 		return a, false, nil
 	}
 	if err != nil {

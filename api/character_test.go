@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -15,8 +14,6 @@ func TestTheOwnerChangesTheirCharacterAndGoesBack(t *testing.T) {
 	ta := newTestAPI(t)
 	ada := ta.signUp(t)
 	zara := ta.raiseZara(t, ada)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	get := func() map[string]any {
 		t.Helper()
 		rec, out := ta.do(t, "GET", "/v1/agents/"+zara+"/character", nil, ada, "")
@@ -31,14 +28,8 @@ func TestTheOwnerChangesTheirCharacterAndGoesBack(t *testing.T) {
 		t.Fatalf("as raised: %v", first)
 	}
 
-	conn, err := ta.db.Acquire(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Release()
-	if _, err := conn.Exec(ctx, "LISTEN "+host.Changed); err != nil {
-		t.Fatal(err)
-	}
+	changed, stop := ta.db.Listen(host.Changed, 8)
+	defer stop()
 	save := func(body map[string]any) int {
 		rec, _ := ta.do(t, "POST", "/v1/agents/"+zara+"/character", body, ada, site)
 		return rec.Code
@@ -47,8 +38,13 @@ func TestTheOwnerChangesTheirCharacterAndGoesBack(t *testing.T) {
 		"day": map[string]any{"plan_at": "07:30"}}); code != http.StatusOK {
 		t.Fatalf("saving: %d", code)
 	}
-	if n, err := conn.Conn().WaitForNotification(ctx); err != nil || n.Payload != zara {
-		t.Errorf("whoever runs her wasn't told: %v %v", n, err)
+	select {
+	case agent := <-changed:
+		if agent != zara {
+			t.Errorf("told %q, not her", agent)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("whoever runs her wasn't told")
 	}
 	now := get()
 	if s := now["story"].([]any); len(s) != 1 || s[0] != "Zara writes hooks for a living." || now["day"].(map[string]any)["plan_at"] != "07:30" ||

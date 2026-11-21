@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Grandbusta/tinio/internal/db"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/internal/memory"
@@ -17,11 +17,8 @@ const topicColumns = `t.id, t.person, t.title, t.summary, t.status, t.settled, t
 // Topics is every open topic with person and the quiet ones last talked in
 // at or after quietSince, newest first, each with the newest message in it.
 func (s *Store) Topics(ctx context.Context, person string, quietSince time.Time, limit int) ([]memory.Topic, error) {
-	return s.queryTopics(ctx, `SELECT `+topicColumns+`, coalesce(said.text, '') FROM topics t
-		LEFT JOIN LATERAL (
-			SELECT p.text FROM percepts p WHERE p.agent_id = t.agent_id AND p.topic_id = t.id AND p.text <> ''
-			ORDER BY p.at DESC LIMIT 1
-		) said ON true
+	return s.queryTopics(ctx, `SELECT `+topicColumns+`, coalesce((SELECT p.text FROM percepts p
+			WHERE p.agent_id = t.agent_id AND p.topic_id = t.id AND p.text <> '' ORDER BY p.at DESC LIMIT 1), '') FROM topics t
 		WHERE t.agent_id = $1 AND t.person = $2 AND (t.state = 'open' OR t.last_at >= $3)
 		ORDER BY t.last_at DESC, t.id DESC LIMIT $4`, person, quietSince, limit)
 }
@@ -30,13 +27,13 @@ func (s *Store) Topics(ctx context.Context, person string, quietSince time.Time,
 // first, with their embeddings: what a message may bring up again, however
 // long ago.
 func (s *Store) OldTopics(ctx context.Context, person string, before time.Time, limit int) ([]memory.Topic, error) {
-	rows, err := s.query(ctx, `SELECT `+topicColumns+`, '', coalesce(t.embedding, '{}'), t.embedded_with FROM topics t
+	rows, err := s.query(ctx, `SELECT `+topicColumns+`, '', t.embedding, t.embedded_with FROM topics t
 		WHERE t.agent_id = $1 AND t.person = $2 AND t.state = 'quiet' AND t.last_at < $3
 		ORDER BY t.last_at DESC, t.id DESC LIMIT $4`, person, before, limit)
 	if err != nil {
 		return nil, fmt.Errorf("load old topics: %w", err)
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (memory.Topic, error) {
+	return db.CollectRows(rows, func(r db.Scanner) (memory.Topic, error) {
 		var t memory.Topic
 		err := scanTopic(r, &t, &t.Embedding, &t.EmbeddedWith)
 		return t, err
@@ -70,16 +67,39 @@ func (s *Store) StartTopic(ctx context.Context, t memory.Topic) error {
 // SetTopic puts a percept in topic ("": none), and its chat row with it,
 // which the app is told of. The topic was last talked in at at, and is open.
 func (s *Store) SetTopic(ctx context.Context, percept ulid.ULID, topic string, at time.Time) error {
-	_, err := s.exec(ctx, `
-		WITH p AS (UPDATE percepts SET topic_id = nullif($3, '') WHERE agent_id = $1 AND id = $2 RETURNING source, external_id),
-		t AS (UPDATE topics SET last_at = greatest(last_at, $4), state = 'open' WHERE agent_id = $1 AND id = $3),
-		msg AS (UPDATE chat_messages c SET topic_id = nullif($3, '') FROM p
-			WHERE c.agent_id = $1 AND p.source = '`+memory.ChatSource+`' AND c.id = p.external_id RETURNING c.agent_id, c.id)
-		SELECT pg_notify('`+FromAgent+`', agent_id || ':' || id) FROM msg`, percept.String(), topic, at)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return fmt.Errorf("set topic: %w", err)
 	}
-	return nil
+	defer tx.Rollback(ctx)
+	var source, external string
+	err = tx.QueryRow(ctx, `UPDATE percepts SET topic_id = nullif($3, '') WHERE agent_id = $1 AND id = $2 RETURNING source, external_id`,
+		s.agent, percept.String(), topic).Scan(&source, &external)
+	if errors.Is(err, db.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("set topic: %w", err)
+	}
+	if err := touchTopic(ctx, tx, s.agent, topic, at); err != nil {
+		return fmt.Errorf("set topic: %w", err)
+	}
+	if source == memory.ChatSource {
+		tag, err := tx.Exec(ctx, `UPDATE chat_messages SET topic_id = nullif($3, '') WHERE agent_id = $1 AND id = $2`, s.agent, external, topic)
+		if err != nil {
+			return fmt.Errorf("set topic: %w", err)
+		}
+		if tag.RowsAffected() == 1 {
+			tx.Notify(FromAgent, s.agent+":"+external)
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+// touchTopic has topic ("": none) last talked in at at, and open.
+func touchTopic(ctx context.Context, tx *db.Tx, agent, topic string, at time.Time) error {
+	_, err := tx.Exec(ctx, `UPDATE topics SET last_at = greatest(last_at, $3), state = 'open' WHERE agent_id = $1 AND id = $2`, agent, topic, at)
+	return err
 }
 
 // NameTopic gives a topic its title, unless it has one: the owner's word wins.
@@ -94,7 +114,7 @@ func (s *Store) NameTopic(ctx context.Context, id, title string) error {
 // not since before (the talk has paused), longest waiting first.
 func (s *Store) TopicsToSum(ctx context.Context, before time.Time, limit int) ([]memory.Topic, error) {
 	return s.queryTopics(ctx, `SELECT `+topicColumns+`, '' FROM topics t
-		WHERE t.agent_id = $1 AND t.last_at > coalesce(t.summed_at, '-infinity') AND t.last_at <= $2
+		WHERE t.agent_id = $1 AND t.last_at > coalesce(t.summed_at, '') AND t.last_at <= $2
 		ORDER BY t.last_at, t.id LIMIT $3`, before, limit)
 }
 
@@ -126,7 +146,7 @@ func (s *Store) QuietTopics(ctx context.Context, before time.Time) error {
 func (s *Store) PerceptTopic(ctx context.Context, id ulid.ULID) (string, error) {
 	var topic string
 	err := s.queryRow(ctx, `SELECT coalesce(topic_id, '') FROM percepts WHERE agent_id = $1 AND id = $2`, id.String()).Scan(&topic)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, db.ErrNoRows) {
 		return "", nil
 	}
 	if err != nil {
@@ -140,22 +160,48 @@ func (s *Store) PerceptTopic(ctx context.Context, id ulid.ULID) (string, error) 
 // agent's rows after it that answered it (until the owner's next message,
 // in the topic it was in). False if there's no such row.
 func (s *Store) MoveChat(ctx context.Context, row, topic string, at time.Time) (bool, error) {
-	tag, err := s.exec(ctx, `
-		WITH was AS (SELECT id, author, topic_id FROM chat_messages WHERE agent_id = $1 AND id = $2),
-		later AS (SELECT min(c.id) AS id FROM chat_messages c, was
-			WHERE c.agent_id = $1 AND c.author = 'owner' AND c.kind = '`+memory.ChatMessageKind+`' AND c.id > was.id),
-		moved AS (UPDATE chat_messages m SET topic_id = nullif($3, '') FROM was, later
-			WHERE m.agent_id = $1 AND (m.id = was.id OR (was.author = 'owner' AND m.author = 'agent' AND m.id > was.id
-				AND (later.id IS NULL OR m.id < later.id) AND m.topic_id IS NOT DISTINCT FROM was.topic_id))
-			RETURNING m.agent_id, m.id),
-		p AS (UPDATE percepts SET topic_id = nullif($3, '') FROM was
-			WHERE percepts.agent_id = $1 AND was.author = 'owner' AND source = '`+memory.ChatSource+`' AND external_id = was.id),
-		t AS (UPDATE topics SET last_at = greatest(last_at, $4), state = 'open' WHERE agent_id = $1 AND id = $3)
-		SELECT pg_notify('`+FromAgent+`', agent_id || ':' || id) FROM moved`, row, topic, at)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("move chat: %w", err)
 	}
-	return tag.RowsAffected() > 0, nil
+	defer tx.Rollback(ctx)
+	var author string
+	var was *string
+	err = tx.QueryRow(ctx, `SELECT author, topic_id FROM chat_messages WHERE agent_id = $1 AND id = $2`, s.agent, row).Scan(&author, &was)
+	if errors.Is(err, db.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("move chat: %w", err)
+	}
+	rows, err := tx.Query(ctx, `UPDATE chat_messages AS m SET topic_id = nullif($3, '')
+		WHERE m.agent_id = $1 AND (m.id = $2 OR ($4 = 'owner' AND m.author = 'agent' AND m.id > $2 AND m.topic_id IS $5
+			AND m.id < coalesce((SELECT min(c.id) FROM chat_messages c WHERE c.agent_id = $1 AND c.author = 'owner'
+				AND c.kind = '`+memory.ChatMessageKind+`' AND c.id > $2), '~')))
+		RETURNING id`, s.agent, row, topic, author, was)
+	if err != nil {
+		return false, fmt.Errorf("move chat: %w", err)
+	}
+	moved, err := db.CollectRows(rows, func(r db.Scanner) (string, error) {
+		var id string
+		return id, r.Scan(&id)
+	})
+	if err != nil {
+		return false, fmt.Errorf("move chat: %w", err)
+	}
+	if author == memory.ChatOwner {
+		if _, err := tx.Exec(ctx, `UPDATE percepts SET topic_id = nullif($3, '') WHERE agent_id = $1 AND source = $4 AND external_id = $2`,
+			s.agent, row, topic, memory.ChatSource); err != nil {
+			return false, fmt.Errorf("move chat: %w", err)
+		}
+	}
+	if err := touchTopic(ctx, tx, s.agent, topic, at); err != nil {
+		return false, fmt.Errorf("move chat: %w", err)
+	}
+	for _, id := range moved {
+		tx.Notify(FromAgent, s.agent+":"+id)
+	}
+	return true, tx.Commit(ctx)
 }
 
 // RenameTopic gives a topic the owner's title. False if there's none.
@@ -183,29 +229,54 @@ func (s *Store) MergeTopic(ctx context.Context, from, into string) (bool, error)
 	if from == into {
 		return false, nil
 	}
-	tx, err := s.begin(ctx, pgx.TxOptions{})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("merge topic: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	tag, err := tx.Exec(ctx, `WITH f AS (DELETE FROM topics WHERE agent_id = $1 AND id = $2 RETURNING person, settled, started_at, last_at)
-		UPDATE topics t SET settled = t.settled || f.settled, started_at = least(t.started_at, f.started_at),
-			last_at = greatest(t.last_at, f.last_at), state = 'open', folded_at = NULL, summed_at = NULL, embedding = NULL
-		FROM f WHERE t.agent_id = $1 AND t.id = $3 AND t.person = f.person`, s.agent, from, into)
+	var (
+		person, gone   string
+		settled, extra []string
+		started, last  time.Time
+	)
+	err = tx.QueryRow(ctx, `DELETE FROM topics WHERE agent_id = $1 AND id = $2 RETURNING person, settled, started_at, last_at`,
+		s.agent, from).Scan(&gone, &extra, &started, &last)
+	if errors.Is(err, db.ErrNoRows) {
+		return false, nil
+	}
 	if err != nil {
 		return false, fmt.Errorf("merge topic: %w", err)
 	}
-	if tag.RowsAffected() != 1 {
+	err = tx.QueryRow(ctx, `SELECT person, settled FROM topics WHERE agent_id = $1 AND id = $2`, s.agent, into).Scan(&person, &settled)
+	if errors.Is(err, db.ErrNoRows) || err == nil && person != gone {
 		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("merge topic: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE topics SET settled = $3, started_at = least(started_at, $4), last_at = greatest(last_at, $5),
+		state = 'open', folded_at = NULL, summed_at = NULL, embedding = NULL WHERE agent_id = $1 AND id = $2`,
+		s.agent, into, append(settled, extra...), started, last); err != nil {
+		return false, fmt.Errorf("merge topic: %w", err)
 	}
 	for _, table := range []string{"percepts", "approvals"} {
 		if _, err := tx.Exec(ctx, `UPDATE `+table+` SET topic_id = $3 WHERE agent_id = $1 AND topic_id = $2`, s.agent, from, into); err != nil {
 			return false, fmt.Errorf("merge topic: %w", err)
 		}
 	}
-	if _, err := tx.Exec(ctx, `WITH c AS (UPDATE chat_messages SET topic_id = $3 WHERE agent_id = $1 AND topic_id = $2 RETURNING agent_id, id)
-		SELECT pg_notify('`+FromAgent+`', agent_id || ':' || id) FROM c`, s.agent, from, into); err != nil {
+	rows, err := tx.Query(ctx, `UPDATE chat_messages SET topic_id = $3 WHERE agent_id = $1 AND topic_id = $2 RETURNING id`, s.agent, from, into)
+	if err != nil {
 		return false, fmt.Errorf("merge topic: %w", err)
+	}
+	moved, err := db.CollectRows(rows, func(r db.Scanner) (string, error) {
+		var id string
+		return id, r.Scan(&id)
+	})
+	if err != nil {
+		return false, fmt.Errorf("merge topic: %w", err)
+	}
+	for _, id := range moved {
+		tx.Notify(FromAgent, s.agent+":"+id)
 	}
 	return true, tx.Commit(ctx)
 }
@@ -215,7 +286,7 @@ func (s *Store) queryTopics(ctx context.Context, sql string, args ...any) ([]mem
 	if err != nil {
 		return nil, fmt.Errorf("load topics: %w", err)
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (memory.Topic, error) {
+	return db.CollectRows(rows, func(r db.Scanner) (memory.Topic, error) {
 		var t memory.Topic
 		err := scanTopic(r, &t)
 		return t, err
@@ -223,7 +294,7 @@ func (s *Store) queryTopics(ctx context.Context, sql string, args ...any) ([]mem
 }
 
 // scanTopic scans topicColumns and the newest message into t, then more.
-func scanTopic(r pgx.CollectableRow, t *memory.Topic, more ...any) error {
+func scanTopic(r db.Scanner, t *memory.Topic, more ...any) error {
 	var folded, summed *time.Time
 	err := r.Scan(append([]any{&t.ID, &t.Person, &t.Title, &t.Summary, &t.Status, &t.Settled, &t.Quiet, &t.StartedAt, &t.LastAt,
 		&folded, &summed, &t.LastSaid}, more...)...)

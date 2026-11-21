@@ -1,5 +1,5 @@
 // Package config is the API's settings, read from the environment once at
-// start, and its database.
+// start, and where Tinio keeps its data.
 package config
 
 import (
@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/Grandbusta/tinio/internal/connect"
@@ -15,7 +17,7 @@ import (
 
 type Config struct {
 	Port           string   // PORT, default 8081
-	DatabaseURL    string   // DATABASE_URL: the platform's one database
+	DataDir        string   // TINIO_DATA: the folder with the database and the key; DefaultDataDir if not set
 	AppOrigin      string   // APP_ORIGIN: the app (app.heytinio.com), the only site that may change anything
 	CookieSecure   bool     // COOKIE_SECURE: false only for plain http on localhost
 	SigninSecret   []byte   // SIGNIN_SECRET: keys the sign-in codes' hashes (32+ characters); the API's alone
@@ -36,7 +38,7 @@ type Config struct {
 func Load() (Config, error) {
 	c := Config{
 		Port:           orDefault(os.Getenv("PORT"), "8081"),
-		DatabaseURL:    os.Getenv("DATABASE_URL"),
+		DataDir:        os.Getenv("TINIO_DATA"),
 		AppOrigin:      orDefault(os.Getenv("APP_ORIGIN"), "http://localhost:3001"),
 		CookieSecure:   os.Getenv("COOKIE_SECURE") != "false",
 		SigninSecret:   []byte(os.Getenv("SIGNIN_SECRET")),
@@ -52,14 +54,42 @@ func Load() (Config, error) {
 		}
 		c.Key = &key
 	}
-	if c.DatabaseURL == "" {
-		return c, errors.New("DATABASE_URL isn't set: the platform's database")
+	if c.DataDir == "" {
+		dir, err := DefaultDataDir()
+		if err != nil {
+			return c, err
+		}
+		c.DataDir = dir
 	}
 	if c.DevCode && (c.CookieSecure || !local(c.AppOrigin)) {
 		return c, errors.New("SIGNIN_DEV_CODE is for development only: it needs COOKIE_SECURE=false and APP_ORIGIN on localhost")
 	}
 	return c, nil
 }
+
+// DefaultDataDir is where Tinio keeps its data unless TINIO_DATA says:
+// Application Support on macOS, %AppData% on Windows, the XDG data folder
+// elsewhere.
+func DefaultDataDir() (string, error) {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		dir, err := os.UserConfigDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(dir, "Tinio"), nil
+	}
+	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
+		return filepath.Join(dir, "tinio"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".local", "share", "tinio"), nil
+}
+
+// DatabasePath is the database's file in the data folder.
+func (c Config) DatabasePath() string { return filepath.Join(c.DataDir, "tinio.db") }
 
 func local(origin string) bool {
 	u, err := url.Parse(origin)

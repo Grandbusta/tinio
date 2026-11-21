@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Grandbusta/tinio/internal/db"
 	"net/http"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/oauth2"
 
 	"github.com/Grandbusta/tinio/internal/secret"
@@ -16,7 +16,7 @@ import (
 // Store keeps connections in the platform's database (connections, a
 // platform table), their grants sealed with Key.
 type Store struct {
-	DB  *pgxpool.Pool
+	DB  *db.DB
 	Key secret.Key
 }
 

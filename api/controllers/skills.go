@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"github.com/Grandbusta/tinio/internal/db"
 	"io"
 	"io/fs"
 	"maps"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Grandbusta/tinio/api/middlewares"
 	"github.com/Grandbusta/tinio/api/utils"
@@ -28,7 +28,7 @@ import (
 // read when a task fits. Know-how is trusted like a prompt but grants no
 // permission, and its scripts are never run. Behind middlewares.OwnAgent.
 type Skills struct {
-	DB *pgxpool.Pool
+	DB *db.DB
 }
 
 const (
@@ -138,9 +138,7 @@ func (sk *Skills) Import(c *gin.Context) error {
 		Files: s.Files, AddedAt: time.Now().UTC()}); err != nil {
 		return err
 	}
-	if _, err := sk.DB.Exec(c, `SELECT pg_notify($1, $2)`, host.Changed, ag.ID); err != nil {
-		return err
-	}
+	sk.DB.Notify(host.Changed, ag.ID)
 	utils.SuccessWithData(c, http.StatusCreated, gin.H{"imported": knowHowView{Name: s.Name, Title: agentskill.Title(s.Name, s.Body),
 		Description: s.Description, Files: len(s.Files), AddedAt: time.Now().UTC()}})
 	return nil
@@ -156,9 +154,7 @@ func (sk *Skills) Remove(c *gin.Context) error {
 	if !ok {
 		return utils.ErrNoSuchSkill
 	}
-	if _, err := sk.DB.Exec(c, `SELECT pg_notify($1, $2)`, host.Changed, ag.ID); err != nil {
-		return err
-	}
+	sk.DB.Notify(host.Changed, ag.ID)
 	utils.SuccessWithData(c, http.StatusOK, gin.H{"removed": c.Param("name")})
 	return nil
 }
