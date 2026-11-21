@@ -42,7 +42,7 @@ as **Tinio**, and `tinio` for the command and in code.
 | Path | What it is |
 |---|---|
 | `cmd/tinio` | The command: `api.Main`. |
-| `desktop/` | The desktop app (Wails, a Go module of its own): `api.Start` in a window, the API in-process, chat as events; `frontend/` is its React app, the web app's screens copied in. See its README. |
+| `desktop/` | The desktop app (Wails, a Go module of its own; `desktop/tools` pins the `wails` command): `api.Start` in a window, the API in-process, chat as events; `frontend/` is its React app, the web app's screens copied in. See its README. |
 | `api/` | The API (every route in `api/main.go`; controllers, models, middlewares) and running the agents beside it (`work`); `tinio eval`. |
 | `.env.example` | Every setting, with what it is; copied to `.env`, which is never committed. |
 | `characters/<name>/` | The six ready characters, loaded into the `characters` table (a new version when one changes) when the API starts: `template.yaml` (how the app offers them), `character.yaml` (who, and when their day runs), `judgment.yaml` (how the owner decides). How every agent works is the defaults in `internal/config`, on the models the environment names. |
@@ -52,8 +52,8 @@ as **Tinio**, and `tinio` for the command and in code.
 | `evals/replies/<character>.yaml`, `evals/judge.md` | Conversations to have with a new agent raised from each ready character, what they must leave behind (reminders, promises, facts, what a reply must or mustn't say), and what a good reply does; the judge's rubric. `go run ./cmd/tinio eval -replies` has them on the real mind (`host.Talk`, their clock held still) in a throwaway database of its own, then checks and judges them: how the reply model is chosen. `go run ./cmd/tinio eval -day` has a new agent live a whole day on a clock it ticks, and reports what it cost. |
 | `docs/` | Setup and settings, the guide to what owners notice, the architecture. |
 | `tinio.go` | Builds `prompts/`, `decisions/` and `characters/` into the binary (`tinio.Files`); a file on disk at the same path wins. Read them only through it. |
-| `.github/workflows/test.yml` | gofmt, vet and the tests. |
-| `.github/workflows/release.yml` | A `v*` tag: `cmd/tinio` built for each system, on a draft release. |
+| `.github/workflows/test.yml` | Every push: gofmt, vet and the tests; and the desktop app, its frontend built, its Go vetted for every system and tested, and the app built on macOS. |
+| `.github/workflows/release.yml` | A `v*` tag: `cmd/tinio` built for each system, and the desktop app built on macOS (universal), Windows and Linux, on a draft release with one checksums file. |
 
 ### Packages (`internal/`)
 
@@ -113,7 +113,7 @@ The desktop app is its own module, and embeds its built frontend: in `desktop/fr
 
 A test that needs a database opens a new SQLite file in its own temporary folder
 (`t.TempDir()`): nothing to start, nothing left behind. Run them with `-race` before a
-commit. `gofmt -l .` must print nothing. CI runs gofmt, vet and the tests.
+commit. `gofmt -l .` must print nothing. CI runs gofmt, vet and the tests, and builds the desktop app.
 
 System 2's instructions are held to a size in bytes (`TestPromptBudget`, sizes in
 `internal/mind/testdata/prompt_budget.json`): a prompt that grows or shrinks fails until its

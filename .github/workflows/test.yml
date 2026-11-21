@@ -1,8 +1,11 @@
 name: test
 
+# Every push and pull request: the engine and API (gofmt, vet, tests), and the
+# desktop app (its frontend typechecked and built, its Go vetted for every
+# system and tested, and the app built on macOS, where it needs nothing else
+# installed).
 on:
   push:
-    branches: [main]
   pull_request:
 
 jobs:
@@ -16,3 +19,34 @@ jobs:
       - run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
       - run: go test ./...
+
+  desktop:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: |
+            desktop/go.sum
+            desktop/tools/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Frontend (typechecked and built)
+        working-directory: desktop/frontend
+        run: npm ci && npm run build
+      - run: go vet ./...
+      - name: Vet for Windows and Linux too
+        run: GOOS=windows go vet ./... && GOOS=linux go vet ./...
+      - run: go test ./...
+      - name: The wails command
+        working-directory: desktop/tools
+        run: go build -o ../../bin/wails github.com/wailsapp/wails/v2/cmd/wails
+      - name: Build the app
+        run: ../bin/wails build -skipbindings -s

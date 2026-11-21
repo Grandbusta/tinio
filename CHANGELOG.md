@@ -28,8 +28,11 @@ saves their files where you choose. Settings has your key, the model for each of
 (replies, decisions, their own day, light mode, works, from the models Tinio has prices
 for), the app, and how it looks.
 
+Each release has the app for macOS (one for Intel and Apple silicon), Windows and Linux,
+unsigned for now, and CI builds and tests it on every push.
+
 **Still to come before v0.5.0:** Telegram, local tools, backup and moving from v0.4, per
-agent; the app reachable from your phone; release builds of the app.
+agent; the app reachable from your phone; connecting accounts from the app.
 
 **Not here until they come back:** the v0.4 commands (`tinio new`, `agent`, `secret`,
 `skill`, `doctor`, `backup`, `restore`), Telegram, the public profile page, and the five

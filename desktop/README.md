@@ -14,11 +14,24 @@ said in a chat comes to it as the app's events rather than a stream.
 You need Go 1.27+, Node 20.19+, and on Linux the WebKitGTK development packages
 (see Wails' [installation guide](https://wails.io/docs/gettingstarted/installation)).
 
+Or download it: each release has the app for macOS (Intel and Apple silicon in one),
+Windows and Linux.
+
+To build it, first the `wails` command, from `desktop/tools`. It's Wails v2.12.0's own,
+pinned to tools that read what Go 1.27 compiles (the `wails` you'd `go install` can't):
+
 ```bash
-go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
-cd desktop
-wails build -skipbindings
+cd desktop/tools && go build -o ../../bin/wails github.com/wailsapp/wails/v2/cmd/wails
 ```
+
+then the app:
+
+```bash
+cd desktop && ../bin/wails build -skipbindings
+```
+
+`-platform darwin/universal` makes one app for both kinds of Mac. On Ubuntu 24.04, add
+`-tags webkit2_41`.
 
 The app is in `build/bin` (`Tinio.app` on macOS). Open it, give it your OpenAI key, and
 raise your first agent. The key can wait (Skip for now) and be added in Settings, but
@@ -31,10 +44,10 @@ Your agents live their days only while Tinio runs, so it keeps running:
 
 - **Closing the window doesn't quit.** On macOS Tinio hides, like Cmd+H, and clicking it
   in the Dock brings it back; elsewhere the window goes to the taskbar. Quit from the
-  menu (macOS) or with Quit Tinio on You. Opening Tinio again while it runs brings back
+  menu (macOS) or with Quit Tinio in Settings. Opening Tinio again while it runs brings back
   its window.
 - **It opens when you log in**, out of the way (minimised), set the first time it runs.
-  Turn it off on You. It's a launch agent on macOS
+  Turn it off in Settings. It's a launch agent on macOS
   (`~/Library/LaunchAgents/app.tinio.desktop.plist`), a value under the Run key on
   Windows, and `~/.config/autostart/tinio.desktop` on Linux. A `wails dev` build never
   sets it.
@@ -44,19 +57,9 @@ Your agents live their days only while Tinio runs, so it keeps running:
 - **Their files** (a PDF, a spreadsheet) are saved where you choose: the window can't
   download, so the app asks.
 
-If `wails` stops with "package ... without types was imported", your Go is newer than the
-Wails CLI's own tools. Build the CLI with current ones instead:
-
-```bash
-mkdir /tmp/wails-cli && cd /tmp/wails-cli && go mod init wails-cli
-printf '//go:build tools\npackage tools\nimport _ "github.com/wailsapp/wails/v2/cmd/wails"\n' > tools.go
-go get github.com/wailsapp/wails/v2@v2.12.0 golang.org/x/tools@latest && go mod tidy
-go build -o "$(go env GOPATH)/bin/wails" github.com/wailsapp/wails/v2/cmd/wails
-```
-
 ## Work on it
 
-`wails dev -skipbindings` runs the app with the window reloading as you change the
+`../bin/wails dev -skipbindings` runs the app with the window reloading as you change the
 frontend; the same window is at http://localhost:34115 in a browser.
 
 The screens are a copy of the web app's, kept apart and synced by hand. Their `next/link`
@@ -70,3 +73,10 @@ TINIO_API=http://127.0.0.1:8081 APP_ORIGIN=http://localhost:5173 npm run dev
 ```
 
 with `APP_ORIGIN=http://localhost:5173` set where `tinio` runs too.
+
+## Unsigned, for now
+
+The app isn't signed. The first time on macOS, right-click it and choose Open (or allow
+it in System Settings, Privacy and Security); on Windows, SmartScreen asks: More info,
+then Run anyway. Signing on macOS needs an Apple Developer account, and on Windows a
+code-signing certificate.

@@ -1,9 +1,10 @@
 name: release
 
-# A tag like v0.5.0 builds Tinio for each system and attaches the binaries to a
-# draft release, written and published by hand. Everything is built into the
-# binary, the app included, so it runs on its own: no database to set up, and
-# its key made on first run.
+# A tag like v0.5.0 builds Tinio for each system and attaches it to a draft
+# release, written and published by hand: the tinio command (the API and the
+# agents, everything built in), and the desktop app for macOS (Intel and Apple
+# silicon in one), Windows and Linux. Each runs on its own: no database to set
+# up, and its key made on first run.
 on:
   push:
     tags: ["v*"]
@@ -30,7 +31,6 @@ jobs:
             cp LICENSE README.md "$name/"
             if [ "$os" = windows ]; then zip -qr "dist/$name.zip" "$name"; else tar -czf "dist/$name.tar.gz" "$name"; fi
           done
-          (cd dist && sha256sum * > checksums.txt)
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -38,3 +38,88 @@ jobs:
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
             gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "$GITHUB_REF_NAME" --notes "See CHANGELOG.md."
           gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+
+  # The desktop app, built on each system (Wails builds against the system's
+  # own web view), once the release exists. Not signed: see desktop/README.
+  desktop:
+    needs: binaries
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin/universal
+            name: macos_universal
+            tags: ""
+          - os: windows-latest
+            platform: windows/amd64
+            name: windows_amd64
+            tags: ""
+          - os: ubuntu-24.04
+            platform: linux/amd64
+            name: linux_amd64
+            tags: "-tags webkit2_41" # Ubuntu 24.04 has WebKitGTK 4.1, not 4.0
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: |
+            desktop/go.sum
+            desktop/tools/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: WebKitGTK
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: The wails command
+        working-directory: desktop/tools
+        run: go build -o ../../bin/wails github.com/wailsapp/wails/v2/cmd/wails
+      - name: Frontend
+        working-directory: desktop/frontend
+        run: npm ci && npm run build
+      - name: Build the app
+        run: ../bin/wails build -skipbindings -s -clean -trimpath -platform "${{ matrix.platform }}" ${{ matrix.tags }}
+      - name: Package
+        run: |
+          name="Tinio_${GITHUB_REF_NAME}_${{ matrix.name }}"
+          mkdir -p dist
+          case "$RUNNER_OS" in
+            macOS)
+              ditto -c -k --keepParent build/bin/Tinio.app "dist/$name.zip" ;;
+            Windows)
+              (cd build/bin && 7z a -tzip "../../dist/$name.zip" Tinio.exe >/dev/null) ;;
+            Linux)
+              mkdir "$name"
+              cp build/bin/Tinio "$name/tinio-desktop"
+              cp build/appicon.png "$name/tinio.png"
+              cp ../LICENSE README.md "$name/"
+              tar -czf "dist/$name.tar.gz" "$name" ;;
+          esac
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+
+  # One checksums file for everything attached.
+  checksums:
+    needs: [binaries, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir dist && cd dist
+          gh release download "$GITHUB_REF_NAME" --pattern '*.zip' --pattern '*.tar.gz'
+          sha256sum * > checksums.txt
+          gh release upload "$GITHUB_REF_NAME" checksums.txt --clobber
