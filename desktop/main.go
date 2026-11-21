@@ -76,7 +76,7 @@ func main() {
 		},
 		Menu: appMenu(),
 		Mac: &mac.Options{
-			TitleBar: mac.TitleBarHiddenInset(),
+			TitleBar: mac.TitleBarHidden(),
 			About:    &mac.AboutInfo{Title: "Tinio", Message: "Agents with lives of their own, on your computer."},
 		},
 	})

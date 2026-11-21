@@ -186,8 +186,8 @@ const railItem = "relative flex min-h-14 w-16 flex-col items-center justify-cent
 function Rail({ account, on }: { account: Account | null; on: "chats" | "you" | "settings" | "connections" }) {
   const { dark, choose } = useTheme();
   return (
-    <nav aria-label="Main" className="flex w-[72px] flex-none flex-col items-center gap-1 border-r border-line bg-surface-2/60 pb-4 max-[900px]:hidden">
-      {/* Room for the window's buttons, and a place to drag it by. */}
+    <nav aria-label="Main" className="flex w-[76px] flex-none flex-col items-center gap-1 border-r border-line bg-surface-2/60 pb-4 max-[900px]:hidden">
+      {/* Room for the window's buttons (macOS puts them here, with the same room either side in the rail's 76px), and a place to drag it by. */}
       <div aria-hidden="true" className="h-8 w-full flex-none [--wails-draggable:drag]" />
       <Link href="/agents" aria-label="Tinio, your agents" className="mb-2 grid size-14 place-items-center text-accent-text">
         <Mark size={28} title="" aria-hidden="true" />
