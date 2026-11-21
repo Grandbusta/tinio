@@ -1,33 +1,9 @@
-// Package usage is what an account's plan allows and how much of its week its
-// agents have used. The week is metered in dollars, the real cost of every
-// decision, and shown to owners as a percentage.
+// Package usage is how much of the week the owner's agents have used, against
+// the cap they set. The week is metered in dollars, the real cost of every
+// decision, on their own keys.
 package usage
 
 import "time"
-
-type Plan struct {
-	Name     string
-	PriceUSD float64 // a month
-	Agents   int
-	MaxPace  int
-	// WeekUSD is what its agents' models may cost in a week, their own day
-	// included. 0: no limit.
-	WeekUSD float64
-	// Trial, if set, is how long after the account starts its agents live their
-	// own day; after it they only chat. TrialWeekUSD is added to each week that
-	// starts within it, for those days.
-	Trial        time.Duration
-	TrialWeekUSD float64
-}
-
-// Plans, by name. The figures are in PLAN.md's pricing: the models at 45% of
-// the price when all of the week is used.
-var Plans = map[string]Plan{
-	"free":     {Name: "free", Agents: 1, MaxPace: 1, WeekUSD: 0.07, Trial: 14 * 24 * time.Hour, TrialWeekUSD: 0.16},
-	"personal": {Name: "personal", PriceUSD: 12, Agents: 2, MaxPace: 1, WeekUSD: 1.25},
-	"pro":      {Name: "pro", PriceUSD: 30, Agents: 5, MaxPace: 3, WeekUSD: 3.10},
-	"team":     {Name: "team", PriceUSD: 100, Agents: 15, MaxPace: 10, WeekUSD: 10.40},
-}
 
 type State string
 
@@ -52,7 +28,7 @@ const (
 // Standing is an account's use of its week. The zero value is no account:
 // nothing is metered.
 type Standing struct {
-	Plan    Plan
+	CapUSD  float64   // what a week may cost; 0: no limit
 	Started time.Time // when the account started: its weeks count from it
 	// Used this week and this hour: what the counter holds, if it's for the
 	// week or hour that contains now (see At).
@@ -80,19 +56,13 @@ func (s Standing) At(now time.Time) Standing {
 	return s
 }
 
-// Budget is what the week starting at weekStart may cost; 0: no limit.
-func (s Standing) Budget(weekStart time.Time) float64 {
-	b := s.Plan.WeekUSD
-	if b > 0 && s.Plan.Trial > 0 && weekStart.Before(s.Started.Add(s.Plan.Trial)) {
-		b += s.Plan.TrialWeekUSD
-	}
-	return b
-}
+// Budget is what a week may cost; 0: no limit.
+func (s Standing) Budget() float64 { return s.CapUSD }
 
 // Used is the share of this week used, 1 at the budget; 0 with no limit.
 func (s Standing) Used(now time.Time) float64 {
 	s = s.At(now)
-	b := s.Budget(s.WeekStart)
+	b := s.Budget()
 	if b <= 0 {
 		return 0
 	}
@@ -101,7 +71,7 @@ func (s Standing) Used(now time.Time) float64 {
 
 func (s Standing) hourOver(now time.Time) bool {
 	s = s.At(now)
-	b := s.Budget(s.WeekStart)
+	b := s.Budget()
 	return b > 0 && s.HourUSD >= b*hourShare
 }
 
@@ -125,10 +95,5 @@ func (s Standing) ResetsAt(now time.Time) time.Time {
 }
 
 // OwnDay is whether their own day goes on: planning, activities, check-ins,
-// what they watch and the weekly review. Not past the week, nor after a trial.
-func (s Standing) OwnDay(now time.Time) bool {
-	if s.Plan.Trial > 0 && !now.Before(s.Started.Add(s.Plan.Trial)) {
-		return false
-	}
-	return s.State(now) == Normal
-}
+// what they watch and the weekly review. Not past the week.
+func (s Standing) OwnDay(now time.Time) bool { return s.State(now) == Normal }

@@ -10,22 +10,18 @@ import (
 	"github.com/Grandbusta/tinio/internal/usage"
 )
 
-const standingColumns = `a.plan, a.created_at, coalesce(u.week_start, a.created_at), coalesce(u.week_usd, 0),
+const standingColumns = `a.week_usd, a.created_at, coalesce(u.week_start, a.created_at), coalesce(u.week_usd, 0),
 	coalesce(u.hour_start, a.created_at), coalesce(u.hour_usd, 0)`
 
 func scanStanding(row db.Scanner) (usage.Standing, error) {
-	var (
-		st   usage.Standing
-		plan string
-	)
-	err := row.Scan(&plan, &st.Started, &st.WeekStart, &st.WeekUSD, &st.HourStart, &st.HourUSD)
+	var st usage.Standing
+	err := row.Scan(&st.CapUSD, &st.Started, &st.WeekStart, &st.WeekUSD, &st.HourStart, &st.HourUSD)
 	if errors.Is(err, db.ErrNoRows) {
 		return usage.Standing{}, nil
 	}
 	if err != nil {
 		return usage.Standing{}, fmt.Errorf("load usage: %w", err)
 	}
-	st.Plan = usage.Plans[plan]
 	return st, nil
 }
 

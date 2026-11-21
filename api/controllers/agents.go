@@ -16,7 +16,6 @@ import (
 	"github.com/Grandbusta/tinio/api/utils"
 	"github.com/Grandbusta/tinio/internal/character"
 	"github.com/Grandbusta/tinio/internal/host"
-	"github.com/Grandbusta/tinio/internal/usage"
 )
 
 // Agents raises agents from the ready characters, and lists an account's own.
@@ -77,18 +76,6 @@ func (a *Agents) Create(c *gin.Context) error {
 		return err
 	}
 	defer tx.Rollback(c)
-	// The transaction holds the database's write lock while it counts, so two at once can't both pass.
-	var (
-		plan string
-		have int
-	)
-	if err := tx.QueryRow(c, `SELECT plan, (SELECT count(*) FROM agents WHERE account_id = a.id) FROM accounts a WHERE id = $1`,
-		account).Scan(&plan, &have); err != nil {
-		return err
-	}
-	if have >= usage.Plans[plan].Agents {
-		return utils.ErrTooManyAgents
-	}
 	if err := ag.Save(c, tx); err != nil {
 		return err
 	}

@@ -43,7 +43,7 @@ func evaluate(ctx context.Context, args []string, log *slog.Logger) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	models, err := host.OpenAI(log)
+	models, err := host.OpenAI(log, "")
 	if err != nil {
 		return err
 	}

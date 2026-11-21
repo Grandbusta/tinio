@@ -46,12 +46,11 @@ func TestAnAgentsSettings(t *testing.T) {
 		}
 	}
 
-	if rec, _ := ta.do(t, "POST", path+"/settings", map[string]any{"pace": 3}, ada, site); rec.Code != http.StatusBadRequest {
-		t.Errorf("pace 3 on Free: %d, want refused", rec.Code)
+	if rec, _ := ta.do(t, "POST", path+"/settings", map[string]any{"pace": 4}, ada, site); rec.Code != http.StatusBadRequest {
+		t.Errorf("pace 4, not offered: %d, want refused", rec.Code)
 	}
-	ta.onPlan(t, ada, "pro")
 	if rec, out := ta.do(t, "POST", path+"/settings", map[string]any{"pace": 3}, ada, site); rec.Code != http.StatusOK || data(out)["pace"] != 3.0 {
-		t.Errorf("pace 3 on Pro: %d %v", rec.Code, out)
+		t.Errorf("pace 3: %d %v", rec.Code, out)
 	}
 
 	if rec, out := ta.do(t, "POST", path+"/settings", map[string]any{"quiet": map[string]string{"from": "22:00", "until": "07:00"}}, ada, site); rec.Code != http.StatusOK ||

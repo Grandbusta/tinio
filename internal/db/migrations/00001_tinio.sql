@@ -4,6 +4,13 @@
 -- width (internal/db), so they sort and compare as text; lists are JSON arrays,
 -- embeddings little-endian float32 BLOBs, booleans 0 or 1.
 
+-- The owner's own keys for the services Tinio uses (OpenAI, ...), by name,
+-- sealed with the key in the data folder; never shown again once set.
+CREATE TABLE keys (
+    name TEXT NOT NULL PRIMARY KEY,
+    sealed BLOB NOT NULL,
+    set_at TEXT NOT NULL
+);
 CREATE TABLE account_usage (
     account_id TEXT NOT NULL,
     week_start TEXT NOT NULL,
@@ -20,8 +27,7 @@ CREATE TABLE accounts (
     terms_accepted_at TEXT NOT NULL,
     adult_at TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    plan TEXT DEFAULT 'free' NOT NULL,
-    CHECK (plan IN ('free', 'personal', 'pro', 'team')),
+    week_usd REAL DEFAULT 5 NOT NULL CHECK (week_usd >= 0),
     UNIQUE (email),
     PRIMARY KEY (id)
 );
@@ -688,3 +694,4 @@ DROP TABLE agent_runs;
 DROP TABLE actions;
 DROP TABLE accounts;
 DROP TABLE account_usage;
+DROP TABLE keys;

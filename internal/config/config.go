@@ -278,22 +278,22 @@ type Reasoning struct {
 	LightModel  string
 }
 
-// Load is how every agent works, on the models the environment names:
-// OPENAI_API_KEY for all of them, OPENAI_MODEL for System 2, and
-// OPENAI_DECISION_MODEL, OPENAI_DAY_MODEL and OPENAI_WORK_MODEL (empty: System
-// 1's default, and OPENAI_MODEL). Nothing leaves the chat yet, so messages outside it are
-// forbidden.
+// Load is how every agent works, on the models the environment names or
+// their defaults: OPENAI_MODEL for System 2 (gpt-6.1-terra),
+// OPENAI_DECISION_MODEL (System 1's default), OPENAI_DAY_MODEL (gpt-6-luna)
+// and OPENAI_WORK_MODEL (OPENAI_MODEL); OPENAI_API_KEY, if set, for all of
+// them. Nothing leaves the chat yet, so messages outside it are forbidden.
 func Load() *Config {
 	key := os.Getenv("OPENAI_API_KEY")
 	return &Config{
 		Decision: Decision{Provider: Provider{Provider: "openai", Model: os.Getenv("OPENAI_DECISION_MODEL"), APIKey: key}, QuestionSets: "decisions"},
-		Reasoning: Reasoning{Provider: Provider{Provider: "openai", Model: os.Getenv("OPENAI_MODEL"), APIKey: key}, Prompt: "prompts/reply.md", TopicPrompt: "prompts/topic.md", Effort: "low",
+		Reasoning: Reasoning{Provider: Provider{Provider: "openai", Model: cmp.Or(os.Getenv("OPENAI_MODEL"), "gpt-6.1-terra"), APIKey: key}, Prompt: "prompts/reply.md", TopicPrompt: "prompts/topic.md", Effort: "low",
 			LightModel: cmp.Or(os.Getenv("OPENAI_LIGHT_MODEL"), "gpt-6-luna")},
 		WorkingMemory: WorkingMemory{Turns: 8, Window: 30 * time.Minute},
 		Memory:        Memory{RecallCandidates: 30},
 		Initiative:    Initiative{Quiet: 4 * time.Hour},
 		DailyLife: DailyLife{Enabled: true, Pace: 1, PlanAt: "08:00", JournalAt: "22:00", Activities: 3, BudgetUSD: 0.05,
-			Model:      os.Getenv("OPENAI_DAY_MODEL"),
+			Model:      cmp.Or(os.Getenv("OPENAI_DAY_MODEL"), "gpt-6-luna"),
 			WorkModel:  os.Getenv("OPENAI_WORK_MODEL"),
 			Abilities:  []string{"read_book", "read_article", "web_search", "read_page"},
 			PlanPrompt: "prompts/plan.md", ActivityPrompt: "prompts/activity.md",

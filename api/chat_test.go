@@ -192,7 +192,6 @@ func TestAnswersOnlyWhatsWaiting(t *testing.T) {
 	ta := newTestAPI(t)
 	ctx := context.Background()
 	ada := ta.signUp(t)
-	ta.onPlan(t, ada, "pro")
 	zara, other := ta.raiseZara(t, ada), ta.raiseZara(t, ada)
 	st := store.New(ta.db).For(zara)
 	request := func(on string, sent bool) string {

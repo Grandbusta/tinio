@@ -57,7 +57,6 @@ func TestConnectingAnAccountForChosenAgents(t *testing.T) {
 	ta := newTestAPI(t)
 	ta.connections.HTTP = fakeSignIn(t)
 	ana, bo := ta.signUp(t), ta.signUp(t)
-	ta.onPlan(t, ana, "pro")
 	mei, bosAgent := ta.raiseZara(t, ana), ta.raiseZara(t, bo)
 
 	rec, out := ta.do(t, "POST", "/v1/connections/start", map[string]any{"connector": "atlassian", "parts": []string{"all"}, "agent": mei}, ana, site)

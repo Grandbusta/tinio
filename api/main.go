@@ -90,12 +90,43 @@ func run(cmd string, log *slog.Logger) error {
 	return errors.Join(served, <-worked)
 }
 
+// work runs every agent on the owner's OpenAI key: OPENAI_API_KEY, or the one
+// set in the app. With none it waits for one, and when the owner sets another
+// the agents start again on it.
 func work(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) error {
-	models, err := host.OpenAI(log)
+	for {
+		changed, stop := d.Listen(models.KeysChanged, 1)
+		err := workOnce(ctx, cfg, d, changed, log)
+		stop()
+		if ctx.Err() != nil || err != nil {
+			return err
+		}
+	}
+}
+
+// workOnce runs the agents until ctx is done or the key changes (nil), or
+// waits for a key if there's none.
+func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan string, log *slog.Logger) error {
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		var err error
+		if apiKey, err = models.OpenKey(ctx, d, *cfg.Key, models.KeyOpenAI); err != nil {
+			return err
+		}
+	}
+	if apiKey == "" {
+		log.Info("waiting for your OpenAI key: set it in the app")
+		select {
+		case <-ctx.Done():
+		case <-changed:
+		}
+		return nil
+	}
+	ms, err := host.OpenAI(log, apiKey)
 	if err != nil {
 		return err
 	}
-	h, err := host.New(d, tinio.Files, models, log)
+	h, err := host.New(d, tinio.Files, ms, log)
 	if err != nil {
 		return err
 	}
@@ -106,8 +137,18 @@ func work(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) er
 			return fmt.Errorf("MAX_AGENTS must be a whole number above 0, have %q", s)
 		}
 	}
+	runCtx, stopRun := context.WithCancel(ctx)
+	defer stopRun()
+	go func() {
+		select {
+		case <-changed:
+			log.Info("your OpenAI key changed: starting the agents again")
+			stopRun()
+		case <-runCtx.Done():
+		}
+	}()
 	log.Info("running agents", "most", h.Max)
-	return h.Run(ctx)
+	return h.Run(runCtx)
 }
 
 func serve(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) error {
@@ -132,7 +173,8 @@ func serve(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) e
 		&controllers.Growth{DB: d}, &controllers.Judgment{DB: d}, &controllers.Mind{DB: d, Sets: sets},
 		&controllers.Memory{DB: d}, &controllers.Character{DB: d}, &controllers.Settings{DB: d}, &controllers.Skills{DB: d},
 		&controllers.Connections{DB: d, Key: cfg.Key, Google: cfg.Google, Picker: cfg.GooglePicker, App: cfg.AppOrigin,
-			HTTP: &http.Client{Timeout: 30 * time.Second}, Log: log.With("component", "connections")}, log)
+			HTTP: &http.Client{Timeout: 30 * time.Second}, Log: log.With("component", "connections")},
+		&controllers.Keys{DB: d, Key: *cfg.Key}, log)
 	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		return err
 	}
@@ -153,7 +195,7 @@ func serve(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) e
 // setupRouter is every route the API has.
 func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.Agents, chat *controllers.Chat, today *controllers.Today,
 	works *controllers.Works, growth *controllers.Growth, judgment *controllers.Judgment, mind *controllers.Mind,
-	mem *controllers.Memory, char *controllers.Character, settings *controllers.Settings, skills *controllers.Skills, cn *controllers.Connections, log *slog.Logger) *gin.Engine {
+	mem *controllers.Memory, char *controllers.Character, settings *controllers.Settings, skills *controllers.Skills, cn *controllers.Connections, keys *controllers.Keys, log *slog.Logger) *gin.Engine {
 	if os.Getenv(gin.EnvGinMode) == "" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -171,6 +213,9 @@ func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.
 	v1.GET("/agents", signedIn, h(agents.List))
 	v1.GET("/overview", signedIn, h(agents.Overview))
 	v1.GET("/usage", signedIn, h(agents.Usage))
+	v1.POST("/usage", ours, signedIn, h(agents.SetCap))
+	v1.GET("/keys", signedIn, h(keys.Get))
+	v1.POST("/keys", ours, signedIn, h(keys.Set))
 	v1.POST("/agents", ours, signedIn, h(agents.Create))
 	own := v1.Group("/agents/:id", signedIn, middlewares.OwnAgent(auth.DB, log))
 	own.GET("", h(agents.One))

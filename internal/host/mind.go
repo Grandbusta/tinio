@@ -86,13 +86,16 @@ func (m Models) Routed(sets ...questions.Set) system1.DecisionModel {
 	return by
 }
 
-// OpenAI is the models the environment names, on the platform's key (see
-// config.Load).
-func OpenAI(log *slog.Logger) (Models, error) {
+// OpenAI is the models the environment names (see config.Load), on the
+// owner's key: apiKey, or OPENAI_API_KEY if that's "".
+func OpenAI(log *slog.Logger, apiKey string) (Models, error) {
 	cfg := config.Load()
+	if apiKey != "" {
+		cfg.Decision.APIKey, cfg.Reasoning.APIKey, cfg.Embedding.APIKey = apiKey, apiKey, apiKey
+	}
 	d, r := cfg.Decision, cfg.Reasoning
 	if r.APIKey == "" || r.Model == "" {
-		return Models{}, fmt.Errorf("host: set OPENAI_API_KEY and OPENAI_MODEL to run agents")
+		return Models{}, fmt.Errorf("host: set your OpenAI key, and OPENAI_MODEL, to run agents")
 	}
 	s1model := d.Model
 	if s1model == "" {

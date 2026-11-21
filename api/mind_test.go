@@ -31,7 +31,6 @@ func testSets(t *testing.T) map[string]questions.Set {
 func TestMindShowsAChainAndTakesALabel(t *testing.T) {
 	ta := newTestAPI(t)
 	ada := ta.signUp(t)
-	ta.onPlan(t, ada, "pro")
 	zara, other := ta.raiseZara(t, ada), ta.raiseZara(t, ada)
 	ctx, st := context.Background(), store.New(ta.db).For(zara)
 	now := time.Now().UTC()

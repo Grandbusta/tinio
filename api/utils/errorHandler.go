@@ -60,7 +60,6 @@ var (
 	ErrNoSuchInvite       = Problem{http.StatusNotFound, "no_such_invite", "There's no invite for that email waiting to be used.", nil}
 	ErrNotInvited         = Problem{http.StatusForbidden, "not_invited", "Tinio is invite-only for now, and this email isn't invited yet.", nil}
 	ErrNotWaiting         = Problem{http.StatusConflict, "not_waiting", "That's no longer waiting for an answer.", nil}
-	ErrTooManyAgents      = Problem{http.StatusConflict, "too_many_agents", "Your plan has room for the agents you have. A bigger plan has room for more.", nil}
 	ErrDailyLimit         = Problem{http.StatusTooManyRequests, "daily_limit", "That's as many messages as you can send them in a day for now. Try again tomorrow.", nil}
 )
 

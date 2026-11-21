@@ -14,7 +14,7 @@ func TestTheWeekSetsHowTheyReply(t *testing.T) {
 	ctx := context.Background()
 	started := now.Add(2*time.Hour - usage.Week) // the week resets in two hours
 	used := func(usd float64) usage.Standing {
-		return usage.Standing{Plan: usage.Plans["personal"], Started: started, WeekStart: started, WeekUSD: usd}
+		return usage.Standing{CapUSD: 1.25, Started: started, WeekStart: started, WeekUSD: usd}
 	}
 	r, full, light := &fakeReplier{}, &fakeSystem2{}, &fakeSystem2{}
 	m, s := newMind(r, &fakeSystem1{choice: "question", confidence: 0.9}, full)
@@ -44,8 +44,7 @@ func TestTheWeekSetsHowTheyReply(t *testing.T) {
 	}
 }
 
-// Their own day goes on only while the week allows it: not once it's used,
-// nor after a free trial.
+// Their own day goes on only while the week allows it: not once it's used.
 func TestTheirDayNeedsTheWeek(t *testing.T) {
 	plan := at(29, 9, 0)
 	for _, c := range []struct {
@@ -53,10 +52,8 @@ func TestTheirDayNeedsTheWeek(t *testing.T) {
 		st    usage.Standing
 		plans bool
 	}{
-		{"within the week", usage.Standing{Plan: usage.Plans["personal"], Started: plan.AddDate(0, 0, -3), WeekStart: plan.AddDate(0, 0, -3), WeekUSD: 0.5}, true},
-		{"the week used", usage.Standing{Plan: usage.Plans["personal"], Started: plan.AddDate(0, 0, -3), WeekStart: plan.AddDate(0, 0, -3), WeekUSD: 1.3}, false},
-		{"a free trial", usage.Standing{Plan: usage.Plans["free"], Started: plan.AddDate(0, 0, -3), WeekStart: plan.AddDate(0, 0, -3), WeekUSD: 0.1}, true},
-		{"after the trial", usage.Standing{Plan: usage.Plans["free"], Started: plan.AddDate(0, 0, -20)}, false},
+		{"within the week", usage.Standing{CapUSD: 1.25, Started: plan.AddDate(0, 0, -3), WeekStart: plan.AddDate(0, 0, -3), WeekUSD: 0.5}, true},
+		{"the week used", usage.Standing{CapUSD: 1.25, Started: plan.AddDate(0, 0, -3), WeekStart: plan.AddDate(0, 0, -3), WeekUSD: 1.3}, false},
 	} {
 		s2 := &fakeSystem2{formats: map[string]string{"day_plan": `{"activities":[]}`}}
 		m, s := lifeMind(s2)

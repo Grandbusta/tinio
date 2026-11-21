@@ -50,7 +50,7 @@ type quietView struct {
 type settingsView struct {
 	Classes []classView `json:"classes"`
 	Pace    int         `json:"pace"`
-	Paces   []int       `json:"paces"` // those their plan allows
+	Paces   []int       `json:"paces"`
 	Quiet   quietView   `json:"quiet"`
 	Paused  bool        `json:"paused"`
 }
@@ -95,11 +95,7 @@ func (s *Settings) view(c *gin.Context, ag models.Agent) (settingsView, error) {
 	if err != nil {
 		return settingsView{}, err
 	}
-	allowed, err := s.paces(c, ag.AccountID)
-	if err != nil {
-		return settingsView{}, err
-	}
-	v := settingsView{Pace: ag.Pace, Paces: allowed, Quiet: quietView{From: ag.QuietFrom, Until: ag.QuietUntil}, Paused: ag.Paused}
+	v := settingsView{Pace: ag.Pace, Paces: paces, Quiet: quietView{From: ag.QuietFrom, Until: ag.QuietUntil}, Paused: ag.Paused}
 	for _, c := range settable {
 		v.Classes = append(v.Classes, classView{Class: string(c), Verdict: verdictOf(p, c), Choices: choicesOf(c)})
 	}
@@ -107,18 +103,6 @@ func (s *Settings) view(c *gin.Context, ag models.Agent) (settingsView, error) {
 		v.Classes = append(v.Classes, classView{Class: string(c), Verdict: verdictOf(p, c), Choices: []string{}})
 	}
 	return v, nil
-}
-
-// paces are the paces the account's plan allows.
-func (s *Settings) paces(c *gin.Context, account string) ([]int, error) {
-	st, err := store.New(s.DB).AccountStanding(c, account)
-	if err != nil {
-		return nil, err
-	}
-	if st.Plan.MaxPace == 0 {
-		return paces, nil
-	}
-	return slices.DeleteFunc(slices.Clone(paces), func(p int) bool { return p > st.Plan.MaxPace }), nil
 }
 
 func (s *Settings) Get(c *gin.Context) error {
@@ -159,14 +143,8 @@ func (s *Settings) Save(c *gin.Context) error {
 			return utils.Invalid("quiet", "Quiet hours are two different times, like 22:00 and 07:00.")
 		}
 	}
-	if in.Pace != 0 {
-		allowed, err := s.paces(c, ag.AccountID)
-		if err != nil {
-			return err
-		}
-		if !slices.Contains(allowed, in.Pace) {
-			return utils.Invalid("pace", "Your plan doesn't allow that pace.")
-		}
+	if in.Pace != 0 && !slices.Contains(paces, in.Pace) {
+		return utils.Invalid("pace", "Pick one of the paces offered.")
 	}
 	now := time.Now().UTC()
 	changed := false

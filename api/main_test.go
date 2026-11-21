@@ -35,7 +35,7 @@ const site = "http://localhost:3000"
 
 func TestHealthz(t *testing.T) {
 	rec := httptest.NewRecorder()
-	setupRouter(config.Config{}, &controllers.Auth{}, &controllers.Agents{}, &controllers.Chat{}, &controllers.Today{}, &controllers.Works{}, &controllers.Growth{}, &controllers.Judgment{}, &controllers.Mind{}, &controllers.Memory{}, &controllers.Character{}, &controllers.Settings{}, &controllers.Skills{}, &controllers.Connections{}, slog.New(slog.NewTextHandler(io.Discard, nil))).
+	setupRouter(config.Config{}, &controllers.Auth{}, &controllers.Agents{}, &controllers.Chat{}, &controllers.Today{}, &controllers.Works{}, &controllers.Growth{}, &controllers.Judgment{}, &controllers.Mind{}, &controllers.Memory{}, &controllers.Character{}, &controllers.Settings{}, &controllers.Skills{}, &controllers.Connections{}, &controllers.Keys{}, slog.New(slog.NewTextHandler(io.Discard, nil))).
 		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 	if rec.Code != http.StatusOK || rec.Body.String() != "ok\n" {
 		t.Fatalf("got %d %q", rec.Code, rec.Body.String())
@@ -82,7 +82,7 @@ func newTestAPI(t *testing.T) *testAPI {
 		&controllers.Works{DB: db, Formats: host.Formats()}, &controllers.Growth{DB: db, Now: func() time.Time { return ta.now }},
 		&controllers.Judgment{DB: db, Now: func() time.Time { return ta.now }}, &controllers.Mind{DB: db, Sets: testSets(t)},
 		&controllers.Memory{DB: db, Now: func() time.Time { return ta.now }}, &controllers.Character{DB: db}, &controllers.Settings{DB: db}, &controllers.Skills{DB: db},
-		ta.connections, log)
+		ta.connections, &controllers.Keys{DB: db, Key: key}, log)
 	return ta
 }
 
@@ -202,16 +202,6 @@ func (ta *testAPI) signUp(t *testing.T) *http.Cookie {
 	return &http.Cookie{Name: config.SessionCookie, Value: token}
 }
 
-// onPlan puts the signed-in account on plan (a new one is on free, with room for one agent).
-func (ta *testAPI) onPlan(t *testing.T, cookie *http.Cookie, plan string) {
-	t.Helper()
-	_, out := ta.do(t, "GET", "/v1/me", nil, cookie, "")
-	id := data(out)["account"].(map[string]any)["id"]
-	if _, err := ta.db.Exec(context.Background(), `UPDATE accounts SET plan = $1 WHERE id = $2`, plan, id); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestRaisingAnAgentFromAReadyCharacter(t *testing.T) {
 	ta := newTestAPI(t)
 	ada := ta.signUp(t)
@@ -306,7 +296,6 @@ func TestCharactersAreVersionedAndOwned(t *testing.T) {
 	}
 
 	ada := ta.signUp(t)
-	ta.onPlan(t, ada, "pro")
 	raise := func(who *http.Cookie, key string) (*httptest.ResponseRecorder, string) {
 		rec, out := ta.do(t, "POST", "/v1/agents", map[string]any{"character": key, "owner_name": "Ada", "relation": "friend"}, who, site)
 		agent, _ := data(out)["agent"].(map[string]any) // none if refused

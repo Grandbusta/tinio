@@ -18,7 +18,6 @@ import (
 func TestTheOverviewIsYourAgents(t *testing.T) {
 	ta := newTestAPI(t)
 	ada, bea := ta.signUp(t), ta.signUp(t)
-	ta.onPlan(t, ada, "pro")
 	first, second := ta.raiseZara(t, ada), ta.raiseZara(t, ada)
 	ta.raiseZara(t, bea)
 
