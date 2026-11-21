@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useFrame } from "@/components/app-frame";
+import { FoldersSection } from "@/components/folders";
 import { KeyForm } from "@/components/first-run";
 import { box, heading } from "@/components/kit";
 import { inTheApp, ThisApp } from "@/components/this-app";
 import { Appearance } from "@/components/usage";
 import { call } from "@/lib/api";
 
-// Settings: your keys, the models your agents use for each of their jobs, the app
-// itself, and how it looks. Every model listed is one Tinio knows the price of, so the
+// Settings: your keys, the models your agents use for each of their jobs, the folders on
+// this computer they may use, the app itself, and how it looks. Every model listed is one Tinio knows the price of, so the
 // week's cap holds whichever you pick.
 
 type ModelOption = { model: string; input: number; output: number };
@@ -55,6 +56,8 @@ export function SettingsPage() {
       </section>
 
       <ModelsSection />
+
+      <FoldersSection />
 
       {inTheApp() && <ThisApp />}
 

@@ -44,6 +44,7 @@ as **Tinio**, and `tinio` for the command and in code.
 | `cmd/tinio` | The command: `api.Main`. |
 | `desktop/` | The desktop app (Wails, a Go module of its own; `desktop/tools` pins the `wails` command): `api.Start` in a window, the API in-process, chat as events; `frontend/` is its React app, the web app's screens copied in. See its README. |
 | `api/` | The API (every route in `api/main.go`; controllers, models, middlewares) and running the agents beside it (`work`); `tinio eval`. |
+| `internal/folders` | Folders on this computer the owner adds for their agents: the rules for what may never be seen or named (`Rules`), reading text, Word, Excel and PDF (`Text`), and the tools: list, search and read on their own; make and change text files only as an ask (`action.Write`), the old version kept. |
 | `.env.example` | Every setting, with what it is; copied to `.env`, which is never committed. |
 | `characters/<name>/` | The six ready characters, loaded into the `characters` table (a new version when one changes) when the API starts: `template.yaml` (how the app offers them), `character.yaml` (who, and when their day runs), `judgment.yaml` (how the owner decides). How every agent works is the defaults in `internal/config`, on the models the environment names. |
 | `prompts/*.md` | Everything System 2 is told, as templates. |

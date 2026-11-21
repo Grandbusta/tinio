@@ -12,11 +12,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Grandbusta/tinio/internal/db"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -34,7 +34,9 @@ import (
 	"github.com/Grandbusta/tinio/api/utils"
 	internalconfig "github.com/Grandbusta/tinio/internal/config"
 	"github.com/Grandbusta/tinio/internal/connect"
+	"github.com/Grandbusta/tinio/internal/db"
 	"github.com/Grandbusta/tinio/internal/decision/questions"
+	"github.com/Grandbusta/tinio/internal/folders"
 	"github.com/Grandbusta/tinio/internal/host"
 )
 
@@ -191,6 +193,7 @@ func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan s
 	}
 	h.Days = true
 	h.Connections = &connect.Store{DB: d, Key: *cfg.Key}
+	h.Folders = &folders.Store{DB: d, Rules: folders.Rules{Data: cfg.DataDir}, Versions: filepath.Join(cfg.DataDir, "versions")}
 	if s := os.Getenv("MAX_AGENTS"); s != "" {
 		if h.Max, err = strconv.Atoi(s); err != nil || h.Max < 1 {
 			return fmt.Errorf("MAX_AGENTS must be a whole number above 0, have %q", s)
@@ -266,6 +269,12 @@ func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.
 	v1.GET("/keys", signedIn, h(keys.Get))
 	v1.POST("/keys", ours, signedIn, h(keys.Set))
 	aiModels := &controllers.Models{DB: keys.DB}
+	fd := &controllers.Folders{DB: keys.DB, Rules: folders.Rules{Data: cfg.DataDir}}
+	v1.GET("/folders", signedIn, h(fd.List))
+	v1.GET("/folders/peek", signedIn, h(fd.Peek))
+	v1.POST("/folders", ours, signedIn, h(fd.Add))
+	v1.POST("/folders/:folder", ours, signedIn, h(fd.Change))
+	v1.POST("/folders/:folder/remove", ours, signedIn, h(fd.Remove))
 	v1.GET("/models", signedIn, h(aiModels.Get))
 	v1.POST("/models", ours, signedIn, h(aiModels.Choose))
 	v1.POST("/agents", ours, signedIn, h(agents.Create))
@@ -304,6 +313,7 @@ func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.
 	own.POST("/skills/:name/remove", ours, h(skills.Remove))
 	own.GET("/tools", h(cn.AgentTools))
 	own.POST("/tools/:connection", ours, h(cn.Use))
+	own.POST("/folders/:folder", ours, h(fd.Use))
 	own.GET("/settings", h(settings.Get))
 	own.POST("/settings", ours, h(settings.Save))
 	own.POST("/pause", ours, h(settings.Pause))

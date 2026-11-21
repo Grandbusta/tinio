@@ -31,6 +31,12 @@ type Doer interface {
 	Do(ctx context.Context, args string, at time.Time) (string, error)
 }
 
+// An Explainer is a tool that says what it would do, in the owner's words, for
+// the card that asks them: a title, where, and the words or change itself.
+type Explainer interface {
+	Explain(args string) (title, where, quote string)
+}
+
 const actionsPerTick = 5
 
 // doers is the tools that change things it may propose now: those whose

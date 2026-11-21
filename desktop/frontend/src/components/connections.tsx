@@ -4,6 +4,7 @@ import { Button } from "@tinio/ui";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Avatar, Back, useFrame, when } from "@/components/app-frame";
+import { AgentFolders } from "@/components/folders";
 import { box, heading, linkButton, linkPrimary, Page } from "@/components/kit";
 import { logoFor, ServiceLogo } from "@/components/service-logo";
 import { call, type AgentTools, type Connection, type Connector, type PickedFile } from "@/lib/api";
@@ -481,6 +482,7 @@ export function AgentToolsPage({ id }: { id: string }) {
 
       {t && (
         <>
+          <AgentFolders id={id} name={name} changes={t.changes} />
           <section className="flex flex-col gap-2.5">
             <h2 className="font-display text-xl font-semibold tracking-[-0.02em]">From your connections</h2>
             {t.given.map((c) => (

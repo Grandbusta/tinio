@@ -80,6 +80,12 @@ func (m *Mind) request(ctx context.Context, a memory.Approval) memory.Request {
 		tool, _, _ := strings.Cut(a.What, ": ")
 		r.Title, r.Quote, r.Where, r.When = "Use "+tool+"?", a.Text, tool, "Within a minute of your yes"
 		ask = fmt.Sprintf("Can I use %s?\n\n%s\n\nWhy: %s", tool, a.Text, orDefault(a.Why, "you asked"))
+		if e, ok := m.doers()[tool].(Explainer); ok {
+			if title, where, quote := e.Explain(a.Text); title != "" {
+				r.Title, r.Where, r.Quote = title, where, quote
+				ask = fmt.Sprintf("%s\n\n%s\n\nWhy: %s", title, quote, orDefault(a.Why, "you asked"))
+			}
+		}
 	case a.Class == string(action.ReachOut):
 		r.Title, r.Quote, r.Where = "Message "+who+"?", a.Text, who
 		r.Undo, r.Final, r.Editable = "Can't be undone once it's sent", true, true

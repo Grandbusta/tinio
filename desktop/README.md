@@ -74,6 +74,13 @@ TINIO_API=http://127.0.0.1:8081 APP_ORIGIN=http://localhost:5173 npm run dev
 
 with `APP_ORIGIN=http://localhost:5173` set where `tinio` runs too.
 
+## Folders
+
+Settings › Folders, or the + beside a chat's message box, adds a folder with the
+computer's own folder window, for the agents you choose: Read, or Read and make files.
+They read what a task needs on their own, and making or changing a file waits for your
+yes in the chat. In a browser (the `tinio` command), you type the folder's path instead.
+
 ## Unsigned, for now
 
 The app isn't signed. The first time on macOS, right-click it and choose Open (or allow

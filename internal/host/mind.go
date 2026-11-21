@@ -361,6 +361,14 @@ func (h *Host) mind(ctx context.Context, r *runner) (m *mind.Mind, done func(), 
 			abilities, doers, closes = append(abilities, reads...), append(doers, ds...), append(closes, end)
 		}
 	}
+	if h.Folders != nil {
+		given, err := h.Folders.Given(ctx, r.row.id)
+		if err != nil {
+			log.Warn("their folders weren't loaded", "err", err)
+		}
+		reads, ds := h.Folders.Tools(given, st, cfg.Tools.CallsPerDay)
+		abilities, doers = append(abilities, reads...), append(doers, ds...)
+	}
 	done = func() {
 		for _, end := range closes {
 			end()

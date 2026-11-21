@@ -94,6 +94,23 @@ database, where approvals and calls are settled once (whoever settles first wins
 two values held in memory: the owner's permissions (behind a lock) and the flag that a goal
 taken on in a chat needs a learning plan.
 
+## Folders on this computer
+
+The owner adds folders (Settings › Folders, or the + in a chat) and gives each to the
+agents they choose, Read or Read and make files ([internal/folders](../internal/folders),
+`folders` and `folder_agents`). An agent reads with `folders.list`, `folders.search` and
+`folders.read`, in a reply or their own day; `folders.make_file` and
+`folders.change_file` are actions of class `write`, so they ask first unless the agent's
+settings say otherwise, and the card says what and where (`mind.Explainer`). Nothing is
+deleted, and a changed file's old version is kept in the data folder (`versions/`).
+
+What's enforced in Go, whatever an agent asks: a path is cleaned of `..` and a shortcut
+leading out of the folder is refused; hidden files and folders, keys and password stores
+by name, keychains, browser profiles and Tinio's own data folder are never listed, read
+or written; reads are capped and count toward the tools' daily limit. What a file says is
+fenced as material, never instructions. A change to a folder ticks its agents at once, so
+they restart with it.
+
 ## Your keys
 
 The owner brings only their own keys ([api/controllers/keys.go](../api/controllers/keys.go)).

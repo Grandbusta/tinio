@@ -28,6 +28,13 @@ saves their files where you choose. Settings has your key, the model for each of
 (replies, decisions, their own day, light mode, works, from the models Tinio has prices
 for), the app, and how it looks.
 
+**Folders on your computer:** add a folder in Settings, or with the + beside the message
+box, and choose which agents may use it, Read or Read and make files. They list, search
+and read what's in it (text, Word, Excel, PDF) on their own; making or changing a file
+asks you first, with the file and what changes. Hidden files, keys, browser profiles and
+anything outside the folder are never seen, nothing is deleted, and a changed file's old
+version is kept.
+
 Each release has the app for macOS (one for Intel and Apple silicon), Windows and Linux,
 unsigned for now, and CI builds and tests it on every push.
 

@@ -53,6 +53,7 @@ var (
 	ErrNoSuchPage         = Problem{http.StatusNotFound, "no_such_page", "There's nothing here.", nil}
 	ErrNoSuchPrinciple    = Problem{http.StatusNotFound, "no_such_principle", "That isn't one of their principles.", nil}
 	ErrNoSuchConnection   = Problem{http.StatusNotFound, "no_such_connection", "That isn't one of your connections.", nil}
+	ErrNoSuchFolder       = Problem{http.StatusNotFound, "no_such_folder", "That isn't one of your folders.", nil}
 	ErrConnectionsOff     = Problem{http.StatusServiceUnavailable, "connections_off", "Connecting that isn't set up on this Tinio yet.", nil}
 	ErrServiceDown        = Problem{http.StatusBadGateway, "service_down", "We couldn't reach its sign-in just now. Try again in a minute.", nil}
 	ErrSignInAgain        = Problem{http.StatusConflict, "sign_in_again", "The service signed Tinio out. Connect it again to carry on.", nil}

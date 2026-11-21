@@ -6,6 +6,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } fr
 import { Avatar, status, useFrame } from "@/components/app-frame";
 import { FileIcon, kindOf } from "@/components/file-icon";
 import { NoKey } from "@/components/first-run";
+import { ComposerFolders } from "@/components/folders";
 import { resets, UsageBanner } from "@/components/usage";
 import { call, type ChatRow, type Topic } from "@/lib/api";
 
@@ -444,6 +445,7 @@ export function Chat({ id }: { id: string }) {
             dashed
           />
         )}
+        <ComposerFolders id={id} name={name} />
         <label htmlFor="msg" className="sr-only">Message {name}</label>
         {/* Enter sends; Shift+Enter starts a new line. It grows with what's written, up to a point. */}
         <textarea

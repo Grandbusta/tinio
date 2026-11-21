@@ -10,6 +10,7 @@ require (
 	github.com/gomutex/godocx v0.1.5
 	github.com/google/jsonschema-go v0.4.3
 	github.com/joho/godotenv v1.5.1
+	github.com/ledongthuc/pdf v0.0.0-20261020125853-5e46805f718e
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/openai/openai-go/v3 v3.90.0

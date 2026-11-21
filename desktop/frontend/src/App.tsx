@@ -7,6 +7,7 @@ import { CharacterPage } from "@/components/character";
 import { Chat } from "@/components/chat";
 import { AgentToolsPage, ConnectionsPage, ConnectPage } from "@/components/connections";
 import { FirstRun, keySkipped, skipKeyForNow, useKeys } from "@/components/first-run";
+import { AddFolderPage } from "@/components/folders";
 import { GrowthPage } from "@/components/growth";
 import { JudgmentPage } from "@/components/judgment";
 import { MemoryPage } from "@/components/memory";
@@ -48,6 +49,7 @@ export function App() {
           <Route path="/agents" element={<Titled title="Your agents"><AllAgents /></Titled>} />
           <Route path="/you" element={<Titled title="You"><YouPage /></Titled>} />
           <Route path="/settings" element={<Titled title="Settings"><AppSettings /></Titled>} />
+          <Route path="/settings/folders/add" element={<Titled title="Add a folder"><AddFolderPage /></Titled>} />
           <Route path="/connections" element={<Connections />} />
           <Route path="/connections/:connector" element={<Connect />} />
           <Route path="/agents/:id" element={<Agent title="Chat" page={(id) => <Chat id={id} />} />} />

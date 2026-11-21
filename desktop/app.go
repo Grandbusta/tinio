@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -210,6 +211,10 @@ func (a *app) serve(w http.ResponseWriter, r *http.Request) {
 		}
 	case r.URL.Path == "/api/app/save" && r.Method == http.MethodPost:
 		a.save(w, r)
+	case r.URL.Path == "/api/app/pick-folder" && r.Method == http.MethodPost:
+		a.pickFolder(w)
+	case r.URL.Path == "/api/app/show-folder" && r.Method == http.MethodPost:
+		a.showFolder(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -268,6 +273,46 @@ func (a *app) save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ok(w, map[string]any{"saved": true, "path": to})
+}
+
+// pickFolder is the computer's own folder window, for adding a folder: the
+// path chosen, or none if it was closed.
+func (a *app) pickFolder(w http.ResponseWriter) {
+	ctx := a.wails()
+	if ctx == nil {
+		fail(w, http.StatusServiceUnavailable, "starting", "Tinio is still starting.")
+		return
+	}
+	home, _ := os.UserHomeDir()
+	path, err := runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{
+		Title: "Add a folder", DefaultDirectory: filepath.Join(home, "Documents"), CanCreateDirectories: true,
+	})
+	if err != nil {
+		fail(w, http.StatusInternalServerError, "no_window", "The folder window didn't open.")
+		return
+	}
+	ok(w, map[string]any{"path": path})
+}
+
+// showFolder opens one of the owner's folders in Finder or Explorer: only a
+// folder they added.
+func (a *app) showFolder(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		ID string `json:"id"`
+	}
+	if json.NewDecoder(r.Body).Decode(&in) != nil {
+		fail(w, http.StatusBadRequest, "bad_request", "That isn't a folder.")
+		return
+	}
+	var path string
+	if err := a.t.DB.QueryRow(r.Context(), `SELECT path FROM folders WHERE id = $1`, in.ID).Scan(&path); err != nil {
+		fail(w, http.StatusNotFound, "no_such_folder", "That isn't one of your folders.")
+		return
+	}
+	if ctx := a.wails(); ctx != nil {
+		runtime.BrowserOpenURL(ctx, (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String())
+	}
+	ok(w, map[string]any{"shown": true})
 }
 
 // ok and fail answer the way the API does, so the window's call reads them.

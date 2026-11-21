@@ -31,6 +31,7 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/internal/connect"
+	"github.com/Grandbusta/tinio/internal/folders"
 	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/mind"
 	"github.com/Grandbusta/tinio/internal/perception"
@@ -67,8 +68,11 @@ type Host struct {
 	// Connections, if set, gives each agent the tools of the accounts their
 	// owner connected and gave them; http is how they reach those services.
 	Connections *connect.Store
-	http        *http.Client
-	every       time.Duration // how often each agent ticks: a minute
+	// Folders, if set, gives each agent the folders on this computer the
+	// owner gave them.
+	Folders *folders.Store
+	http    *http.Client
+	every   time.Duration // how often each agent ticks: a minute
 
 	// starting lets so many agents start (load, and seed the first time) at
 	// once; a crowd starting together would crowd out everyone running.
@@ -425,6 +429,7 @@ func (h *Host) listenOnce(ctx context.Context, again bool) {
 			if held {
 				if m := r.mind.Load(); m != nil { // nil: starting, so with the new character anyway
 					m.Reload()
+					r.tickNow() // now, not at the next minute: a folder just given is asked about at once
 				}
 			}
 		case payload, ok := <-written:
@@ -451,6 +456,14 @@ func (h *Host) listenOnce(ctx context.Context, again bool) {
 func (h *Host) claimNow() {
 	select {
 	case h.claimSoon <- struct{}{}:
+	default:
+	}
+}
+
+// tickNow ticks r's mind at once, if it isn't busy with one already.
+func (r *runner) tickNow() {
+	select {
+	case r.ticks <- time.Now():
 	default:
 	}
 }
