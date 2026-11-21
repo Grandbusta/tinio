@@ -6,15 +6,15 @@ import { Back, useFrame, when } from "@/components/app-frame";
 import { call, type AgentSkill, type Skills } from "@/lib/api";
 
 // An agent's skills, as on the canvas: each on the ladder (Apprentice, then Pro once their
-// scored work holds the standard, then Certified with a skill's tests, which come with the
-// market), and the know-how their owner imported in the Agent Skills format.
+// scored work holds the standard), and the know-how their owner imported in the Agent
+// Skills format. Certified, with a skill's tests, and the market are the platform's.
 
-const rungs = ["Apprentice", "Pro", "Certified"] as const;
+const rungs = ["Apprentice", "Pro"] as const;
 
 function Ladder({ s }: { s: AgentSkill }) {
   const at = s.rung === "pro" ? 1 : 0;
   return (
-    <ol aria-label="Ladder" className="m-0 grid flex-[1_1_300px] list-none grid-cols-3 gap-1.5 p-0">
+    <ol aria-label="Ladder" className="m-0 grid flex-[1_1_300px] list-none grid-cols-2 gap-1.5 p-0">
       {rungs.map((r, i) => (
         <li
           key={r}
@@ -65,16 +65,13 @@ export function SkillsPage({ id }: { id: string }) {
         <div className="flex flex-col gap-1.5">
           <h1 className="font-display text-[34px] leading-[1.12] font-medium tracking-[-0.02em]">{agent ? `${agent.name}'s skills` : "Skills"}</h1>
           <p className="m-0 max-w-[62ch] text-muted">
-            Each skill climbs the same ladder: Apprentice, then Pro when {name}&apos;s scored work holds the standard, then Certified when they pass the
-            skill&apos;s tests and can be hired for it.
+            Each skill climbs the same ladder: Apprentice, then Pro when {name}&apos;s scored work holds the standard. Teach them more by importing a
+            skill you already use.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={`/agents/${id}/skills/import`} className="inline-flex min-h-10 items-center rounded-full border border-line-strong px-4 text-[13px] font-semibold text-fg no-underline hover:border-fg">
+          <Link href={`/agents/${id}/skills/import`} className="inline-flex min-h-10 items-center rounded-full bg-accent px-4 text-[13px] font-semibold text-accent-ink no-underline hover:bg-accent-hover hover:text-accent-ink">
             Import a skill
-          </Link>
-          <Link href={`/market?for=${id}`} className="inline-flex min-h-10 items-center rounded-full bg-accent px-4 text-[13px] font-semibold text-accent-ink no-underline hover:bg-accent-hover hover:text-accent-ink">
-            Find a skill
           </Link>
         </div>
       </div>
@@ -100,7 +97,7 @@ export function SkillsPage({ id }: { id: string }) {
                     Level {s.level} of 10{s.scores.length > 0 && ` · last scored ${s.scores.join(", ")}`}
                   </span>
                   <span className="text-[13px] text-muted">
-                    {s.rung === "pro" ? "Certified comes with the skill's tests, once hiring opens." : "Scored work at 6 or above makes them a Pro."}
+                    {s.rung === "pro" ? "At the top of the ladder: their scored work holds the standard." : "Scored work at 6 or above makes them a Pro."}
                   </span>
                 </div>
               </article>
@@ -111,13 +108,13 @@ export function SkillsPage({ id }: { id: string }) {
             <div className="flex flex-col gap-1">
               <h2 id="knowhow" className="font-display text-xl font-semibold tracking-[-0.02em]">Know-how</h2>
               <span className="text-sm text-muted">
-                Instructions in the Agent Skills format (a SKILL.md): ones you imported from any app that uses it, and skills taught from the market. {name}{" "}
+                Instructions in the Agent Skills format (a SKILL.md), imported from any app that uses it. {name}{" "}
                 reads them when a task fits; they don&apos;t climb the ladder on their own.
               </span>
             </div>
             {data.know_how.length === 0 && (
               <p className="m-0 text-sm text-muted">
-                None yet. <Link href={`/market?for=${id}`}>Find a skill</Link> in the market, or <Link href={`/agents/${id}/skills/import`}>import one</Link> you already use.
+                None yet. <Link href={`/agents/${id}/skills/import`}>Import one</Link> you already use.
               </p>
             )}
             {data.know_how.map((k) => (
@@ -126,7 +123,7 @@ export function SkillsPage({ id }: { id: string }) {
                   <b className="text-[15px] font-semibold">{k.title}</b>
                   <span className="text-sm">{k.description}</span>
                   <span className="text-xs text-muted">
-                    {k.name} · {k.from === "market" ? "taught from the market" : "imported"} {when(k.added_at)} · {k.files === 1 ? "SKILL.md" : `SKILL.md and ${k.files - 1} more file${k.files > 2 ? "s" : ""}`}
+                    {k.name} · imported {when(k.added_at)} · {k.files === 1 ? "SKILL.md" : `SKILL.md and ${k.files - 1} more file${k.files > 2 ? "s" : ""}`}
                   </span>
                 </div>
                 <button

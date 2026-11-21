@@ -16,7 +16,7 @@ export function chip(on: boolean) {
   return `min-h-9 rounded-full px-3.5 text-[13px] font-semibold ${on ? "bg-fg text-bg" : "text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)]"}`;
 }
 
-// Page is a full-width page of the market's: on a phone, with a way back to the chats.
+// Page is a full-width page (Connections): on a phone, with a way back to the chats.
 export function Page({ children, wide }: { children: ReactNode; wide?: boolean }) {
   return (
     <div className={`mx-auto flex w-full ${wide ? "max-w-[1120px]" : "max-w-[880px]"} flex-col gap-6 px-10 pt-8 pb-12 max-[900px]:px-4 max-[900px]:pt-4`}>
