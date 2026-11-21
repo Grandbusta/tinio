@@ -12,10 +12,10 @@ ask less. They always say plainly that they're an AI.
 Everything stays on your machine, in one file, except the calls to the models, on your
 own key.
 
-> **v0.5 is under way on this branch.** The engine and API run as one program on SQLite;
-> Tinio's own web app, which they'll be raised and talked to in, comes next, and a desktop
-> app after it. Until then the API is how to use it ([SETUP](docs/SETUP.md)). The latest
-> release, v0.4, runs one agent on Telegram.
+> **v0.5 is under way on this branch.** The engine and API run as one program on SQLite,
+> and the desktop app is where you raise your agents and talk to them
+> ([desktop/README](desktop/README.md)). The latest release, v0.4, runs one agent on
+> Telegram.
 
 ## What makes them different
 

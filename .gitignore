@@ -14,3 +14,7 @@
 
 # The film: its sources, frames and videos stay on your machine.
 /docs/brand/video/
+
+# The desktop app's build and its frontend's packages.
+/desktop/build/bin/
+/desktop/frontend/node_modules/

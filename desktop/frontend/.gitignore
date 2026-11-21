@@ -1,0 +1,5 @@
+node_modules
+dist
+# Made by the wails command.
+wailsjs
+package.json.md5

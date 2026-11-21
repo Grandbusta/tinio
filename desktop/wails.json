@@ -1,0 +1,17 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Tinio",
+  "outputfilename": "Tinio",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": { "name": "Tinio" },
+  "info": {
+    "companyName": "Tinio",
+    "productName": "Tinio",
+    "productVersion": "0.5.0",
+    "copyright": "Tinio's contributors, MIT licence",
+    "comments": "Agents with lives of their own, on your computer."
+  }
+}

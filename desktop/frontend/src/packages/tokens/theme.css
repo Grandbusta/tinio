@@ -1,0 +1,132 @@
+/* The brand as code: the Brand colours board on the design canvas. Ink is the one brand
+   colour (buttons, links, focus); slate is nearly everything else; no gradients. Every
+   text pairing meets WCAG AA (4.5:1), and borders and focus rings meet 3:1. Import after
+   tailwindcss. */
+
+@theme {
+  --color-ink-50: #f2f7fe;
+  --color-ink-100: #e5f0fe;
+  --color-ink-200: #cce2ff;
+  --color-ink-300: #a9cdff;
+  --color-ink-400: #7cadef;
+  --color-ink-500: #548dda;
+  --color-ink-600: #2d6bbb;
+  --color-ink-700: #0f4b92;
+  --color-ink-800: #0c3c75;
+  --color-ink-900: #092b54;
+  --color-ink-950: #06162c;
+
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f4f7;
+  --color-slate-200: #e3e7ec;
+  --color-slate-300: #cfd5dc;
+  --color-slate-400: #8a919b;
+  --color-slate-500: #6e757f;
+  --color-slate-600: #565e69;
+  --color-slate-700: #3e4650;
+  --color-slate-800: #282e37;
+  --color-slate-900: #161b21;
+  --color-slate-950: #0b0f13;
+
+  --color-butter: #fff4c2;
+
+  --font-display: var(--font-manrope), system-ui, sans-serif;
+  --font-sans: var(--font-instrument), system-ui, sans-serif;
+}
+
+/* What each colour is for. Components use these, so dark mode is one switch. */
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f1f4f7;
+  --fg: #0b0f13;
+  --muted: #565e69;
+  --line: #e3e7ec;
+  --line-strong: #8a919b;
+  --accent: #0f4b92;
+  --accent-hover: #0c3c75;
+  --accent-ink: #ffffff;
+  --accent-soft: #e5f0fe;
+  --accent-text: #0f4b92;
+  --band: #06162c;
+  --good: #1f7a4d;
+  --good-soft: #ddf3e6;
+  --good-text: #14532d;
+  --warn-soft: #fff7de;
+  --warn-text: #824c11;
+  --bad: #c9302d;
+  --bad-soft: #feefef;
+  --bad-text: #89211e;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1114;
+    --surface: #14171c;
+    --surface-2: #1b2025;
+    --fg: #ebeff4;
+    --muted: #abb2bb;
+    --line: #292e35;
+    --line-strong: #6b727b;
+    --accent: #a9cdff;
+    --accent-hover: #cce2ff;
+    --accent-ink: #06162c;
+    --accent-soft: #112743;
+    --accent-text: #a9cdff;
+    --good-soft: #163526;
+    --good-text: #8fe0b5;
+    --warn-soft: #24210f;
+    --warn-text: #f2c94c;
+    --bad-soft: #3d2018;
+    --bad-text: #ffb59a;
+    color-scheme: dark;
+  }
+}
+
+/* Dark chosen by hand (data-theme="dark"), whatever the system says; the same colours. */
+:root[data-theme="dark"] {
+  --bg: #0e1114;
+  --surface: #14171c;
+  --surface-2: #1b2025;
+  --fg: #ebeff4;
+  --muted: #abb2bb;
+  --line: #292e35;
+  --line-strong: #6b727b;
+  --accent: #a9cdff;
+  --accent-hover: #cce2ff;
+  --accent-ink: #06162c;
+  --accent-soft: #112743;
+  --accent-text: #a9cdff;
+  --good-soft: #163526;
+  --good-text: #8fe0b5;
+  --warn-soft: #24210f;
+  --warn-text: #f2c94c;
+  --bad-soft: #3d2018;
+  --bad-text: #ffb59a;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-band: var(--band);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-good-text: var(--good-text);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-text: var(--warn-text);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-bad-text: var(--bad-text);
+}

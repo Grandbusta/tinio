@@ -1,0 +1,163 @@
+@import "tailwindcss";
+@import "./packages/tokens/theme.css";
+@import "@fontsource/manrope/500.css";
+@import "@fontsource/manrope/600.css";
+@import "@fontsource/manrope/700.css";
+@import "@fontsource/manrope/800.css";
+@import "@fontsource/instrument-sans/400.css";
+@import "@fontsource/instrument-sans/500.css";
+@import "@fontsource/instrument-sans/600.css";
+@import "@fontsource/instrument-sans/700.css";
+
+:root {
+  --font-manrope: "Manrope";
+  --font-instrument: "Instrument Sans";
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+}
+
+/* Behind the chat, faint doodles of what agents make, so it isn't a blank page. Mid-grey
+   at low opacity reads on the light and the dark background alike; it stays put while the
+   messages scroll over it. */
+.chat-wallpaper {
+  background-image: url("/chat-wallpaper.svg");
+  background-size: 320px 320px;
+}
+
+/* Opening or closing About, and arriving from a page outside the frame: the page area
+   eases in, the rail and the list stay still. */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(page) {
+  animation: page-out 140ms ease-in both;
+}
+
+::view-transition-new(page) {
+  animation: page-in 220ms ease-out both;
+}
+
+@keyframes page-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* A page shown in the frame eases in, as About does. */
+.page-in {
+  animation: page-in 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-in {
+    animation: none;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* A work's words, from Markdown: set like the reader, not the app around it. */
+.work-words {
+  font-size: 15px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.work-words > * + * {
+  margin-top: 0.9em;
+}
+.work-words h1,
+.work-words h2,
+.work-words h3,
+.work-words h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin-top: 1.4em;
+}
+.work-words h1 {
+  font-size: 24px;
+}
+.work-words h2 {
+  font-size: 20px;
+}
+.work-words h3,
+.work-words h4 {
+  font-size: 17px;
+}
+.work-words ul,
+.work-words ol {
+  padding-left: 1.4em;
+}
+.work-words ul {
+  list-style: disc;
+}
+.work-words ol {
+  list-style: decimal;
+}
+.work-words li + li {
+  margin-top: 0.3em;
+}
+.work-words blockquote {
+  border-left: 2px solid var(--color-line-strong);
+  padding-left: 1em;
+  color: var(--color-muted);
+}
+.work-words code {
+  font-size: 0.9em;
+  background: var(--color-surface-2);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.work-words pre {
+  background: var(--color-surface-2);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+.work-words pre code {
+  background: none;
+  padding: 0;
+}
+.work-words hr {
+  border: 0;
+  border-top: 1px solid var(--color-line);
+}
+.work-words a {
+  color: var(--color-accent-text);
+  text-decoration: underline;
+}
+.work-words table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.work-words th,
+.work-words td {
+  border: 1px solid var(--color-line);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.work-words th {
+  background: var(--color-surface-2);
+  font-weight: 600;
+}

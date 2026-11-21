@@ -17,8 +17,19 @@
   change, quiet hours and pausing, skills with checks, and the six job-ready characters.
   The Skills market, admin, the beta, feedback and email are the platform's alone.
 
-**Still to come before v0.5.0:** Tinio's own web app, served by the same program; Telegram,
-local tools, backup and moving from v0.4, per agent; the desktop app.
+**The desktop app** (`desktop/`, built with Wails): the agents and the API run inside it,
+with no port and no sign-in. It asks for your OpenAI key first, then you raise an agent
+and talk to them, with replies as they're written. Every page of the web app is there:
+their day, works, skills, topics, character, judgment, memory, mind, growth, tools and
+settings, and You, with your key and the week's cap. It keeps running when you close its
+window (in the Dock on macOS, the taskbar elsewhere), opens at login (on by default, off
+on You), tells you in a notification what an agent says while you're elsewhere, and
+saves their files where you choose. Settings has your key, the model for each of their jobs
+(replies, decisions, their own day, light mode, works, from the models Tinio has prices
+for), the app, and how it looks.
+
+**Still to come before v0.5.0:** Telegram, local tools, backup and moving from v0.4, per
+agent; the app reachable from your phone; release builds of the app.
 
 **Not here until they come back:** the v0.4 commands (`tinio new`, `agent`, `secret`,
 `skill`, `doctor`, `backup`, `restore`), Telegram, the public profile page, and the five

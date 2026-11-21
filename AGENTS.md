@@ -42,6 +42,7 @@ as **Tinio**, and `tinio` for the command and in code.
 | Path | What it is |
 |---|---|
 | `cmd/tinio` | The command: `api.Main`. |
+| `desktop/` | The desktop app (Wails, a Go module of its own): `api.Start` in a window, the API in-process, chat as events; `frontend/` is its React app, the web app's screens copied in. See its README. |
 | `api/` | The API (every route in `api/main.go`; controllers, models, middlewares) and running the agents beside it (`work`); `tinio eval`. |
 | `.env.example` | Every setting, with what it is; copied to `.env`, which is never committed. |
 | `characters/<name>/` | The six ready characters, loaded into the `characters` table (a new version when one changes) when the API starts: `template.yaml` (how the app offers them), `character.yaml` (who, and when their day runs), `judgment.yaml` (how the owner decides). How every agent works is the defaults in `internal/config`, on the models the environment names. |
@@ -106,6 +107,9 @@ add a field.
 go build ./... && go vet ./...
 go test ./...
 ```
+
+The desktop app is its own module, and embeds its built frontend: in `desktop/frontend`,
+`npm install && npm run build` (which typechecks), then `cd desktop && go test ./...`.
 
 A test that needs a database opens a new SQLite file in its own temporary folder
 (`t.TempDir()`): nothing to start, nothing left behind. Run them with `-race` before a

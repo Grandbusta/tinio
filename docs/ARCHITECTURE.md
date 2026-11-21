@@ -15,6 +15,14 @@ button, or their owner opening the chat for the first time) or a **tick** (the c
 a minute). Everything the mind does starts from one of the two, runs through the same few
 parts, and ends in the decision log.
 
+The **desktop app** ([desktop](../desktop)) is the same thing in a window: it calls
+`api.Start`, which opens the database and starts the agents, and hands the window's
+`/api/...` requests to the API's handler in-process, with no port. What's said in a chat
+reaches the window as the app's events (`controllers.ChatEvents`), not a stream: the window
+on Windows reads a whole answer before it shows any of it. Agents live only while the program
+runs, so the app keeps running when its window closes and opens at login
+([desktop/README](../desktop/README.md)).
+
 ```mermaid
 flowchart TB
     APP["The app<br/>raising an agent, the chat"]
@@ -95,9 +103,15 @@ The owner brings only their own keys ([api/controllers/keys.go](../api/controlle
   the environment is used instead if it's set (`LoadKey` in [api/config](../api/config/config.go)).
 - **The OpenAI key** is set in the app (`POST /v1/keys`), sealed in the `keys` table, and
   only ever shown masked. `OPENAI_API_KEY` in the environment is used instead if it's set.
-- **The worker waits for it.** With no key, the worker waits; when the owner sets another,
-  the API notifies `keys_changed` (`models.KeysChanged`) and the worker stops every agent and
-  starts them again on it (`work` and `workOnce` in [api/main.go](../api/main.go)).
+- **The models** for each job (replies, decisions, their own day, light mode, works) are
+  Tinio's defaults until the owner picks another of the priced ones in the app's Settings
+  (`POST /v1/models`, kept in `model_choices`; `models.Jobs` in
+  [api/models/model_choices.go](../api/models/model_choices.go)). One named in the
+  environment (`OPENAI_MODEL`, ...) wins, and can't be changed in the app.
+- **The worker waits for a key.** With none, the worker waits; when the owner sets another
+  key or picks a model, the API notifies `keys_changed` (`models.KeysChanged`) and the worker
+  stops every agent and starts them again on it (`work` and `workOnce` in
+  [api/main.go](../api/main.go), `host.OpenAIWith`).
 - **The data folder** is `TINIO_DATA`, or by default Application Support on macOS,
   `%AppData%` on Windows, and `$XDG_DATA_HOME/tinio` or `~/.local/share/tinio` elsewhere. It
   holds `tinio.db` and `key`.
@@ -115,8 +129,10 @@ There's no email and no codes.
 - **Another device** (a phone on the same Wi-Fi) gets in only with `TINIO_PASSCODE` (16
   characters or more): `POST /v1/auth/passcode` checks it and gives that browser a session
   cookie for 30 days. Without a passcode, nothing but this machine gets in.
+- **The desktop app's window** is the owner too: its requests reach the API only from
+  inside the program, marked by `middlewares.InApp`, which `SignedIn` lets in.
 - **From the app only.** A request that changes anything is refused unless its `Origin` is
-  the app's (`APP_ORIGIN`).
+  the app's (`APP_ORIGIN`), or it's the desktop app's own.
 
 ## Every agent in one process
 
