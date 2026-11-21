@@ -10,6 +10,7 @@ import { NoKey } from "@/components/first-run";
 import { MeterLine } from "@/components/usage";
 import { useAccount } from "@/lib/account";
 import { call, prefetch, type Account, type Character, type Overview, type Usage } from "@/lib/api";
+import { plainText } from "@/components/message-text";
 
 // The app's frame, as on the canvas: the rail, your agents' list (each one's chat), the
 // page, and beside a chat the panel about the agent. On a phone, the list and a page are
@@ -361,7 +362,7 @@ function List({ open, className }: { open?: string; className: string }) {
 function Row({ agent: a, current, unread, onOpen }: { agent: Summary; current: boolean; unread: number; onOpen: () => void }) {
   const preview = !a.last
     ? "Say hello"
-    : `${a.last.author === "owner" ? "You: " : ""}${a.last.kind === "file" ? `Sent a file${a.last.text ? `: ${a.last.text}` : ""}` : a.last.text}`;
+    : `${a.last.author === "owner" ? "You: " : ""}${a.last.kind === "file" ? `Sent a file${a.last.text ? `: ${plainText(a.last.text)}` : ""}` : plainText(a.last.text)}`;
   return (
     <Link
       href={`/agents/${a.id}`}

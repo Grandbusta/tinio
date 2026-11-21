@@ -362,7 +362,7 @@ func (t Tool) Prepare(ctx context.Context, a ability.Act) (ability.Material, err
 		return ability.Material{}, err
 	}
 	note := fmt.Sprintf("\n\nYou used %s (%s) with %s; it returned this.%s", t.Name(), t.server.Name, orNone(a.Query()), ability.Fence(text))
-	return ability.Material{Note: note, Project: a.Project}, nil
+	return ability.Material{Note: note, Project: a.Project, Source: t.server.Name}, nil
 }
 
 // Action is a tool that changes things: it is never run as it is proposed,

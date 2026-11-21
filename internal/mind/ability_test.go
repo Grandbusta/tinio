@@ -21,6 +21,7 @@ type fakeAbility struct {
 	acts     []ability.Act
 	risk     ability.Risk // zero: ReadsWeb
 	cost     float64      // what each use costs, like a web search
+	source   string       // what it says it read
 }
 
 func (f *fakeAbility) Name() string     { return f.name }
@@ -38,7 +39,7 @@ func (f *fakeAbility) Prepare(_ context.Context, a ability.Act) (ability.Materia
 	if !ok {
 		return ability.Material{}, errors.New("not found")
 	}
-	return ability.Material{Note: ability.Fence(text), Project: a.Project, CostUSD: f.cost}, nil
+	return ability.Material{Note: ability.Fence(text), Project: a.Project, CostUSD: f.cost, Source: f.source}, nil
 }
 
 const notesJSON = `{"title":"Polyrhythm notes","kind":"notes","text":"Three against two.",

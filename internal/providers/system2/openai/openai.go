@@ -43,17 +43,22 @@ func New(apiKey, model, baseURL string, price pricing.Price, effort, tier string
 	return &Client{api: openaiclient.New(apiKey, baseURL, requestTimeout), model: model, price: price, effort: effort, tier: tier}
 }
 
+// maxAnswers is the most answers to tap a reply offers.
+const maxAnswers = 4
+
 // replyWithFacts is the Structured Outputs schema used with CollectFacts:
 // strict mode guarantees the output matches it. The model writes the
 // properties in order, which JSON gives a map alphabetically, so most of what
 // it saves comes before the reply. Reply first was tried (20 Nov): its first
 // words showed 0.4s sooner, but replies were blander and a fact went unsaved.
 var replyWithFacts = map[string]any{
-	"type": "object", "additionalProperties": false, "required": []string{"reply", "remember", "who_they_are", "reminders", "promises", "permissions", "corrections", "misread", "feedback", "lessons", "tastes", "goals", "send", "moves", "act", "look", "topic"},
+	"type": "object", "additionalProperties": false, "required": []string{"reply", "remember", "who_they_are", "reminders", "promises", "permissions", "corrections", "misread", "feedback", "lessons", "tastes", "goals", "send", "moves", "act", "look", "topic", "answers", "many"},
 	"properties": map[string]any{
 		"reply":        map[string]any{"type": "string"},
 		"look":         map[string]any{"type": "array", "items": system2.LookSchema},
 		"topic":        map[string]any{"type": "string", "description": "the name the note asks for, if it does; otherwise empty"},
+		"answers":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		"many":         map[string]any{"type": "boolean"},
 		"who_they_are": map[string]any{"type": "string"},
 		"reminders": map[string]any{"type": "array", "items": map[string]any{
 			"type": "object", "additionalProperties": false, "required": []string{"when", "what"},
@@ -80,10 +85,11 @@ var replyWithFacts = map[string]any{
 		"misread": map[string]any{"type": "string"},
 		"act":     map[string]any{"type": "array", "items": system2.ActSchema},
 		"moves": map[string]any{"type": "array", "items": map[string]any{
-			"type": "object", "additionalProperties": false, "required": []string{"promise", "by"},
+			"type": "object", "additionalProperties": false, "required": []string{"promise", "by", "as"},
 			"properties": map[string]any{
 				"promise": map[string]any{"type": "string", "description": "the ref of a promise in the note, e.g. p1"},
 				"by":      map[string]any{"type": "string", "description": "the new local time, YYYY-MM-DDTHH:MM, or now"},
+				"as":      map[string]any{"type": "string", "description": "the file it now goes as, e.g. ics; empty to keep it as it is"},
 			},
 		}},
 		"send": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"work", "as"},
@@ -263,6 +269,8 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 		fixes      []system2.Correction
 		misread    string
 		topic      string
+		answers    []string
+		many       bool
 		send       system2.Send
 		moves      []system2.Move
 		acts       []system2.Act
@@ -305,8 +313,10 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 				Action string `json:"action"`
 				Text   string `json:"text"`
 			} `json:"corrections"`
-			Misread string `json:"misread"`
-			Topic   string `json:"topic"`
+			Misread string   `json:"misread"`
+			Topic   string   `json:"topic"`
+			Answers []string `json:"answers"`
+			Many    bool     `json:"many"`
 			Act     []struct {
 				Tool string `json:"tool"`
 				Args string `json:"args"`
@@ -319,6 +329,7 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 			Moves []struct {
 				Promise string `json:"promise"`
 				By      string `json:"by"`
+				As      string `json:"as"`
 			} `json:"moves"`
 			Send struct {
 				Work string `json:"work"`
@@ -383,6 +394,12 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 		}
 		misread = strings.TrimSpace(out.Misread)
 		topic = strings.TrimSpace(out.Topic)
+		for _, a := range out.Answers {
+			if a = strings.TrimSpace(a); a != "" && len(answers) < maxAnswers {
+				answers = append(answers, a)
+			}
+		}
+		many = out.Many && len(answers) > 1
 		for _, l := range out.Look {
 			if tool := strings.TrimSpace(l.Tool); tool != "" {
 				looks = append(looks, system2.Look{Tool: tool, Query: strings.TrimSpace(l.Query)})
@@ -395,7 +412,7 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 		}
 		for _, mv := range out.Moves {
 			if ref, by := strings.Trim(strings.TrimSpace(mv.Promise), "[]"), strings.ToLower(strings.TrimSpace(mv.By)); ref != "" && by != "" {
-				moves = append(moves, system2.Move{Promise: ref, By: by})
+				moves = append(moves, system2.Move{Promise: ref, By: by, As: strings.ToLower(strings.TrimSpace(mv.As))})
 			}
 		}
 		if work := strings.Trim(strings.TrimSpace(out.Send.Work), "[]"); work != "" {
@@ -452,6 +469,8 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 		Corrections: fixes,
 		Misread:     misread,
 		Topic:       topic,
+		Answers:     answers,
+		Many:        many,
 		Feedback:    feedback,
 		Lessons:     lessons,
 		Tastes:      tastes,

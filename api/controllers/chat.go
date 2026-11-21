@@ -42,6 +42,9 @@ const (
 	pageSize        = 50
 	maxPage         = 200
 	missedAtMost    = 500 // rows a reconnecting stream is sent
+	maxNoteRunes    = 500
+	maxSearchRunes  = 100
+	searchShown     = 50
 )
 
 // chatRow is a row as the app reads it. The app keeps rows by id: a settled ask
@@ -206,6 +209,52 @@ func (ch *Chat) Answer(c *gin.Context) error {
 		return ch.write(c, memory.ChatMessage{Kind: memory.ChatPick}, perception.Pick{Call: in.Call, Option: *in.Option})
 	}
 	return utils.ErrBadRequest
+}
+
+// React is the owner's thumb on something their agent made (work), with what
+// was off, if they say: a row their agent hears, as feedback on the skills it
+// shows. Never shown in the chat.
+func (ch *Chat) React(c *gin.Context) error {
+	var in struct {
+		Work string `json:"work"`
+		Good *bool  `json:"good"`
+		Note string `json:"note"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil || in.Good == nil {
+		return utils.ErrBadRequest
+	}
+	id, err := ulid.Parse(in.Work)
+	if err != nil {
+		return utils.ErrNoSuchWork
+	}
+	note := strings.TrimSpace(in.Note)
+	if *in.Good && note != "" || utf8.RuneCountInString(note) > maxNoteRunes {
+		return utils.Invalid("note", fmt.Sprintf("What was off goes with a thumb down, up to %d characters.", maxNoteRunes))
+	}
+	if _, ok, err := ch.store(c).WorkFor(c, id, "account:"+middlewares.Owned(c).AccountID); err != nil {
+		return err
+	} else if !ok {
+		return utils.ErrNoSuchWork
+	}
+	return ch.write(c, memory.ChatMessage{Kind: memory.ChatReact}, perception.Reaction{Work: in.Work, Good: *in.Good, Note: note})
+}
+
+// Search is the rows of the chat with q in their words, newest first.
+func (ch *Chat) Search(c *gin.Context) error {
+	q := strings.TrimSpace(c.Query("q"))
+	if q == "" || utf8.RuneCountInString(q) > maxSearchRunes {
+		return utils.Invalid("q", fmt.Sprintf("Search for something, up to %d characters.", maxSearchRunes))
+	}
+	ms, err := ch.store(c).SearchChat(c, q, searchShown)
+	if err != nil {
+		return err
+	}
+	rows := make([]chatRow, len(ms))
+	for i, m := range ms {
+		rows[i] = rowOf(m)
+	}
+	utils.SuccessWithData(c, http.StatusOK, gin.H{"messages": rows})
+	return nil
 }
 
 // Read is the owner having seen their agent's chat up to the row until.

@@ -323,6 +323,18 @@ func TestDueIntentionsAndUnaskedFacts(t *testing.T) {
 	if is, err := s.DueIntentions(ctx, base, 100); err != nil || len(ours(is)) != 0 {
 		t.Fatalf("due before its time: %+v, %v", is, err)
 	}
+	// A promise moved to go as another file keeps its other arguments.
+	asked := memory.Intention{ID: ulid.Make(), Subject: person, Kind: memory.IntentionTask, PerceptID: msg.ID, Text: "a plan",
+		Args: map[string]string{"query": "tea"}, DueAt: base.Add(30 * time.Hour), Status: memory.IntentionPending, CreatedAt: base}
+	if err := s.SaveIntention(ctx, asked); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetIntentionArg(ctx, asked.ID, "as", "ics"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, err := s.Intention(ctx, asked.ID); err != nil || got.Args["as"] != "ics" || got.Args["query"] != "tea" {
+		t.Fatalf("after changing what it goes as: %+v %v", got.Args, err)
+	}
 	is, err := s.DueIntentions(ctx, base.Add(time.Hour), 100)
 	if got := ours(is); err != nil || len(got) != 1 || got[0].Text != "call mum" || !got[0].DueAt.Equal(due.DueAt) ||
 		got[0].PerceptID != msg.ID || !got[0].ProjectID.IsZero() || !got[0].DoneAt.IsZero() {

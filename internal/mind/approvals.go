@@ -291,7 +291,7 @@ func (m *Mind) sendApproved(ctx context.Context, a memory.Approval, now time.Tim
 	if f != nil {
 		text = strings.TrimSuffix(text, attachedLine(f.Name))
 	}
-	err = m.send(ctx, p, text, f)
+	err = m.send(ctx, p, text, f, Said{})
 	d.Outcome = &decision.Outcome{Status: decision.OutcomeOK, Detail: "approved by the owner", At: time.Now().UTC()}
 	if err != nil {
 		d.Outcome = &decision.Outcome{Status: decision.OutcomeFailed, Detail: err.Error(), At: time.Now().UTC()}

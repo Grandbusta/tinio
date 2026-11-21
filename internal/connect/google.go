@@ -46,10 +46,10 @@ type google struct {
 func (g *google) reads() []ability.Ability {
 	var out []ability.Ability
 	if g.given.Access.Has("calendar") {
-		out = append(out, gread{g: g, name: "google.calendar", about: `Read the owner's Google Calendar: their events and when they're free. Query: {} for the next 7 days, or {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}.`, read: g.events})
+		out = append(out, gread{g: g, name: "google.calendar", about: `Read the owner's Google Calendar: their events and when they're free. Query: {} for the next 7 days, or {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}.`, read: g.events, source: "your Google Calendar"})
 	}
 	if g.given.Access.Has("drive") {
-		out = append(out, gread{g: g, name: "google.files", about: `Read the owner's Google Drive files they picked for you, and the docs you made in their "Tinio" folder. Query: {} to list them, or {"file": "its name or id"} to read one.`, read: g.files})
+		out = append(out, gread{g: g, name: "google.files", about: `Read the owner's Google Drive files they picked for you, and the docs you made in their "Tinio" folder. Query: {} to list them, or {"file": "its name or id"} to read one.`, read: g.files, source: "your Google Drive files"})
 	}
 	return out
 }
@@ -69,10 +69,11 @@ func (g *google) doers() []mind.Doer {
 
 // gread is a Google reading tool, offered as an ability.
 type gread struct {
-	g     *google
-	name  string
-	about string
-	read  func(ctx context.Context, a ability.Act, args map[string]string) (string, error)
+	g      *google
+	name   string
+	about  string
+	source string // what it reads, as its owner says it
+	read   func(ctx context.Context, a ability.Act, args map[string]string) (string, error)
 }
 
 func (r gread) Name() string       { return r.name }
@@ -97,7 +98,7 @@ func (r gread) Prepare(ctx context.Context, a ability.Act) (ability.Material, er
 		return ability.Material{}, err
 	}
 	note := fmt.Sprintf("\n\nYou used %s (Google, %s) with %s; it returned this.%s", r.name, r.g.given.Label, orEmpty(a.Query()), ability.Fence(text))
-	return ability.Material{Note: note, Project: a.Project}, nil
+	return ability.Material{Note: note, Project: a.Project, Source: r.source}, nil
 }
 
 // gdo is a Google tool that changes something: only ever proposed, and run

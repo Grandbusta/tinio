@@ -151,6 +151,7 @@ func (r Article) Prepare(ctx context.Context, a ability.Act) (ability.Material, 
 		Note:     fmt.Sprintf("\n\nYou looked up %q and are reading the Wikipedia article %q.%s", a.Query(), art.Title, ability.Fence(passage)),
 		Project:  a.Project,
 		WorkKind: NotesKind,
+		Source:   "Wikipedia: " + art.Title,
 	}, nil
 }
 

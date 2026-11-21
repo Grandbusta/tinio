@@ -645,7 +645,7 @@ type AgentSkill struct {
 type ChatMessage struct {
 	ID     string
 	Author string // ChatOwner or ChatAgent
-	Kind   string // ChatMessageKind ("" is one), ChatAsk, ChatChoice, ChatFile, ChatApprove, ChatPick or ChatHello
+	Kind   string // ChatMessageKind ("" is one), ChatAsk, ChatChoice, ChatFile, ChatApprove, ChatPick, ChatHello or ChatReact
 	Text   string
 	// Payload says which request, call or file: for ChatApprove a
 	// perception.Answer, for ChatPick a perception.Pick. nil for a message.
@@ -669,6 +669,7 @@ const (
 	ChatApprove     = "approve" // the owner's answer to an ask
 	ChatPick        = "pick"    // the owner's pick on a choice
 	ChatHello       = "hello"   // the owner opened the chat for the first time: never shown
+	ChatReact       = "react"   // the owner's thumb on a work: never shown
 )
 
 // HelloID is the id of an agent's hello row: the same for every agent, so

@@ -3,6 +3,7 @@ package mind
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -62,12 +63,14 @@ func (m *Mind) looksHelp(person memory.Person, n names) string {
 }
 
 // look reads with what System 2 asked for, all at once: the note's account of
-// it, and what reading cost; last says it can't look again.
-func (m *Mind) look(ctx context.Context, p perception.Percept, person memory.Person, looks []system2.Look, last bool) (note string, cost float64) {
+// it, what reading cost, and what was read, by name, for the reply to show;
+// last says it can't look again.
+func (m *Mind) look(ctx context.Context, p perception.Percept, person memory.Person, looks []system2.Look, last bool) (note string, cost float64, read []string) {
 	tools := m.lookable(person)
 	looks = looks[:min(len(looks), lookAtOnce)]
 	found := make([]string, len(looks))
 	costs := make([]float64, len(looks))
+	sources := make([]string, len(looks))
 	var wg sync.WaitGroup
 	for i, l := range looks {
 		a, ok := tools[l.Tool]
@@ -87,7 +90,7 @@ func (m *Mind) look(ctx context.Context, p perception.Percept, person memory.Per
 				found[i] = fmt.Sprintf("\n\nLooking with %s failed: %s. Say so plainly if it matters.", l.Tool, err)
 				return
 			}
-			found[i], costs[i] = mat.Note, mat.CostUSD
+			found[i], costs[i], sources[i] = mat.Note, mat.CostUSD, mat.Source
 		}()
 	}
 	wg.Wait()
@@ -98,5 +101,10 @@ func (m *Mind) look(ctx context.Context, p perception.Percept, person memory.Per
 	for _, c := range costs {
 		cost += c
 	}
-	return "\n\nWhat you just looked at, to answer this message:" + strings.Join(found, "") + then, cost
+	for _, s := range sources {
+		if s != "" && !slices.Contains(read, s) {
+			read = append(read, s)
+		}
+	}
+	return "\n\nWhat you just looked at, to answer this message:" + strings.Join(found, "") + then, cost, read
 }

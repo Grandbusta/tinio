@@ -161,3 +161,119 @@ body {
   background: var(--color-surface-2);
   font-weight: 600;
 }
+
+/* An agent's message in the chat: Markdown kept to what reads well in a bubble. */
+.message-text {
+  overflow-wrap: anywhere;
+}
+.message-text > * + * {
+  margin-top: 0.5em;
+}
+.message-text ul,
+.message-text ol {
+  padding-left: 1.35em;
+}
+.message-text ul {
+  list-style: disc;
+}
+.message-text ol {
+  list-style: decimal;
+}
+.message-text li + li {
+  margin-top: 0.2em;
+}
+.message-text a {
+  color: var(--color-accent-text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.message-text :not(pre) > code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.88em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--color-surface-2);
+}
+.message-text blockquote {
+  border-left: 3px solid var(--color-line-strong);
+  padding-left: 0.75em;
+  color: var(--color-muted);
+}
+.message-text table {
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.message-text th,
+.message-text td {
+  border: 1px solid var(--color-line);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+/* Code, as in an editor: a dark block in either theme, coloured by its language. */
+.code-block {
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0b0f13;
+  margin-top: 0.6em;
+}
+.code-block pre {
+  margin: 0;
+  padding: 12px 16px 14px;
+  overflow-x: auto;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 13px;
+  line-height: 1.65;
+  color: #c9d1db;
+  white-space: pre;
+}
+.code-block .hljs-keyword,
+.code-block .hljs-built_in,
+.code-block .hljs-literal,
+.code-block .hljs-selector-tag {
+  color: #7cadef;
+}
+.code-block .hljs-string,
+.code-block .hljs-regexp,
+.code-block .hljs-attr,
+.code-block .hljs-symbol {
+  color: #e9c46a;
+}
+.code-block .hljs-comment,
+.code-block .hljs-quote {
+  color: #8a919b;
+  font-style: italic;
+}
+.code-block .hljs-title,
+.code-block .hljs-title.function_,
+.code-block .hljs-function {
+  color: #f2a97f;
+}
+.code-block .hljs-number,
+.code-block .hljs-type,
+.code-block .hljs-variable,
+.code-block .hljs-template-variable {
+  color: #f2c94c;
+}
+.code-block .hljs-meta,
+.code-block .hljs-tag,
+.code-block .hljs-name {
+  color: #a9cdff;
+}
+.code-block .hljs-addition {
+  color: #9fd8b0;
+}
+.code-block .hljs-deletion {
+  color: #f2a0a0;
+}
+
+/* What a search in the chat found, and the one shown now (the CSS Highlight API). */
+::highlight(chat-found) {
+  background-color: #fff4c2;
+  color: #0b0f13;
+}
+::highlight(chat-here) {
+  background-color: #f2c94c;
+  color: #0b0f13;
+}

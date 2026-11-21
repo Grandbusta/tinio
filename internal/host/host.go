@@ -482,6 +482,7 @@ var perceived = map[string]string{
 	memory.ChatApprove:     perception.KindApproval,
 	memory.ChatPick:        perception.KindCall,
 	memory.ChatHello:       perception.KindHello,
+	memory.ChatReact:       perception.KindReaction,
 }
 
 // feed hands r's mind what their owner wrote that they haven't heard, each

@@ -2,6 +2,7 @@ package mind
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"slices"
@@ -167,6 +168,71 @@ func (m *Mind) recomputeLevel(ctx context.Context, skill string, at time.Time) (
 	}
 	level := math.Round(sum/weight*10) / 10
 	return level, m.Store.SetSkillLevel(ctx, skill, level, at)
+}
+
+// A thumb on a work counts as the owner's feedback at these levels (1-10).
+const (
+	thumbUp   = 7
+	thumbDown = 4
+)
+
+// reacted takes the owner's thumb on a work as their feedback on each skill
+// that kind of work shows, with what was off, if they said. Only the owner's
+// count. Nothing is said back.
+func (m *Mind) reacted(ctx context.Context, p perception.Percept) {
+	log := m.Log.With("percept", p.ID.String())
+	if p.Speaker == "" || p.Speaker != m.policy().Owner {
+		log.Warn("a thumb from someone who isn't the owner; ignored", "speaker", p.Speaker)
+		return
+	}
+	var r perception.Reaction
+	if err := json.Unmarshal(p.Payload, &r); err != nil {
+		log.Warn("a thumb that can't be read; ignored", "err", err)
+		return
+	}
+	id, err := ulid.Parse(r.Work)
+	if err != nil {
+		log.Warn("a thumb on no work; ignored", "work", r.Work)
+		return
+	}
+	w, ok, err := m.Store.Work(ctx, id)
+	if err != nil || !ok {
+		log.Warn("a thumb on a work that isn't there; ignored", "work", r.Work, "err", err)
+		return
+	}
+	skills, err := m.Store.Skills(ctx)
+	if err != nil {
+		log.Warn("loading skills failed; the thumb isn't counted", "err", err)
+		return
+	}
+	score, said := float64(thumbUp), "liked it"
+	if !r.Good {
+		score, said = thumbDown, "said it wasn't quite right"
+	}
+	note := w.Title
+	if r.Note != "" {
+		note += ": " + cutRunes(r.Note, 500)
+	}
+	d := newDecision(p, nil, time.Now())
+	d.Tier, d.SetID, d.Action = decision.TierReflex, "reflex.reaction@1", "skill_feedback"
+	var moved []string
+	for _, sk := range skills {
+		if !slices.Contains(sk.ShownBy, w.Kind) {
+			continue
+		}
+		level, err := m.addEvidence(ctx, memory.Evidence{Skill: sk.Name, WorkID: w.ID, Score: score, Source: memory.EvidenceOwner, Note: note})
+		if err != nil {
+			log.Error("save feedback", "err", err)
+			continue
+		}
+		moved = append(moved, fmt.Sprintf("%s now %.1f", sk.Name, level))
+	}
+	d.Outcome = &decision.Outcome{Status: decision.OutcomeOK, At: time.Now().UTC(),
+		Detail: fmt.Sprintf("the owner %s (%q); %s", said, w.Title, orDefault(strings.Join(moved, ", "), "no skill shows it"))}
+	d.Latency = time.Since(d.At)
+	if err := m.Store.SaveDecision(ctx, *d); err != nil {
+		log.Error("save decision", "err", err)
+	}
 }
 
 // takeFeedback counts only the owner's feedback, and only for a skill it has.

@@ -12,6 +12,7 @@ import (
 	"github.com/Grandbusta/tinio/internal/channel/web"
 	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/perception"
+	"github.com/Grandbusta/tinio/internal/render"
 	"github.com/Grandbusta/tinio/internal/store"
 )
 
@@ -59,9 +60,9 @@ func (s *sayings) Ask(ctx context.Context, p perception.Percept, r memory.Reques
 	return s.Channel.Ask(ctx, p, r, id)
 }
 
-func (s *sayings) SendFile(ctx context.Context, p perception.Percept, name string, data []byte, caption string) error {
-	s.note(p, "[sends "+name+"] "+caption)
-	return s.Channel.SendFile(ctx, p, name, data, caption)
+func (s *sayings) SendFile(ctx context.Context, p perception.Percept, f render.File, caption string) error {
+	s.note(p, "[sends "+f.Name+"] "+caption)
+	return s.Channel.SendFile(ctx, p, f, caption)
 }
 
 // Talk starts agent's mind, seeded, for their owner (account, called owner),

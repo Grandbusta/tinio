@@ -43,6 +43,24 @@ writes the reply as them, from their life story and personality, the recent conv
 and the facts System 1 picked as relevant. Every message gets a reply in their own words,
 and you see it appear as they write it.
 
+### What the chat shows
+
+- **Formatting where it helps.** A short reply is plain text. A plan, steps or options can
+  come as a list, with the one thing that matters in bold and links you can open; code comes
+  coloured by its language, with a button to copy it.
+- **Work as what it is.** A file they send shows what's in it: a sheet as a table (its first
+  rows, then all of them), a calendar as its events, music you can play right there, a
+  document by its first page. It still downloads as its file.
+- **Answers to tap.** When they ask something with a few likely answers ("Simplified or
+  traditional?"), the answers show under their message: tap one, or pick several and send.
+  Typing your own works as ever.
+- **What they read.** When they looked something up to answer (your calendar, a Wikipedia
+  article), it's named under the reply.
+- **Thumbs on what they made.** Up counts toward the skills it shows; down asks what was off,
+  in a line, and they learn from it. A message's menu also copies it.
+- **Search.** The magnifier in the header finds words anywhere in the chat and steps through
+  each match.
+
 ### Topics
 
 It's one chat, however much you have going. They sort what you say into topics as you talk
@@ -82,7 +100,7 @@ em dashes.
   what they can do in writing, at most three open promises per person, and nothing to
   strangers. A promise not kept within 24 hours is missed. Ask for something they promised
   sooner or later ("can you send it now?") and they move it; "now" arrives within a
-  couple of minutes.
+  couple of minutes. You can change what it comes as too ("now, as a calendar").
 - **Files:** ask for something they already made as a file ("send me that outreach as a
   PDF") and it comes right away in the chat, with their reply beside it, to download.
   Something new ("a plan I can print, tonight") is promised like anything else and sent as

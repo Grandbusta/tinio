@@ -13,7 +13,7 @@ import (
 )
 
 type Filer interface {
-	SendFile(ctx context.Context, p perception.Percept, name string, data []byte, caption string) error
+	SendFile(ctx context.Context, p perception.Percept, f render.File, caption string) error
 }
 
 // canSendAs is false for a format made from data no craft of its life carries.
@@ -92,11 +92,27 @@ func (m *Mind) dataFile(w memory.Work) (*render.File, error) {
 	return nil, nil
 }
 
-func (m *Mind) send(ctx context.Context, p perception.Percept, text string, f *render.File) error {
-	if f == nil {
-		return m.Replier.Reply(ctx, p, text)
+// Said is what goes with a reply in a chat that shows it: answers to tap
+// (Many: several may be picked), and what was read to write it, by name.
+type Said struct {
+	Answers []string
+	Many    bool
+	Read    []string
+}
+
+// SayingReplier is a Replier whose chat shows what goes with a reply.
+type SayingReplier interface {
+	ReplyWith(ctx context.Context, p perception.Percept, text string, s Said) error
+}
+
+func (m *Mind) send(ctx context.Context, p perception.Percept, text string, f *render.File, s Said) error {
+	if f != nil {
+		return m.Filer.SendFile(ctx, p, *f, text)
 	}
-	return m.Filer.SendFile(ctx, p, f.Name, f.Data, text)
+	if r, ok := m.Replier.(SayingReplier); ok && (len(s.Answers) > 0 || len(s.Read) > 0) {
+		return r.ReplyWith(ctx, p, text, s)
+	}
+	return m.Replier.Reply(ctx, p, text)
 }
 
 // attachedLine marks, in what was said, the file that went with it.

@@ -18,6 +18,7 @@ import (
 
 	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/perception"
+	"github.com/Grandbusta/tinio/internal/render"
 )
 
 const (
@@ -97,7 +98,7 @@ func (c *Channel) Reply(ctx context.Context, p perception.Percept, text string) 
 
 // SendFile sends a file with caption; a caption too long for one goes first
 // as a message of its own.
-func (c *Channel) SendFile(ctx context.Context, p perception.Percept, name string, data []byte, caption string) error {
+func (c *Channel) SendFile(ctx context.Context, p perception.Percept, f render.File, caption string) error {
 	chat, err := chatID(p)
 	if err != nil {
 		return fmt.Errorf("telegram file: %w", err)
@@ -109,7 +110,7 @@ func (c *Channel) SendFile(ctx context.Context, p perception.Percept, name strin
 		caption = ""
 	}
 	_, err = c.bot.SendDocument(ctx, &bot.SendDocumentParams{ChatID: chat, Caption: caption,
-		Document: &models.InputFileUpload{Filename: name, Data: bytes.NewReader(data)}})
+		Document: &models.InputFileUpload{Filename: f.Name, Data: bytes.NewReader(f.Data)}})
 	return err
 }
 

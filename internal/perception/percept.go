@@ -60,6 +60,18 @@ const KindHello = "hello"
 // is a Pick; it has no Text.
 const KindCall = "call"
 
+// KindReaction is the owner's thumb on something the agent made. Its Payload
+// is a Reaction; it has no Text, and is never answered.
+const KindReaction = "reaction"
+
+// Reaction is how a work landed with its owner: Good, or not quite, and in
+// that case, if they said, what was off.
+type Reaction struct {
+	Work string `json:"work"`
+	Good bool   `json:"good"`
+	Note string `json:"note,omitempty"`
+}
+
 type Pick struct {
 	Call   string `json:"call"`
 	Option int    `json:"option"` // an index into its options; -1 something else

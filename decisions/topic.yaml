@@ -4,26 +4,30 @@
 # the recent exchange and the topics in the state: they would upset the
 # intent read.
 #
-# `continues` is a template asked once per topic ({topic} is a path to it);
-# `starts` once. The topic with the likeliest yes at or above act is the
-# message's; with none, a yes to `starts` begins a new one; otherwise it's in
-# no topic, like small talk. The writer's own choice (writing in a topic,
+# `continues` is a template asked once per topic ({topic} is the topic itself,
+# described in the question: pointed at in a list of topics, the model mixed
+# them up); `starts` once. The topic with the likeliest yes at or above act is
+# the message's; with none, a yes to `starts` begins a new one; otherwise it's
+# in no topic, like small talk. The writer's own choice (writing in a topic,
 # starting one, replying to a message) is never asked about.
 id: topic
-version: 1
+version: 2
 primary: starts
 
 questions:
   - name: continues
     type: predicate
-    instructions: "`topics` are things the writer and the reader have going, each with where it stands and what was last said in it. Does `message` carry on with {topic}: add to it, answer something said in it, or ask about it? `previous` is the exchange just before, which a short answer like \"yes, do that\" carries on from."
+    instructions: "This is something the writer and the reader have going, with where it stands or what was said in it lately: {topic}. Does `message` carry on with it: name it or something in it, add to it, change, fix or redo something in it, answer or follow up something said in it, or ask about it? `previous` is the exchange just before, which a short follow-up like \"yes, do that\" or \"make it seven\" carries on from."
   - name: starts
     type: predicate
     instructions: "Does `message` begin something the writer and the reader will likely come back to, such as a piece of work, a task with a deadline, a plan, a decision or a problem to solve, rather than small talk, a reaction or a one-off question?"
 
 # A first run on a real chat (21 Nov): a gift guide to plan 0.92, "the winter
 # menu needs translating by Friday" 0.58, the kettle breaking 0.06; carrying on
-# with its topic 0.99, small talk 0.
+# with its topic 0.99, small talk 0. Version 2 (22 Nov) also counts changing or
+# fixing something in a topic, and is given a young topic's last exchanges: on
+# 16 labelled messages against three topics, 15 right (version 1: 11), the
+# miss a follow-up that names what the topic never said ("change the third post").
 thresholds:
   act: 0.5 # at or above: the message is in that topic, or starts one
   ask: 0.5 # unused

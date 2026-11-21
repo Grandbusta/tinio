@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"errors"
 	"github.com/Grandbusta/tinio/internal/db"
 	"mime"
@@ -36,21 +37,25 @@ const (
 )
 
 type workRow struct {
-	ID      string    `json:"id"`
-	Kind    string    `json:"kind"` // as people say it: "beat idea", not "beat_idea"
-	Title   string    `json:"title"`
-	Peek    string    `json:"peek,omitempty"`
-	Text    string    `json:"text,omitempty"` // only when one is read
-	At      time.Time `json:"at"`
-	ForYou  bool      `json:"for_you"` // made for their owner, not for themselves
-	Formats []string  `json:"formats"` // the files it can be made into now, e.g. "pdf"
+	ID    string `json:"id"`
+	Kind  string `json:"kind"` // as people say it: "beat idea", not "beat_idea"
+	Title string `json:"title"`
+	Peek  string `json:"peek,omitempty"`
+	Text  string `json:"text,omitempty"` // only when one is read
+	// Data is what it carries beside its words, as its file is made from it
+	// (a sheet's rows, events, a score), by DataKind; only when one is read.
+	Data     json.RawMessage `json:"data,omitempty"`
+	DataKind string          `json:"data_kind,omitempty"`
+	At       time.Time       `json:"at"`
+	ForYou   bool            `json:"for_you"` // made for their owner, not for themselves
+	Formats  []string        `json:"formats"` // the files it can be made into now, e.g. "pdf"
 }
 
 func (wk *Works) row(w memory.Work, owner string, full bool) workRow {
 	r := workRow{ID: w.ID.String(), Kind: strings.ReplaceAll(w.Kind, "_", " "), Title: w.Title, At: w.CreatedAt.UTC(),
 		ForYou: w.MadeFor == owner, Formats: []string{}}
 	if full {
-		r.Text = w.Text
+		r.Text, r.Data, r.DataKind = w.Text, w.Data, w.DataKind
 	} else {
 		r.Peek = peek(w.Title, w.Text)
 	}
@@ -151,7 +156,7 @@ func (wk *Works) Send(c *gin.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := chat.SendFile(c, perception.Percept{}, f.Name, f.Data, w.Title); err != nil {
+	if err := chat.SendFile(c, perception.Percept{}, f, w.Title); err != nil {
 		return err
 	}
 	utils.SuccessWithData(c, http.StatusCreated, gin.H{"sent": f.Name})

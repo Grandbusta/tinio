@@ -347,6 +347,17 @@ func (s *fakeStore) PostponeIntention(_ context.Context, id ulid.ULID, due time.
 	return nil
 }
 
+func (s *fakeStore) SetIntentionArg(_ context.Context, id ulid.ULID, key, value string) error {
+	update(s.intentions, func(x memory.Intention) bool { return x.ID == id }, func(x *memory.Intention) {
+		x.Args = maps.Clone(x.Args)
+		if x.Args == nil {
+			x.Args = map[string]string{}
+		}
+		x.Args[key] = value
+	})
+	return nil
+}
+
 func (s *fakeStore) intention(id ulid.ULID) memory.Intention {
 	i, _, _ := s.Intention(context.Background(), id)
 	return i
@@ -620,6 +631,17 @@ func (r *fakeReplier) Reply(_ context.Context, p perception.Percept, text string
 	return r.err
 }
 
+// sayingReplier is a fakeReplier whose chat shows what goes with a reply.
+type sayingReplier struct {
+	fakeReplier
+	said []Said
+}
+
+func (r *sayingReplier) ReplyWith(ctx context.Context, p perception.Percept, text string, s Said) error {
+	r.said = append(r.said, s)
+	return r.Reply(ctx, p, text)
+}
+
 func (r *fakeReplier) Draft(_ context.Context, _ perception.Percept, text string) error {
 	r.sent = append(r.sent, "draft: "+text)
 	return nil
@@ -740,6 +762,7 @@ type fakeSystem2 struct {
 	looks      [][]system2.Look  // each reply call's looks, in turn, before it replies
 	formats    map[string]string // reply text by Format.Name, for structured requests
 	topic      string            // the name it gives a topic
+	answers    []string          // answers to tap that it offers
 	drafts     []string          // told to a request's Draft, in turn
 	requests   []system2.Request
 }
@@ -763,7 +786,7 @@ func (f *fakeSystem2) Reason(_ context.Context, req system2.Request) (system2.Re
 		return system2.Response{Provider: "fake2/1", Looks: looks, CostUSD: 0.001}, nil
 	}
 	return system2.Response{Provider: "fake2/1", Text: "a thoughtful reply", Remember: f.remember, WhoTheyAre: f.whoTheyAre,
-		Reminders: f.reminders, Promises: f.promises, Lessons: f.lessons, Feedback: f.feedback, Goals: f.goals, Send: f.send, Moves: f.moves, Acts: f.acts, Topic: f.topic, CostUSD: 0.001}, nil
+		Reminders: f.reminders, Promises: f.promises, Lessons: f.lessons, Feedback: f.feedback, Goals: f.goals, Send: f.send, Moves: f.moves, Acts: f.acts, Topic: f.topic, Answers: f.answers, CostUSD: 0.001}, nil
 }
 
 var testSet = questions.Set{

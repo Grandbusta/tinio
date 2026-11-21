@@ -39,7 +39,7 @@ export type Request = {
 export type ChatRow = {
   id: string;
   author: "owner" | "agent";
-  kind: "message" | "ask" | "choice" | "file" | "approve" | "pick" | "hello";
+  kind: "message" | "ask" | "choice" | "file" | "approve" | "pick" | "hello" | "react";
   text: string;
   payload?: {
     approval?: string;
@@ -49,6 +49,13 @@ export type ChatRow = {
     file?: string;
     name?: string;
     size?: number;
+    work?: string; // a file's work, and what it was made as
+    format?: string;
+    answers?: string[]; // a reply's answers to tap; several may be picked with many
+    many?: boolean;
+    read?: string[]; // what was read to write a reply
+    good?: boolean; // a thumb on work: how it landed, and what was off
+    note?: string;
   } & Request;
   at: string;
   settled_at?: string;
@@ -268,6 +275,8 @@ export type Work = {
   at: string;
   for_you: boolean;
   formats: string[];
+  data?: unknown; // what it carries beside its words, as data_kind says (a table, events, a score); only when one is read
+  data_kind?: string;
 };
 
 // The week your agents share, on your own key: cap_usd is what it may cost (0: no limit),

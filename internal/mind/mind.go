@@ -62,6 +62,7 @@ type Store interface {
 	IntentionsDue(ctx context.Context, from, to time.Time) ([]memory.Intention, error)
 	FinishIntention(ctx context.Context, id ulid.ULID, status, result string, at time.Time) error
 	PostponeIntention(ctx context.Context, id ulid.ULID, due time.Time) error
+	SetIntentionArg(ctx context.Context, id ulid.ULID, key, value string) error
 	RetryIntention(ctx context.Context, id ulid.ULID, due time.Time) error
 	OpenIntentions(ctx context.Context, subject, kind string) ([]memory.Intention, error)
 	AwaitIntention(ctx context.Context, id ulid.ULID) error
@@ -221,7 +222,10 @@ type Config struct {
 	OpenThreads      questions.Set
 	RecallCandidates int // facts considered per reply: same life area first, then newest
 	ReplyPrompt      Prompt
-	Working          WorkingMemory
+	// RichChat: the chat shows Markdown and answers to tap (the web app);
+	// false: plain text, like Telegram.
+	RichChat bool
+	Working  WorkingMemory
 	// TopicSort sorts messages into topics, so a reply is written from what
 	// it's about; zero value: there are none, and replies have the last few
 	// minutes. TopicPrompt sums topics up; zero: they're never summed up.
@@ -455,6 +459,10 @@ func (m *Mind) handle(ctx context.Context, p perception.Percept) {
 		m.hello(ctx, p)
 		return
 	}
+	if p.Kind == perception.KindReaction {
+		m.reacted(ctx, p)
+		return
+	}
 
 	// The name comes from memory once known, so a changed account name does
 	// not change them.
@@ -471,6 +479,7 @@ func (m *Mind) handle(ctx context.Context, p perception.Percept) {
 	chain := []*decision.Decision{root} // root first; a System 2 hand-off is its child
 	var (
 		reply    string
+		said     Said
 		attached *render.File
 		learn    func() []*decision.Decision // keeps what the reply learned, once it's sent; nil if nothing
 		after    []*decision.Decision        // what the reply's answer changed: saved after it
@@ -526,7 +535,7 @@ func (m *Mind) handle(ctx context.Context, p perception.Percept) {
 			if state == usage.Light && m.LightSystem2 != nil {
 				writer = m.LightSystem2
 			}
-			reply, attached, learn = m.reason(ctx, writer, p, person, root, child, m.talkedOf(ctx, p, recent, about), facts, why, rel, about)
+			reply, said, attached, learn = m.reason(ctx, writer, p, person, root, child, m.talkedOf(ctx, p, recent, about), facts, why, rel, about)
 			chain = append(chain, child)
 		}
 	}
@@ -538,7 +547,7 @@ func (m *Mind) handle(ctx context.Context, p perception.Percept) {
 		actor.Reply += attachedLine(attached.Name)
 	}
 	actor.Outcome = &decision.Outcome{Status: decision.OutcomeOK}
-	if err := m.send(ctx, p, reply, attached); err != nil {
+	if err := m.send(ctx, p, reply, attached, said); err != nil {
 		log.Warn("reply failed", "err", err)
 		actor.Outcome = &decision.Outcome{Status: decision.OutcomeFailed, Detail: err.Error()}
 	}
@@ -956,7 +965,7 @@ func (m *Mind) lookUp(ctx context.Context, p perception.Percept, person memory.P
 // never waits on it; learn returns the decisions it made, and is nil if
 // System 2 failed.
 func (m *Mind) reason(ctx context.Context, writer system2.Reasoner, p perception.Percept, person memory.Person, parent, d *decision.Decision,
-	recent []memory.Exchange, facts []memory.Fact, why string, rel related, about topical) (reply string, file *render.File, learn func() []*decision.Decision) {
+	recent []memory.Exchange, facts []memory.Fact, why string, rel related, about topical) (reply string, said Said, file *render.File, learn func() []*decision.Decision) {
 	d.Tier, d.SetID, d.Action = decision.TierSystem2, m.ReplyPrompt.Ref, "reply"
 	n := m.namesFor(p)
 	note, refs := m.system2Note(parent, why, facts, n)
@@ -985,8 +994,9 @@ func (m *Mind) reason(ctx context.Context, writer system2.Reasoner, p perception
 	resp, err := writer.Reason(ctx, req)
 	spent, looked := rel.cost, false
 	for round := 1; err == nil && len(resp.Looks) > 0 && round <= lookRounds && len(m.lookable(person)) > 0; round++ {
-		more, cost := m.look(ctx, p, person, resp.Looks, round == lookRounds)
+		more, cost, read := m.look(ctx, p, person, resp.Looks, round == lookRounds)
 		spent += resp.CostUSD + cost
+		said.Read = append(said.Read, read...)
 		req.Note += more
 		looked = true
 		resp, err = writer.Reason(ctx, req)
@@ -998,12 +1008,17 @@ func (m *Mind) reason(ctx context.Context, writer system2.Reasoner, p perception
 	if err != nil {
 		m.Log.Error("system 2 failed", "percept", p.ID.String(), "err", err)
 		d.Action = "error"
-		return "Sorry, I couldn't think that through just now.", nil, nil
+		return "Sorry, I couldn't think that through just now.", Said{}, nil, nil
+	}
+	if m.RichChat {
+		said.Answers, said.Many = resp.Answers, resp.Many
+	} else {
+		said = Said{} // the chat shows only words
 	}
 	m.Log.Debug("system 2 usage", "input_tokens", resp.Usage.InputTokens, "cached_tokens", resp.Usage.CachedTokens,
 		"output_tokens", resp.Usage.OutputTokens, "reasoning_tokens", resp.Usage.ReasoningTokens)
 
-	return resp.Text, m.sendWith(p, resp.Send, rel.workRefs), func() []*decision.Decision {
+	return resp.Text, said, m.sendWith(p, resp.Send, rel.workRefs), func() []*decision.Decision {
 		var fs []memory.Fact
 		for _, mem := range resp.Remember {
 			subject := memory.SubjectSelf
@@ -1070,14 +1085,19 @@ func (m *Mind) promisesNote(ctx context.Context, p perception.Percept, person me
 	for k, i := range open {
 		ref := fmt.Sprintf("p%d", k+1)
 		refs[ref] = i
-		fmt.Fprintf(&b, "\n- [%s] by %s: %s", ref, i.DueAt.In(m.Zone).Format("Mon 2 Jan 15:04"), i.Text)
+		as := "a message"
+		if f := i.Args["as"]; f != "" {
+			as = "a " + f + " file"
+		}
+		fmt.Fprintf(&b, "\n- [%s] by %s, as %s: %s", ref, i.DueAt.In(m.Zone).Format("Mon 2 Jan 15:04"), as, i.Text)
 	}
 	return gate + b.String(), refs
 }
 
 // movePromises sets the new time of promises it already made, by their ref
-// in the note: "now", or a local time (one already past is now). The next
-// tick makes and sends what is due.
+// in the note: "now", or a local time (one already past is now); and what
+// one goes as, if that changed and it can send that. The next tick makes and
+// sends what is due.
 func (m *Mind) movePromises(ctx context.Context, p perception.Percept, moves []system2.Move, promised map[string]memory.Intention) {
 	for _, mv := range moves {
 		log := m.Log.With("percept", p.ID.String(), "promise", mv.Promise, "by", mv.By)
@@ -1102,6 +1122,18 @@ func (m *Mind) movePromises(ctx context.Context, p perception.Percept, moves []s
 			continue
 		}
 		log.Info("moved a promise", "what", i.Text, "from", i.DueAt.In(m.Zone).Format(time.RFC3339), "to", due.In(m.Zone).Format(time.RFC3339))
+		if mv.As == "" || mv.As == i.Args["as"] {
+			continue
+		}
+		if !m.canSendAs(mv.As) {
+			log.Warn("asked to send a promise as a file it can't; it goes as it was", "as", mv.As)
+			continue
+		}
+		if err := m.Store.SetIntentionArg(ctx, i.ID, "as", mv.As); err != nil {
+			log.Error("changing what a promise goes as failed", "err", err)
+			continue
+		}
+		log.Info("a promise goes as another file now", "what", i.Text, "as", mv.As)
 	}
 }
 
@@ -1193,6 +1225,26 @@ func (m *Mind) saveReminders(ctx context.Context, p perception.Percept, rs []sys
 	}
 }
 
+// formatting is how replies are laid out, by what the chat shows.
+func (m *Mind) formatting() string {
+	if !m.RichChat {
+		return "Plain text: no Markdown, because your chat shows it as raw symbols."
+	}
+	return "Usually plain text, like a message. Only when it helps something be read or used, format it in Markdown: a " +
+		"numbered list for steps or options, **bold** for the one thing that matters, a link as [words](url), and code in " +
+		"a fenced block with its language (```python). Never headings or tables: a table belongs in a sheet you make."
+}
+
+func (m *Mind) answersHelp(n names) string {
+	if !m.RichChat {
+		return "- Leave `answers` empty and `many` false."
+	}
+	return fmt.Sprintf("- When you ask %s something with a few likely answers (a choice between options, yes or no, a time or a "+
+		"day), put the likeliest 2 to 4 in `answers`, each a few words as %s would say it (\"Simplified\", \"9am\", \"Yes, go ahead\"), "+
+		"so they can tap one instead of typing; set `many` if several can be picked. Leave `answers` empty when you ask nothing, or "+
+		"ask what only they can say (a name, a description).", n.speaker, n.speaker)
+}
+
 func (m *Mind) now(t time.Time) string {
 	return fmt.Sprintf("It is now %s (%s time).", t.In(m.Zone).Format("Monday 2 January 2006, 15:04"), m.Zone)
 }
@@ -1207,7 +1259,7 @@ func (m *Mind) instructions(ctx context.Context, person memory.Person, n names) 
 		"{personality}", personality, "{who_they_are}", m.whoTheyAre(person, n),
 		"{makes}", m.makesList(), "{abilities}", m.abilitiesList(), "{files}", m.filesHelp(n), "{actions}", m.actionsFor(person, n), "{looks}", m.looksHelp(person, n), "{intents}", strings.Join(m.intents(), ", "),
 		"{correct_self}", m.correctSelf(person), "{permissions_help}", m.permissionsHelp(person, n),
-		"{fact_areas}", m.factAreasHelp(),
+		"{fact_areas}", m.factAreasHelp(), "{formatting}", m.formatting(), "{answers_help}", m.answersHelp(n),
 		"{feedback_help}", m.feedbackHelp(ctx, person)+m.goalsHelp(person)).Replace(m.ReplyPrompt.Text)
 }
 

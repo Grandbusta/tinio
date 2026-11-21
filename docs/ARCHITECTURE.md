@@ -306,7 +306,7 @@ When the owner sends "I have an interview on Friday, wish me luck", this is what
    | [incoming_message](../decisions/incoming_message.yaml) | the raw message | `intent`: share, ask about the person, ask what they can do, ask about the writer, ask for help, remind, small talk, other; `mentions_time` | what System 2 is told the message is doing, and the route |
    | [follow_up](../decisions/follow_up.yaml) | the message + the person's last reply | is it answering that? | only when their last reply is the last thing said |
    | [life_area](../decisions/life_area.yaml) | the message, with pronouns replaced by names | `area` (16 parts of life), `personal`, `broad` | where recall looks |
-   | [topic](../decisions/topic.yaml) | the message, the exchange before it, and the speaker's open topics and those quiet less than 30 days (at most 10), plus the 3 older quiet ones closest to the message by embedding, however old; each with where it stands | does it carry on with each one? does it start one? | the topic it's in (below) |
+   | [topic](../decisions/topic.yaml) | the message, the exchange before it, and the speaker's open topics and those quiet less than 30 days (at most 10), plus the 3 older quiet ones closest to the message by embedding, however old; each described in its own question, by its summary, or a young one by its last 2 exchanges | does it carry on with each one? does it start one? | the topic it's in (below) |
 
    **Topics** ([topics.go](../internal/mind/topics.go)) keep one chat from blurring: what's
    said is sorted into the things the owner and the agent have going (`topics`, each with
@@ -354,7 +354,8 @@ When the owner sends "I have an interview on Friday, wish me luck", this is what
 
    It returns the **reply** and, alongside it: facts to **remember** (about the speaker,
    or decided about themselves, each with its life areas), **who the speaker is** to them, **reminders**,
-   **promises**, **corrections** to recalled facts (by ref), **permission** changes,
+   **promises**, **moves** of promises already made (a new time, and a new file to go as),
+   **corrections** to recalled facts (by ref), **permission** changes,
    a **misread** (what the owner's last message was really doing), **feedback** on their
    work (skill levels), and **lessons**. Only the owner's permissions, feedback and lessons
    count; only the owner can correct facts about the person. Em dashes are rewritten in
@@ -365,6 +366,12 @@ When the owner sends "I have an interview on Friday, wish me luck", this is what
    fenced as material, and System 2 is asked again; twice at most
    ([looks.go](../internal/mind/looks.go)). After a look, anything it proposes to change
    asks the owner whatever its class allows.
+   In the web chat (`RichChat`) the prompt allows Markdown where it helps (lists, bold,
+   links, fenced code; never headings or tables), and the reply may offer up to 4
+   **answers** to tap (`many`: several may be picked); on Telegram it's plain text and
+   none. The reply's chat row carries its answers and what it read (each tool's `Source`,
+   like "Wikipedia: Oolong"), and a file's row the work it was made from and its format,
+   so the app shows it as what it is (a sheet as a table, events, music to play).
 9. **Act.** The reply is sent, and only then is what it learned kept, so it never waits
    on that. System 2 files each fact by life area as it writes it, from life_area's own
    list (in testing every fact shared an area with life_area's filing, often adding one);
@@ -377,7 +384,10 @@ When the owner sends "I have an interview on Friday, wish me luck", this is what
     latency), its System 2 child (`parent_id`), and any decisions that followed.
 
 A tap on a button is a percept too, with no text: an approval (`gate:<id>:y|n`) or a call
-(`call:<id>:<option>`). Only the owner's taps count, and only the first.
+(`call:<id>:<option>`). Only the owner's taps count, and only the first. So is the owner's
+thumb on a work in the web chat (a `react` row, `perception.Reaction`): it's their feedback
+on each skill that kind of work shows, 7 for up and 4 for down with what was off, and gets
+no reply.
 
 ## The clock
 

@@ -95,6 +95,7 @@ var LookSchema = map[string]any{"type": "object", "additionalProperties": false,
 type Move struct {
 	Promise string // its ref in the note, e.g. "p1"
 	By      string // local time, "2006-01-02T15:04", or "now"
+	As      string // the file it now goes as, e.g. "ics"; "" keeps what it was
 }
 
 // Send is a work it already made, sent with the reply as a file.
@@ -182,7 +183,11 @@ type Response struct {
 	Looks []Look
 	// Topic is the name it gave what the message starts, when the note asked
 	// for one; "" otherwise.
-	Topic   string
+	Topic string
+	// Answers are a few likely answers to what the reply asks, to tap; Many:
+	// several may be picked. None if it asks nothing, or nothing with a few answers.
+	Answers []string
+	Many    bool
 	Usage   Usage
 	CostUSD float64 // 0 when no price is configured
 }

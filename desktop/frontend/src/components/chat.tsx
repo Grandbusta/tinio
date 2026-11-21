@@ -5,6 +5,8 @@ import { Button } from "@tinio/ui";
 import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Avatar, status, useFrame } from "@/components/app-frame";
 import { FileIcon, kindOf } from "@/components/file-icon";
+import { MessageText } from "@/components/message-text";
+import { WorkPreview } from "@/components/work-preview";
 import { NoKey } from "@/components/first-run";
 import { ComposerFolders } from "@/components/folders";
 import { resets, UsageBanner } from "@/components/usage";
@@ -66,6 +68,11 @@ export function Chat({ id }: { id: string }) {
   const [replyTo, setReplyTo] = useState<ChatRow | null>(null);
   const [starting, setStarting] = useState(false); // what you send next starts a topic
   const [menu, setMenu] = useState(""); // the row whose menu is open
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<ChatRow[] | null>(null); // what a search found, newest first
+  const [hit, setHit] = useState(0); // the one shown
+  const log = useRef<HTMLDivElement>(null);
 
   const loadTopics = useCallback(
     () => call<{ topics: Topic[] }>(`/agents/${id}/topics`).then((t) => t.ok && setTopics(t.data.topics)),
@@ -170,6 +177,9 @@ export function Chat({ id }: { id: string }) {
   const last = all[all.length - 1];
   const waiting = ready && (all.length === 0 || last.author === "owner");
   const visible = inTopic ? (topicRows[inTopic] ?? []).filter((r) => shown.has(r.kind)) : all;
+  // Your last thumb on each work, from the rows you sent.
+  const reactions: Record<string, { good: boolean; note?: string }> = {};
+  for (const r of rows ?? []) if (r.kind === "react" && r.payload?.work) reactions[r.payload.work] = { good: !!r.payload.good, note: r.payload.note };
   const topic = topics.find((t) => t.id === inTopic);
   const titleOf = (t?: string) => {
     const found = topics.find((x) => x.id === t);
@@ -228,15 +238,17 @@ export function Chat({ id }: { id: string }) {
     return () => document.removeEventListener("visibilitychange", mark);
   }, [rows, id, refresh]);
 
-  async function send(e?: FormEvent) {
+  // send sends what's typed, or an answer tapped (answer), which goes in the topic of
+  // what it answers.
+  async function send(e?: FormEvent, tapped?: string) {
     e?.preventDefault();
-    const said = text.trim();
+    const said = (tapped ?? text).trim();
     if (!said || sending) return;
     setSending(true);
     setError("");
     const res = await call<{ message: ChatRow }>(`/agents/${id}/messages`, {
       text: said,
-      topic: starting ? "new" : inTopic,
+      topic: starting ? "new" : inTopic || (tapped ? (last?.topic ?? "") : ""),
       reply_to: replyTo?.id ?? "",
     });
     setSending(false);
@@ -244,7 +256,7 @@ export function Chat({ id }: { id: string }) {
     atEnd.current = true;
     setDraft("");
     keep(res.data.message);
-    setText((now) => (now === text ? "" : now)); // anything typed while it went stays
+    if (tapped === undefined) setText((now) => (now === text ? "" : now)); // anything typed while it went stays
     setReplyTo(null);
     setStarting(false);
     if (res.data.message.topic) loadTopics();
@@ -257,6 +269,79 @@ export function Chat({ id }: { id: string }) {
     const res = await call(`/agents/${id}/messages/${row.id}/topic`, { topic: to });
     if (!res.ok) return setError(res.error.message);
     loadTopics();
+  }
+
+  // search finds q anywhere in the chat; the newest match is shown first.
+  async function search(e: FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    if (!q) return;
+    const res = await call<{ messages: ChatRow[] }>(`/agents/${id}/search?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return setError(res.error.message);
+    setHits(res.data.messages);
+    setHit(0);
+    if (res.data.messages.length) goTo(res.data.messages[0]);
+  }
+
+  // goTo shows a row found: in the whole chat, its older pages read until it's there.
+  async function goTo(r: ChatRow) {
+    if (inTopic) show("");
+    atEnd.current = false;
+    let have = rows ?? [];
+    for (let page = 0; page < 20 && !have.some((x) => x.id === r.id) && have.length; page++) {
+      const m = await call<{ messages: ChatRow[] }>(`/agents/${id}/messages?before=${have[0].id}&limit=200`);
+      if (!m.ok || !m.data.messages.length) break;
+      have = [...m.data.messages, ...have];
+    }
+    setRows((prev) => have.reduce(put, prev ?? []));
+    requestAnimationFrame(() => document.getElementById(`row-${r.id}`)?.scrollIntoView({ block: "center" }));
+  }
+
+  function step(by: number) {
+    if (!hits?.length) return;
+    const next = (hit + by + hits.length) % hits.length;
+    setHit(next);
+    goTo(hits[next]);
+  }
+
+  // The words found are marked where they are, without changing what's drawn (the CSS
+  // Highlight API); the one shown now is marked more strongly. A browser without it
+  // still scrolls to each.
+  useEffect(() => {
+    const marks = typeof CSS !== "undefined" ? (CSS as unknown as { highlights?: Map<string, unknown> }).highlights : undefined;
+    if (!marks) return;
+    marks.delete("chat-found");
+    marks.delete("chat-here");
+    const q = query.trim().toLowerCase();
+    if (!searching || !hits?.length || !q || !log.current) return;
+    const found: Range[] = [];
+    const here: Range[] = [];
+    const current = document.getElementById(`row-${hits[hit]?.id}`);
+    const walk = document.createTreeWalker(log.current, NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      const text = n.textContent?.toLowerCase() ?? "";
+      for (let at = text.indexOf(q); at >= 0; at = text.indexOf(q, at + q.length)) {
+        const range = new Range();
+        range.setStart(n, at);
+        range.setEnd(n, at + q.length);
+        (current?.contains(n) ? here : found).push(range);
+      }
+    }
+    const Highlight = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
+    marks.set("chat-found", new Highlight(...found));
+    marks.set("chat-here", new Highlight(...here));
+  }, [searching, hits, hit, rows, query]);
+
+  // react sends your thumb on a work, with what was off if it's down.
+  async function react(work: string, good: boolean, note = "") {
+    const res = await call<{ message: ChatRow }>(`/agents/${id}/reactions`, { work, good, note });
+    if (!res.ok) return setError(res.error.message);
+    keep(res.data.message);
+  }
+
+  async function copy(row: ChatRow) {
+    setMenu("");
+    await navigator.clipboard.writeText(row.text);
   }
 
   function reply(row: ChatRow) {
@@ -306,7 +391,22 @@ export function Chat({ id }: { id: string }) {
               <span className="truncate text-[13px] text-muted">{agent ? status(agent, about(agent)) : ""}</span>
             </span>
           </button>
-          <button type="button" aria-label={`About ${name}`} aria-expanded={aboutOpen} onClick={toggleAbout} className="grid size-11 flex-none place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-fg">
+          <button
+          type="button"
+          aria-label="Search this chat"
+          aria-pressed={searching}
+          onClick={() => {
+            setSearching(!searching);
+            setHits(null);
+          }}
+          className="grid size-11 flex-none place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-fg aria-pressed:bg-accent-soft aria-pressed:text-accent-text"
+        >
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="M16 16l4.5 4.5" />
+          </svg>
+        </button>
+        <button type="button" aria-label={`About ${name}`} aria-expanded={aboutOpen} onClick={toggleAbout} className="grid size-11 flex-none place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-fg">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <circle cx="12" cy="12" r="9" />
               <path d="M12 11v6" />
@@ -314,6 +414,36 @@ export function Chat({ id }: { id: string }) {
             </svg>
           </button>
         </div>
+        {searching && (
+          <form role="search" onSubmit={search} className="flex items-center gap-1.5 px-5 pb-2.5 max-[900px]:px-3">
+            <input
+              type="search"
+              aria-label="Search this chat"
+              placeholder="Search this chat"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setHits(null);
+              }}
+              autoFocus
+              maxLength={100}
+              className="min-h-10 min-w-0 flex-1 rounded-full border border-line-strong bg-surface px-4 text-sm focus:outline-2 focus:outline-offset-1 focus:outline-accent"
+            />
+            <span role="status" className="px-1 text-[13px] whitespace-nowrap text-muted">
+              {hits === null ? "" : hits.length === 0 ? "Not found" : `${hit + 1} of ${hits.length}${hits.length === 50 ? "+" : ""}`}
+            </span>
+            <button type="button" aria-label="Older match" disabled={!hits?.length} onClick={() => step(1)} className="grid size-10 place-items-center rounded-full text-muted hover:bg-surface-2 disabled:opacity-40">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 15l6-6 6 6" />
+              </svg>
+            </button>
+            <button type="button" aria-label="Newer match" disabled={!hits?.length} onClick={() => step(-1)} className="grid size-10 place-items-center rounded-full text-muted hover:bg-surface-2 disabled:opacity-40">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+          </form>
+        )}
         {ready && (
           <TopicChips
             agent={id}
@@ -354,7 +484,7 @@ export function Chat({ id }: { id: string }) {
         </section>
       )}
 
-      <div role="log" aria-live="polite" aria-label={`Chat with ${name}`} className="flex w-full max-w-[760px] flex-1 flex-col px-10 py-6 max-[900px]:px-3 max-[900px]:py-4">
+      <div ref={log} role="log" aria-live="polite" aria-label={`Chat with ${name}`} className="flex w-full max-w-[760px] flex-1 flex-col px-10 py-6 max-[900px]:px-3 max-[900px]:py-4">
         {agent && <span className="mb-1 self-center text-xs text-muted">{name} was raised {day(agent.created_at)}</span>}
         {visible.map((r, i) => {
           const before = visible[i - 1];
@@ -381,7 +511,7 @@ export function Chat({ id }: { id: string }) {
                   {titleOf(r.topic)}
                 </button>
               )}
-              <div className={`group relative flex w-full items-center gap-1 ${mine ? "flex-row-reverse" : ""} ${first ? "mt-3" : "mt-1"}`}>
+              <div id={`row-${r.id}`} className={`group relative flex w-full scroll-mt-40 items-center gap-1 ${mine ? "flex-row-reverse" : ""} ${first ? "mt-3" : "mt-1"}`}>
                 <Row row={r} first={first} agent={id} name={name} quote={quoted(r)} tapped={tapped[r.id]} busy={answering[r.id]} failed={cardError[r.id]} answer={answer} />
                 <div className={`flex flex-none self-center ${menu === r.id ? "" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100 max-[900px]:opacity-100"}`}>
                   <button type="button" aria-label="Reply to this message" onClick={() => reply(r)} className={`${rowAction} max-[900px]:hidden`}>
@@ -399,9 +529,30 @@ export function Chat({ id }: { id: string }) {
                   </button>
                 </div>
                 {menu === r.id && (
-                  <RowMenu row={r} mine={mine} topics={topics.filter((t) => !t.quiet && t.id !== r.topic)} close={() => setMenu("")} reply={() => reply(r)} move={(to) => move(r, to)} />
+                  <RowMenu
+                    row={r}
+                    mine={mine}
+                    topics={topics.filter((t) => !t.quiet && t.id !== r.topic)}
+                    close={() => setMenu("")}
+                    reply={() => reply(r)}
+                    copy={() => copy(r)}
+                    move={(to) => move(r, to)}
+                  />
                 )}
               </div>
+              {!mine && !!r.payload?.read?.length && (
+                <span className="mt-1 flex flex-wrap items-center gap-1.5 self-start pl-1.5 text-xs text-muted">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                  Read {r.payload.read.join(" · ")}
+                </span>
+              )}
+              {r.kind === "file" && r.payload?.work && <Thumbs key={r.payload.work} said={reactions[r.payload.work]} name={name} react={(good, note) => react(r.payload!.work!, good, note)} />}
+              {r.id === last?.id && !mine && !!r.payload?.answers?.length && (
+                <Answers answers={r.payload.answers} many={!!r.payload.many} busy={sending} send={(said) => send(undefined, said)} />
+              )}
             </Fragment>
           );
         })}
@@ -560,7 +711,13 @@ function Row({ agent, first, quote, ...props }: Card & { agent: string; first: b
             <span className="line-clamp-3 opacity-90">{quote.text}</span>
           </span>
         )}
-        {row.text}
+        {mine ? (
+          row.text
+        ) : (
+          <div className="whitespace-normal">
+            <MessageText text={row.text} />
+          </div>
+        )}
         {/* Room on the last line for the time, as in any messenger. */}
         <span aria-hidden="true" className="inline-block w-12" />
         <Stamp at={row.at} mine={mine} />
@@ -585,6 +742,7 @@ function Row({ agent, first, quote, ...props }: Card & { agent: string; first: b
             {kindOf(p.name ?? "").name === "Calendar" ? "Add to calendar" : "Download"}
           </a>
         </div>
+        {p.work && p.format && <WorkPreview agent={agent} work={p.work} format={p.format} />}
       </div>
     );
   }
@@ -830,12 +988,13 @@ function TopicChips({ agent, topics, shown, show, quietShown, showQuiet, startin
 }
 
 // RowMenu is a message's menu: reply to it, or move it to another topic, a new one or none.
-function RowMenu({ row, mine, topics, close, reply, move }: {
+function RowMenu({ row, mine, topics, close, reply, copy, move }: {
   row: ChatRow;
   mine: boolean;
   topics: Topic[];
   close: () => void;
   reply: () => void;
+  copy: () => void;
   move: (to: string) => void;
 }) {
   const first = useRef<HTMLButtonElement>(null);
@@ -853,6 +1012,11 @@ function RowMenu({ row, mine, topics, close, reply, move }: {
         <button ref={first} type="button" role="menuitem" onClick={reply} className={item}>
           Reply
         </button>
+        {row.text && (
+          <button type="button" role="menuitem" onClick={copy} className={item}>
+            Copy
+          </button>
+        )}
         <span className="px-3 pt-2 pb-0.5 text-[11.5px] font-bold tracking-[0.05em] text-muted uppercase">Move to</span>
         {topics.map((t) => (
           <button key={t.id} type="button" role="menuitem" onClick={() => move(t.id)} className={item}>
@@ -887,6 +1051,100 @@ function ComposerBar({ title, text, stop, onStop, dashed }: { title: string; tex
           <path d="M18 6L6 18" />
         </svg>
       </button>
+    </div>
+  );
+}
+
+// Answers are a reply's likely answers to tap, under the newest message only: one sends at
+// a tap; several are picked, then sent. Typing anything else works as ever.
+function Answers({ answers, many, busy, send }: { answers: string[]; many: boolean; busy: boolean; send: (said: string) => void }) {
+  const [picked, setPicked] = useState<string[]>([]);
+  const answer = "inline-flex min-h-10 items-center gap-1.5 rounded-full border border-accent px-4 text-sm font-semibold text-accent-text hover:bg-accent-soft disabled:opacity-60";
+  const join = (xs: string[]) => new Intl.ListFormat("en-GB", { type: "conjunction" }).format(xs);
+  return (
+    <div role="group" aria-label="Answers to tap" className="mt-2 flex flex-col gap-2 self-start pl-1">
+      <div className="flex flex-wrap gap-2">
+        {answers.map((a) =>
+          many ? (
+            <button
+              key={a}
+              type="button"
+              aria-pressed={picked.includes(a)}
+              onClick={() => setPicked((p) => (p.includes(a) ? p.filter((x) => x !== a) : [...p, a]))}
+              className={`${answer} aria-pressed:bg-accent aria-pressed:text-accent-ink`}
+            >
+              {picked.includes(a) && (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M5 12l5 5 9-10" />
+                </svg>
+              )}
+              {a}
+            </button>
+          ) : (
+            <button key={a} type="button" disabled={busy} onClick={() => send(a)} className={answer}>
+              {a}
+            </button>
+          ),
+        )}
+      </div>
+      {many && (
+        <span className="flex items-center gap-2.5">
+          <Button kind="primary" type="button" disabled={busy || !picked.length} onClick={() => send(join(answers.filter((a) => picked.includes(a))))} className="min-h-10 px-4">
+            Send{picked.length ? ` (${picked.length})` : ""}
+          </Button>
+          <span className="text-xs text-muted">Pick any, or type instead.</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Thumbs are your word on something they made: up counts toward the skills it shows; down
+// asks what was off, in a line, and that goes with it.
+function Thumbs({ said, name, react }: { said?: { good: boolean; note?: string }; name: string; react: (good: boolean, note?: string) => Promise<void> }) {
+  const [asking, setAsking] = useState(false);
+  const [note, setNote] = useState("");
+  const thumb = "grid size-9 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-fg aria-pressed:bg-accent-soft aria-pressed:text-accent-text";
+  return (
+    <div className="mt-1 flex flex-col gap-1.5 self-start pl-1">
+      <div className="flex items-center gap-0.5">
+        <button type="button" aria-label="Good" aria-pressed={said?.good === true} onClick={() => react(true)} className={thumb}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M7 11v9H4v-9z" />
+            <path d="M7 11l4-8c1.7 0 2.7 1.2 2.4 2.8L13 9h5.4a2 2 0 0 1 2 2.4l-1.3 7A2 2 0 0 1 17.1 20H7" />
+          </svg>
+        </button>
+        <button type="button" aria-label="Not quite" aria-pressed={said?.good === false || asking} onClick={() => setAsking(true)} className={thumb}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M17 13V4h3v9z" />
+            <path d="M17 13l-4 8c-1.7 0-2.7-1.2-2.4-2.8L11 15H5.6a2 2 0 0 1-2-2.4l1.3-7A2 2 0 0 1 6.9 4H17" />
+          </svg>
+        </button>
+        {said && !asking && (
+          <span role="status" className="pl-1 text-xs text-muted">
+            {said.good ? `${name} counts it toward their skills.` : `Sent to ${name} as your feedback.`}
+          </span>
+        )}
+      </div>
+      {asking && (
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            await react(false, note.trim());
+            setAsking(false);
+          }}
+          className="flex max-w-[460px] flex-wrap items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2.5"
+        >
+          <label htmlFor="what-was-off" className="basis-full text-[13px] font-semibold">
+            What was off? {name} learns from it.
+          </label>
+          <input id="what-was-off" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} autoFocus className="min-h-9 min-w-0 flex-[1_1_220px] rounded-lg border border-line-strong bg-bg px-2.5 text-sm" />
+          <Button kind="primary" type="submit" className="min-h-9 px-4 text-[13px]">Tell {name}</Button>
+          <button type="button" onClick={() => setAsking(false)} className="min-h-9 px-2 text-[13px] font-semibold text-muted">
+            Cancel
+          </button>
+        </form>
+      )}
     </div>
   );
 }

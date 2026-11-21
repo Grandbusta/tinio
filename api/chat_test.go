@@ -73,6 +73,8 @@ func TestOnlyTheOwnerReachesTheirAgentsChat(t *testing.T) {
 		{"POST", "/principles/" + ulid.Make().String(), map[string]any{"keep": true}},
 		{"POST", "/read", map[string]string{"until": ulid.Make().String()}},
 		{"GET", "/topics", nil},
+		{"POST", "/reactions", map[string]any{"work": ulid.Make().String(), "good": true}},
+		{"GET", "/search?q=tin", nil},
 		{"POST", "/topics/" + ulid.Make().String(), map[string]string{"title": "x"}},
 		{"POST", "/topics/" + ulid.Make().String() + "/close", nil},
 		{"POST", "/topics/" + ulid.Make().String() + "/merge", map[string]string{"into": ulid.Make().String()}},

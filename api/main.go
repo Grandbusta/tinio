@@ -288,6 +288,8 @@ func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.
 	own.GET("/files/:file", h(chat.File))
 	own.GET("/stream", h(chat.Stream))
 	own.GET("/topics", h(chat.Topics))
+	own.POST("/reactions", ours, h(chat.React))
+	own.GET("/search", h(chat.Search))
 	own.POST("/topics/:topic", ours, h(chat.RenameTopic))
 	own.POST("/topics/:topic/close", ours, h(chat.CloseTopic))
 	own.POST("/topics/:topic/merge", ours, h(chat.MergeTopic))

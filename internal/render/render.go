@@ -43,9 +43,11 @@ type DataFormat interface {
 }
 
 type File struct {
-	Name string
-	Type string // media type
-	Data []byte
+	Name   string
+	Type   string // media type
+	Data   []byte
+	Work   string // the work it was made from, by id
+	Format string // what it was made as, e.g. "xlsx"
 }
 
 var ErrNoData = errors.New("render: the work doesn't carry what this file is made from")
@@ -129,7 +131,7 @@ func (s *Set) File(format string, w memory.Work, author string) (File, error) {
 	if err != nil {
 		return File{}, fmt.Errorf("render %s: %w", format, err)
 	}
-	return File{Name: FileName(w.Title, f.Ext()), Type: f.MediaType(), Data: data}, nil
+	return File{Name: FileName(w.Title, f.Ext()), Type: f.MediaType(), Data: data, Work: w.ID.String(), Format: f.Name()}, nil
 }
 
 // FileName is title as a file name with ext, like "clinic-outreach-plan.pdf".

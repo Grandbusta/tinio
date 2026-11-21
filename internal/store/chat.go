@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Grandbusta/tinio/internal/db"
+	"strings"
 	"time"
 
 	"github.com/oklog/ulid/v2"
@@ -136,6 +137,16 @@ func (s *Store) TopicThings(ctx context.Context, topics []string, limit int) ([]
 	return s.queryChat(ctx, `SELECT `+chatColumns+` FROM chat_messages
 		WHERE agent_id = $1 AND topic_id IN (SELECT value FROM json_each($2)) AND kind IN ($3, $4, $5) ORDER BY id DESC LIMIT $6`,
 		nonNil(topics), memory.ChatFile, memory.ChatAsk, memory.ChatChoice, limit)
+}
+
+// SearchChat is the rows shown in the chat whose words (or file's name)
+// have q in them, any case, newest first, at most limit.
+func (s *Store) SearchChat(ctx context.Context, q string, limit int) ([]memory.ChatMessage, error) {
+	like := "%" + strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(q) + "%"
+	return s.queryChat(ctx, `SELECT `+chatColumns+` FROM chat_messages
+		WHERE agent_id = $1 AND kind IN ($2, $3, $4, $5)
+		  AND (lower(text) LIKE lower($6) ESCAPE '\' OR lower(json_extract(payload, '$.name')) LIKE lower($6) ESCAPE '\')
+		ORDER BY id DESC LIMIT $7`, memory.ChatMessageKind, memory.ChatAsk, memory.ChatChoice, memory.ChatFile, like, limit)
 }
 
 // ChatAfter is the rows after after, oldest first: what a stream missed.

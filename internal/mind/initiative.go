@@ -470,7 +470,7 @@ func (m *Mind) hello(ctx context.Context, p perception.Percept) {
 	if m.speakFirst(ctx, p, person, nil, speech{action: "hello", note: note, approved: true}) != sent {
 		// It's said once, and the owner is waiting for it: a plain one beats none.
 		plain := fmt.Sprintf("Hi %s, I'm %s. I'm an AI, and I'll always say so. Tell me a little about yourself?", n.speaker, m.Life.Name)
-		if err := m.send(ctx, p, plain, nil); err != nil {
+		if err := m.send(ctx, p, plain, nil, Said{}); err != nil {
 			m.Log.Warn("saying hello failed", "percept", p.ID.String(), "err", err)
 		}
 	}
@@ -564,7 +564,7 @@ func (m *Mind) speakFirst(ctx context.Context, p perception.Percept, person memo
 			break
 		}
 		d.Outcome = &decision.Outcome{Status: decision.OutcomeOK, At: time.Now().UTC()}
-		if err := m.send(ctx, p, text, s.file); err != nil {
+		if err := m.send(ctx, p, text, s.file, Said{}); err != nil {
 			log.Warn("sending failed", "err", err)
 			d.Outcome = &decision.Outcome{Status: decision.OutcomeFailed, Detail: err.Error(), At: time.Now().UTC()}
 		} else {

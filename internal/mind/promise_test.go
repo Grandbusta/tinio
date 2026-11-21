@@ -185,7 +185,7 @@ func TestAPromiseCanBeMovedToNow(t *testing.T) {
 
 	s2.moves = []system2.Move{{Promise: "p1", By: "now"}, {Promise: "p2", By: "2026-10-27T09:00"}, {Promise: "p9", By: "now"}}
 	m.handle(context.Background(), percept("1", "Can you send the verse now? And the poem this morning"))
-	if note := s2.requests[0].Note; !strings.Contains(note, "[p1] by Wed 28 Oct 10:16: Tobi writes Sam a verse") {
+	if note := s2.requests[0].Note; !strings.Contains(note, "[p1] by Wed 28 Oct 10:16, as a message: Tobi writes Sam a verse") {
 		t.Errorf("note:\n%s", note)
 	}
 	if got := s.intention(later.ID); !got.DueAt.Equal(now) {

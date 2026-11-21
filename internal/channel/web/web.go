@@ -15,7 +15,9 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/mind"
 	"github.com/Grandbusta/tinio/internal/perception"
+	"github.com/Grandbusta/tinio/internal/render"
 	"github.com/Grandbusta/tinio/internal/store"
 )
 
@@ -48,11 +50,14 @@ type Offered struct {
 	Pick    int    `json:"pick"`
 }
 
-// Sent is a file row's payload.
+// Sent is a file row's payload: the file, and the work it was made from and
+// as what, so the app can show it as what it is ("" if from no work).
 type Sent struct {
-	File string `json:"file"`
-	Name string `json:"name"`
-	Size int    `json:"size"`
+	File   string `json:"file"`
+	Name   string `json:"name"`
+	Size   int    `json:"size"`
+	Work   string `json:"work,omitempty"`
+	Format string `json:"format,omitempty"`
 }
 
 // where is what Ask and Choose return, for Settle: the row.
@@ -62,6 +67,19 @@ type where struct {
 
 func (c Channel) Reply(ctx context.Context, p perception.Percept, text string) error {
 	_, err := c.say(ctx, p, memory.ChatMessageKind, text, nil)
+	return err
+}
+
+// Replied is a reply's payload, when something goes with it: answers its
+// owner can tap (several, with many), and what was read to write it.
+type Replied struct {
+	Answers []string `json:"answers,omitempty"`
+	Many    bool     `json:"many,omitempty"`
+	Read    []string `json:"read,omitempty"`
+}
+
+func (c Channel) ReplyWith(ctx context.Context, p perception.Percept, text string, s mind.Said) error {
+	_, err := c.say(ctx, p, memory.ChatMessageKind, text, Replied{Answers: s.Answers, Many: s.Many, Read: s.Read})
 	return err
 }
 
@@ -91,16 +109,16 @@ func (c Channel) Settle(ctx context.Context, at json.RawMessage, text string) er
 	return c.Store.Settle(ctx, w.Message, text, time.Now().UTC())
 }
 
-func (c Channel) SendFile(ctx context.Context, p perception.Percept, name string, data []byte, caption string) error {
-	kind := mime.TypeByExtension(filepath.Ext(name))
+func (c Channel) SendFile(ctx context.Context, p perception.Percept, file render.File, caption string) error {
+	kind := mime.TypeByExtension(filepath.Ext(file.Name))
 	if kind == "" {
 		kind = "application/octet-stream"
 	}
-	f := memory.SentFile{ID: ulid.Make().String(), Name: name, ContentType: kind, Data: data, At: time.Now().UTC()}
+	f := memory.SentFile{ID: ulid.Make().String(), Name: file.Name, ContentType: kind, Data: file.Data, At: time.Now().UTC()}
 	if err := c.Store.SaveFile(ctx, f); err != nil {
 		return err
 	}
-	_, err := c.say(ctx, p, memory.ChatFile, caption, Sent{File: f.ID, Name: name, Size: len(data)})
+	_, err := c.say(ctx, p, memory.ChatFile, caption, Sent{File: f.ID, Name: file.Name, Size: len(file.Data), Work: file.Work, Format: file.Format})
 	return err
 }
 

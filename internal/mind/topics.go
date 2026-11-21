@@ -24,8 +24,11 @@ import (
 const (
 	topicTail    = 6
 	overallTail  = 2
-	topicsToSort = 10                  // open or lately quiet topics a message is sorted among
-	quietReach   = 30 * 24 * time.Hour // a quiet topic this recent is always among them
+	topicsToSort = 10 // open or lately quiet topics a message is sorted among
+	// youngTopicTurns is how many of its newest exchanges describe a topic
+	// with no summary yet: its last message alone said too little in testing.
+	youngTopicTurns = 2
+	quietReach      = 30 * 24 * time.Hour // a quiet topic this recent is always among them
 	// Older ones are among them only if they're about what's said, however
 	// old: the closest few of the newest oldScanned, by embedding. Only
 	// offered: System 1 still decides. With text-embedding-3-small (21 Nov),
@@ -132,10 +135,18 @@ func (m *Mind) pickTopic(ctx context.Context, p perception.Percept, recent []mem
 	described := make([]string, len(topics))
 	qs := make([]system1.Question, 0, len(topics)+1)
 	for i, t := range topics {
-		described[i] = topicLine(t)
+		lately := []memory.Exchange{{Message: t.LastSaid}}
+		if t.Summary == "" {
+			if said, err := m.Store.TopicExchanges(ctx, t.ID, time.Time{}, p.ID, youngTopicTurns); err != nil {
+				m.Log.Warn("loading a young topic's talk failed; it's described by its last message", "topic", t.ID, "err", err)
+			} else if len(said) > 0 {
+				lately = said
+			}
+		}
+		described[i] = topicLine(t, lately, n)
 		q := m.TopicSort.Questions[0]
 		q.Name = "in:" + t.ID
-		q.Instructions = strings.ReplaceAll(q.Instructions, "{topic}", fmt.Sprintf("`topics[%d]`", i))
+		q.Instructions = strings.ReplaceAll(q.Instructions, "{topic}", strconv.Quote(described[i]))
 		qs = append(qs, q)
 	}
 	qs = append(qs, m.TopicSort.Questions[1])
@@ -171,14 +182,25 @@ func (m *Mind) pickTopic(ctx context.Context, p perception.Percept, recent []mem
 	return topical{}, starts, d
 }
 
-// topicLine is a topic as System 1 is given it.
-func topicLine(t memory.Topic) string {
+// topicLine is a topic as System 1 is given it: its title and summary, or,
+// for one too young to have a summary, what was said in it lately.
+func topicLine(t memory.Topic, lately []memory.Exchange, n names) string {
 	line := orDefault(t.Title, "(not named yet)")
-	if about := orDefault(t.Status, t.Summary); about != "" {
-		line += ": " + cutRunes(about, 300)
+	if about := orDefault(t.Summary, t.Status); about != "" {
+		line += ": " + cutRunes(about, 400)
+		if t.LastSaid != "" {
+			line += fmt.Sprintf(" Last said: %q", cutRunes(t.LastSaid, 200))
+		}
+		return line
 	}
-	if t.LastSaid != "" {
-		line += fmt.Sprintf(" Last said: %q", cutRunes(t.LastSaid, 200))
+	line += ". Said in it lately:"
+	for _, e := range lately {
+		if e.Message != "" {
+			line += fmt.Sprintf(" %s: %q", n.speaker, cutRunes(e.Message, 200))
+		}
+		if e.Reply != "" {
+			line += fmt.Sprintf(" %s: %q", n.agent, cutRunes(e.Reply, 200))
+		}
 	}
 	return line
 }

@@ -43,10 +43,12 @@ func TestARepliesFromItsTopic(t *testing.T) {
 	days := now.Add(-48 * time.Hour)
 	s.topics = []memory.Topic{{ID: "gift", Person: sam, Title: "Gift guide", Summary: "Posts from 1 December.",
 		Settled: []string{"Six posts, not ten"}, StartedAt: days, LastAt: days},
-		{ID: "menu", Person: sam, Title: "Winter menu", Summary: "Into Mandarin by Friday.", StartedAt: days, LastAt: days}}
+		{ID: "menu", Person: sam, Title: "Winter menu", Summary: "Into Mandarin by Friday.", StartedAt: days, LastAt: days},
+		{ID: "news", Person: sam, Title: "Spring newsletter", StartedAt: days, LastAt: days}}
 	s.exchanges = []memory.Exchange{
 		{At: days, Message: "A gift guide this year?", Reply: "Built around who it's for.", Topic: "gift"},
 		{At: now.Add(-10 * time.Minute), Message: "The kettle gave up again.", Reply: "Third time this month."},
+		{At: days, Message: "A spring newsletter, out in March.", Reply: "What should it lead with?", Topic: "news"},
 	}
 
 	m.handle(context.Background(), percept("1", "Which tin goes first?"))
@@ -72,6 +74,15 @@ func TestARepliesFromItsTopic(t *testing.T) {
 	}
 	if strings.Contains(req.Note, "Mandarin") {
 		t.Fatalf("another topic's notes reached the reply:\n%s", req.Note)
+	}
+	// Each topic is described in its own question: one with no summary yet by
+	// what was said in it lately.
+	var asked []string
+	for _, q := range s1.topicCalls[0].Questions {
+		asked = append(asked, q.Instructions)
+	}
+	if all := strings.Join(asked, "|"); !strings.Contains(all, "Into Mandarin by Friday.") || !strings.Contains(all, "What should it lead with?") {
+		t.Fatalf("topics asked about as:\n%s", all)
 	}
 }
 

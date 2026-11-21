@@ -471,6 +471,16 @@ func (s *Store) RetryIntention(ctx context.Context, id ulid.ULID, due time.Time)
 	return nil
 }
 
+// SetIntentionArg sets one of an intention's arguments, like what a promise
+// is sent as.
+func (s *Store) SetIntentionArg(ctx context.Context, id ulid.ULID, key, value string) error {
+	if _, err := s.exec(ctx, `UPDATE intentions SET args = json_set(args, '$.' || $3, $4) WHERE agent_id = $1 AND id = $2`,
+		id.String(), key, value); err != nil {
+		return fmt.Errorf("set intention arg: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) PostponeIntention(ctx context.Context, id ulid.ULID, due time.Time) error {
 	if _, err := s.exec(ctx, `UPDATE intentions SET due_at = $3 WHERE agent_id = $1 AND id = $2`, id.String(), due); err != nil {
 		return fmt.Errorf("postpone intention: %w", err)

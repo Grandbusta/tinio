@@ -71,6 +71,9 @@ type Material struct {
 	// CostUSD is what getting it cost (a web search's model and tool), paid
 	// like a decision's.
 	CostUSD float64
+	// Source is what was read, in a few words for its owner to see under a
+	// reply ("Wikipedia: Oolong", "your Google Calendar"); "" names nothing.
+	Source string
 }
 
 // Fence marks text from outside (a book, an article, a web page) as

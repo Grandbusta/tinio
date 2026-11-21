@@ -22,6 +22,9 @@ func (n noEmDashes) Reason(ctx context.Context, req Request) (Response, error) {
 	resp.Text = RemoveEmDashes(resp.Text)
 	resp.WhoTheyAre = RemoveEmDashes(resp.WhoTheyAre)
 	resp.Topic = RemoveEmDashes(resp.Topic)
+	for i := range resp.Answers {
+		resp.Answers[i] = RemoveEmDashes(resp.Answers[i])
+	}
 	for i := range resp.Remember {
 		resp.Remember[i].Text = RemoveEmDashes(resp.Remember[i].Text)
 	}
