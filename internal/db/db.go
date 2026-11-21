@@ -219,10 +219,11 @@ func (r *Row) Scan(dest ...any) error {
 // Scanner is a row being read.
 type Scanner interface{ Scan(dest ...any) error }
 
-// CollectRows reads every row with each, and closes rows.
+// CollectRows reads every row with each, and closes rows. With none it's an
+// empty slice, never nil, so a list in JSON is [] and not null.
 func CollectRows[T any](rows *Rows, each func(Scanner) (T, error)) ([]T, error) {
 	defer rows.Close()
-	var out []T
+	out := []T{}
 	for rows.Next() {
 		v, err := each(rows)
 		if err != nil {

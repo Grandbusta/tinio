@@ -11,6 +11,7 @@ import { GrowthPage } from "@/components/growth";
 import { JudgmentPage } from "@/components/judgment";
 import { MemoryPage } from "@/components/memory";
 import { MindPage } from "@/components/mind";
+import { PageError } from "@/components/page-error";
 import { PickCharacter } from "@/components/pick-character";
 import { SettingsPage as AppSettings } from "@/components/settings";
 import { SkillImportPage, SkillsPage } from "@/components/skills";
@@ -38,11 +39,12 @@ export function App() {
     );
   return (
     <BrowserRouter>
+      <PageError>
       <Routes>
         <Route path="/" element={<Navigate to="/agents" replace />} />
         <Route path="/raise" element={<Titled title="Pick a character"><PickCharacter /></Titled>} />
         <Route path="/raise/:character" element={<Param name="character" render={(c) => <Titled title="Who are you to them"><WhoYouAre characterKey={c} /></Titled>} />} />
-        <Route element={<AppFrame><Outlet /></AppFrame>}>
+        <Route element={<AppFrame><PageError><Outlet /></PageError></AppFrame>}>
           <Route path="/agents" element={<Titled title="Your agents"><AllAgents /></Titled>} />
           <Route path="/you" element={<Titled title="You"><YouPage /></Titled>} />
           <Route path="/settings" element={<Titled title="Settings"><AppSettings /></Titled>} />
@@ -65,6 +67,7 @@ export function App() {
         </Route>
         <Route path="*" element={<Navigate to="/agents" replace />} />
       </Routes>
+      </PageError>
     </BrowserRouter>
   );
 }

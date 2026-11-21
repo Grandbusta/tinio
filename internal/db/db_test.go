@@ -55,3 +55,20 @@ func TestValuesComeBackAsTheyWent(t *testing.T) {
 		t.Fatalf("times don't compare as text: %d %v", n, err)
 	}
 }
+
+// No rows is an empty list, as the platform's Postgres gave: in JSON, [] and
+// never null, which the app reads as a list.
+func TestNoRowsIsAnEmptyList(t *testing.T) {
+	d := openTest(t)
+	rows, err := d.Query(context.Background(), `SELECT name FROM keys`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := CollectRows(rows, func(r Scanner) (string, error) {
+		var s string
+		return s, r.Scan(&s)
+	})
+	if err != nil || got == nil || len(got) != 0 {
+		t.Errorf("%#v, %v", got, err)
+	}
+}

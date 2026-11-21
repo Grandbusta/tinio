@@ -76,7 +76,7 @@ export function ConnectionsPage({ failed }: { failed?: string }) {
     if (!res.ok) return setError(res.error.message);
     load();
   }
-  const connected = new Set(lists?.connections.map((c) => c.connector));
+  const connected = new Set((lists?.connections ?? []).map((c) => c.connector));
   return (
     <Page>
       <div className="flex flex-col gap-1.5">
@@ -95,8 +95,8 @@ export function ConnectionsPage({ failed }: { failed?: string }) {
       {failed && <p role="alert" className="m-0 text-sm text-bad-text">That sign-in didn&apos;t finish. Try connecting again.</p>}
       {error && <p role="alert" className="m-0 text-sm text-bad-text">{error}</p>}
 
-      {lists?.connections.map((c) => {
-        const k = lists.connectors.find((x) => x.id === c.connector);
+      {(lists?.connections ?? []).map((c) => {
+        const k = lists?.connectors.find((x) => x.id === c.connector);
         if (!k) return null;
         return (
           <article key={c.id} className="overflow-hidden rounded-lg border border-line">
