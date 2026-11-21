@@ -14,7 +14,8 @@ import (
 const KeyOpenAI = "openai"
 
 // KeysChanged is the channel told, with the key's name, when the owner sets
-// or removes one.
+// or removes one, and with "models" when they choose a model: the agents
+// start again on it.
 const KeysChanged = "keys_changed"
 
 // SaveKey keeps the owner's key name, sealed with key; value "" removes it.

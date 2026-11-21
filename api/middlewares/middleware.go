@@ -2,6 +2,7 @@
 package middlewares
 
 import (
+	"context"
 	"log/slog"
 	"net"
 	"net/http"
@@ -15,11 +16,25 @@ import (
 	"github.com/Grandbusta/tinio/api/utils"
 )
 
+type inAppKey struct{}
+
+// InApp marks every request through h as the desktop app's own: its window
+// hands them straight to the API (no network, no port), so only its owner can
+// make them.
+func InApp(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), inAppKey{}, true)))
+	})
+}
+
+func inApp(r *http.Request) bool { return r.Context().Value(inAppKey{}) == true }
+
 // FromOurSite refuses a request that changes anything unless the browser says
-// it comes from the app (origin): another site can't sign someone in or out.
+// it comes from the app (origin), or it's the desktop app's own (InApp):
+// another site can't change anything.
 func FromOurSite(origin string, log *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.GetHeader("Origin") != origin {
+		if !inApp(c.Request) && c.GetHeader("Origin") != origin {
 			utils.ServerResponse(c, log, utils.ErrWrongOrigin)
 		}
 	}
@@ -36,12 +51,13 @@ func LimitByAddress(l *utils.Limiter, log *slog.Logger) gin.HandlerFunc {
 
 const accountKey = "account"
 
-// SignedIn lets a request through as owner when it comes from this machine,
+// SignedIn lets a request through as owner when it's the desktop app's own or
+// comes from this machine,
 // and otherwise only with a live session (from the passcode), keeping its
 // account for the controller (Account).
 func SignedIn(db models.DB, owner models.Account, log *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if FromThisMachine(c.Request) {
+		if inApp(c.Request) || FromThisMachine(c.Request) {
 			c.Set(accountKey, owner)
 			return
 		}

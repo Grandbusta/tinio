@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Grandbusta/tinio/internal/db"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -21,6 +20,7 @@ import (
 	"github.com/Grandbusta/tinio/api/middlewares"
 	"github.com/Grandbusta/tinio/api/models"
 	"github.com/Grandbusta/tinio/api/utils"
+	"github.com/Grandbusta/tinio/internal/db"
 	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/perception"
 	"github.com/Grandbusta/tinio/internal/store"
@@ -452,5 +452,55 @@ func (h *ChatHub) listen(ctx context.Context) {
 			}
 		}
 		h.mu.Unlock()
+	}
+}
+
+// ChatEvents tells emit what's said in every agent's chat until ctx is done,
+// for the desktop app's window, which can't hold a stream open: "chat" with a
+// row added or settled ({agent, row}), and "draft" with the reply being
+// written ({agent, text}). If it falls behind, it says "behind", and the app
+// reads the chats again.
+func ChatEvents(ctx context.Context, d *db.DB, emit func(event string, data any)) {
+	for ctx.Err() == nil {
+		chatEvents(ctx, d, emit)
+		if ctx.Err() == nil {
+			emit("behind", nil)
+		}
+	}
+}
+
+func chatEvents(ctx context.Context, d *db.DB, emit func(event string, data any)) {
+	toAgent, stopTo := d.Listen(store.ToAgent, 1024)
+	defer stopTo()
+	fromAgent, stopFrom := d.Listen(store.FromAgent, 1024)
+	defer stopFrom()
+	drafting, stopDraft := d.Listen(store.Drafting, 1024)
+	defer stopDraft()
+	for {
+		var (
+			payload string
+			ok      bool
+			draft   bool
+		)
+		select {
+		case <-ctx.Done():
+			return
+		case payload, ok = <-toAgent:
+		case payload, ok = <-fromAgent:
+		case payload, ok = <-drafting:
+			draft = true
+		}
+		if !ok {
+			return
+		}
+		agent, rest, _ := strings.Cut(payload, ":")
+		if draft {
+			emit("draft", gin.H{"agent": agent, "text": rest})
+			continue
+		}
+		m, found, err := store.New(d).For(agent).ChatMessage(ctx, rest)
+		if err == nil && found {
+			emit("chat", gin.H{"agent": agent, "row": rowOf(m)})
+		}
 	}
 }

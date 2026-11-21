@@ -61,38 +61,92 @@ func run(cmd string, log *slog.Logger) error {
 	if cmd == "eval" {
 		return evaluate(ctx, os.Args[2:], log)
 	}
-	cfg, err := config.Load()
+	t, err := Start(ctx, log)
 	if err != nil {
 		return err
 	}
+	srv := &http.Server{Addr: t.Config.Addr, Handler: t.Handler, ReadHeaderTimeout: 10 * time.Second}
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-t.Done():
+		}
+		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		srv.Shutdown(shutdown)
+	}()
+	log.Info("api listening", "addr", srv.Addr, "app", t.Config.AppOrigin)
+	served := srv.ListenAndServe()
+	if errors.Is(served, http.ErrServerClosed) {
+		served = nil
+	}
+	return errors.Join(served, t.Stop())
+}
+
+// Tinio is Tinio running: its database, its agents and its API, which isn't
+// listening anywhere yet (Handler): the tinio command serves it over HTTP, the
+// desktop app inside its window.
+type Tinio struct {
+	Config  config.Config
+	DB      *db.DB
+	Handler http.Handler
+	stop    context.CancelFunc
+	worked  chan error
+}
+
+// Start opens Tinio's data folder and database (made the first time, with its
+// key) and starts the agents. Stop ends them.
+func Start(ctx context.Context, log *slog.Logger) (*Tinio, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
-		return err
+		return nil, err
 	}
 	if err := cfg.LoadKey(); err != nil {
-		return err
+		return nil, err
 	}
 	d, err := db.Open(ctx, cfg.DatabasePath())
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer d.Close()
 	log.Info("Tinio's data", "folder", cfg.DataDir)
-	// The API and the agents run side by side; when either stops, so does the other.
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	worked := make(chan error, 1)
-	go func() {
-		defer cancel()
-		worked <- work(ctx, cfg, d, log)
-	}()
-	served := serve(ctx, cfg, d, log)
-	cancel()
-	return errors.Join(served, <-worked)
+	h, err := api(ctx, cfg, d, log)
+	if err != nil {
+		cancel()
+		d.Close()
+		return nil, err
+	}
+	t := &Tinio{Config: cfg, DB: d, Handler: h, stop: cancel, worked: make(chan error, 1)}
+	go func() { t.worked <- work(ctx, cfg, d, log) }()
+	return t, nil
 }
 
-// work runs every agent on the owner's OpenAI key: OPENAI_API_KEY, or the one
-// set in the app. With none it waits for one, and when the owner sets another
-// the agents start again on it.
+// Done is closed once the agents have stopped: Stop was called, or their work
+// failed (Stop says how).
+func (t *Tinio) Done() <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		err := <-t.worked
+		t.worked <- err
+		close(done)
+	}()
+	return done
+}
+
+// Stop ends the agents and closes the database.
+func (t *Tinio) Stop() error {
+	t.stop()
+	err := <-t.worked
+	t.worked <- err
+	return errors.Join(err, t.DB.Close())
+}
+
+// work runs every agent on the owner's OpenAI key (OPENAI_API_KEY, or the one
+// set in the app) and the models chosen for each job. With no key it waits for
+// one, and when the owner changes the key or a model the agents start again.
 func work(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) error {
 	for {
 		changed, stop := d.Listen(models.KeysChanged, 1)
@@ -122,7 +176,12 @@ func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan s
 		}
 		return nil
 	}
-	ms, err := host.OpenAI(log, apiKey)
+	chosen, err := models.ChosenModels(ctx, d)
+	if err != nil {
+		return err
+	}
+	ms, err := host.OpenAIWith(log, apiKey, host.Chosen{Reply: chosen["reply"].Model, Decision: chosen["decision"].Model,
+		Day: chosen["day"].Model, Light: chosen["light"].Model, Work: chosen["work"].Model})
 	if err != nil {
 		return err
 	}
@@ -142,7 +201,7 @@ func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan s
 	go func() {
 		select {
 		case <-changed:
-			log.Info("your OpenAI key changed: starting the agents again")
+			log.Info("your key or models changed: starting the agents again")
 			stopRun()
 		case <-runCtx.Done():
 		}
@@ -151,18 +210,19 @@ func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan s
 	return h.Run(runCtx)
 }
 
-func serve(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) error {
+// api is the API, its chat streams running until ctx is done.
+func api(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) (http.Handler, error) {
 	owner, err := models.Owner(ctx, d, time.Now().UTC())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	characters, err := controllers.LoadCharacters(ctx, d, tinio.Files)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	sets, err := questions.LoadDir(tinio.Files, internalconfig.Load().Decision.QuestionSets)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	auth := &controllers.Auth{DB: d, Owner: owner, Passcode: cfg.Passcode, Secure: cfg.CookieSecure, Log: log}
 	agents := &controllers.Agents{DB: d, Characters: characters}
@@ -176,20 +236,9 @@ func serve(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) e
 			HTTP: &http.Client{Timeout: 30 * time.Second}, Log: log.With("component", "connections")},
 		&controllers.Keys{DB: d, Key: *cfg.Key}, log)
 	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
-		return err
+		return nil, err
 	}
-	srv := &http.Server{Addr: cfg.Addr, Handler: r, ReadHeaderTimeout: 10 * time.Second}
-	go func() {
-		<-ctx.Done()
-		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		srv.Shutdown(shutdown)
-	}()
-	log.Info("api listening", "addr", srv.Addr, "app", cfg.AppOrigin)
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
-	}
-	return nil
+	return r, nil
 }
 
 // setupRouter is every route the API has.
@@ -216,6 +265,9 @@ func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.
 	v1.POST("/usage", ours, signedIn, h(agents.SetCap))
 	v1.GET("/keys", signedIn, h(keys.Get))
 	v1.POST("/keys", ours, signedIn, h(keys.Set))
+	aiModels := &controllers.Models{DB: keys.DB}
+	v1.GET("/models", signedIn, h(aiModels.Get))
+	v1.POST("/models", ours, signedIn, h(aiModels.Choose))
 	v1.POST("/agents", ours, signedIn, h(agents.Create))
 	own := v1.Group("/agents/:id", signedIn, middlewares.OwnAgent(auth.DB, log))
 	own.GET("", h(agents.One))

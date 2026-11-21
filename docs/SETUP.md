@@ -82,6 +82,9 @@ elsewhere: a web page that points its own name at your machine doesn't get in.
 Tinio reads `.env` beside it; anything already set in the environment wins. None is
 needed. [.env.example](../.env.example) has them all.
 
+Each model below can also be picked in the app's Settings, from the models Tinio has prices
+for; one set here wins, and can't be changed there.
+
 | Variable | Default | What it is |
 |---|---|---|
 | `OPENAI_API_KEY` | none | Your OpenAI key, used instead of the one set in the app. |

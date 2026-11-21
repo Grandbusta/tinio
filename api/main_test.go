@@ -23,6 +23,7 @@ import (
 	"github.com/Grandbusta/tinio"
 	"github.com/Grandbusta/tinio/api/config"
 	"github.com/Grandbusta/tinio/api/controllers"
+	"github.com/Grandbusta/tinio/api/middlewares"
 	"github.com/Grandbusta/tinio/api/models"
 	"github.com/Grandbusta/tinio/api/utils"
 	"github.com/Grandbusta/tinio/internal/character"
@@ -157,6 +158,33 @@ func TestThisMachineNeedsNoSignIn(t *testing.T) {
 	}
 	if rec, _ := ta.do(t, "GET", "/v1/me", nil, nil, ""); rec.Code != http.StatusUnauthorized {
 		t.Errorf("another device with no session: %d", rec.Code)
+	}
+}
+
+// The desktop app's window is its owner: its requests (middlewares.InApp) need
+// no sign-in, and may change things whatever origin the window sends.
+func TestTheAppsWindowNeedsNoSignIn(t *testing.T) {
+	ta := newTestAPI(t)
+	app := middlewares.InApp(ta.router)
+	send := func(h http.Handler, method, path, body string) int {
+		t.Helper()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Host = "wails.localhost"
+		req.RemoteAddr = "192.0.2.1:1234" // what a request handed over in-process says isn't this machine's
+		req.Header.Set("Origin", "wails://wails")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	if code := send(app, "GET", "/v1/me", ""); code != http.StatusOK {
+		t.Errorf("the window: %d", code)
+	}
+	if code := send(app, "POST", "/v1/usage", `{"cap_usd": 7}`); code != http.StatusOK {
+		t.Errorf("the window changing the cap: %d", code)
+	}
+	if code := send(ta.router, "GET", "/v1/me", ""); code != http.StatusUnauthorized {
+		t.Errorf("the same request, not the window's: %d", code)
 	}
 }
 

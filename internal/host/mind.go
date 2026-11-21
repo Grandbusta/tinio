@@ -89,10 +89,31 @@ func (m Models) Routed(sets ...questions.Set) system1.DecisionModel {
 // OpenAI is the models the environment names (see config.Load), on the
 // owner's key: apiKey, or OPENAI_API_KEY if that's "".
 func OpenAI(log *slog.Logger, apiKey string) (Models, error) {
+	return OpenAIWith(log, apiKey, Chosen{})
+}
+
+// Chosen is the models the owner chose for each job, "" leaving a job as the
+// environment or Tinio's default has it.
+type Chosen struct {
+	Reply, Decision, Day, Light, Work string
+}
+
+// OpenAIWith is OpenAI with the models the owner chose.
+func OpenAIWith(log *slog.Logger, apiKey string, chosen Chosen) (Models, error) {
 	cfg := config.Load()
 	if apiKey != "" {
 		cfg.Decision.APIKey, cfg.Reasoning.APIKey, cfg.Embedding.APIKey = apiKey, apiKey, apiKey
 	}
+	set := func(to *string, model string) {
+		if model != "" {
+			*to = model
+		}
+	}
+	set(&cfg.Reasoning.Model, chosen.Reply)
+	set(&cfg.Decision.Model, chosen.Decision)
+	set(&cfg.DailyLife.Model, chosen.Day)
+	set(&cfg.Reasoning.LightModel, chosen.Light)
+	set(&cfg.DailyLife.WorkModel, chosen.Work)
 	d, r := cfg.Decision, cfg.Reasoning
 	if r.APIKey == "" || r.Model == "" {
 		return Models{}, fmt.Errorf("host: set your OpenAI key, and OPENAI_MODEL, to run agents")
