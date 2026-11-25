@@ -66,8 +66,8 @@ type Service struct {
 
 	ctx      context.Context
 	mu       sync.Mutex
-	runs     map[string]*run   // by job id: those with a CLI running
-	reviewer system2.Reasoner // what agents check work with; nil: they don't
+	runs     map[string]*run         // by job id: those with a CLI running
+	reviewer system2.Reasoner        // what agents check work with; nil: they don't
 	gates    map[string]*coding.Gate // by job id: what the owner allowed for the job, kept across its rounds
 }
 
@@ -201,8 +201,8 @@ type Card struct {
 	CostUSD float64  `json:"cost_usd"`
 	Summary string   `json:"summary"` // its last words, when it's done
 	Rounds  int      `json:"rounds"`
-	Commit  string   `json:"commit"` // its commit's short sha, on the owner's yes
-	PR      string   `json:"pr"`     // its pull request, on their second
+	Commit  string   `json:"commit"`  // its commit's short sha, on the owner's yes
+	PR      string   `json:"pr"`      // its pull request, on their second
 	Verdict string   `json:"verdict"` // the agent's word on it, once they've checked it
 }
 
@@ -210,6 +210,9 @@ func cardOf(j Job) Card {
 	return Card{Job: j.ID, Title: j.Title, Folder: filepath.Base(j.Repo), Branch: j.Branch, Base: j.Base, CLI: j.CLI,
 		Model: j.Model, Status: j.Status, Files: []string{}, CostUSD: j.CostUSD}
 }
+
+// CardOf is j's card as it is now.
+func (s *Service) CardOf(ctx context.Context, j Job) Card { return s.card(ctx, j) }
 
 // card is j's card as it is now.
 func (s *Service) card(ctx context.Context, j Job) Card {

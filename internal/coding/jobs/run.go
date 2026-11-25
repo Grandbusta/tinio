@@ -36,7 +36,7 @@ type run struct {
 	// says then goes into the next round.
 	reviewing bool
 	heard     []string
-	showing sync.Mutex    // one card update at a time, each of the latest state
+	showing   sync.Mutex // one card update at a time, each of the latest state
 }
 
 // show shows the job's card as it is now. Updates go one at a time, each
