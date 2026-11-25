@@ -316,13 +316,18 @@ func TestAJobsChangesCommitAndPullRequest(t *testing.T) {
 // fakeReviewer is the agent's model checking work: it sends the first round
 // back and passes the second.
 type fakeReviewer struct {
-	mu   sync.Mutex
-	seen []string // what it was asked, each time
+	mu     sync.Mutex
+	seen   []string // what it was asked, each time
+	learnt []string // what it was asked to learn from
 }
 
 func (f *fakeReviewer) Reason(_ context.Context, req system2.Request) (system2.Response, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if req.Format != nil && req.Format.Name == "notes" { // learning from a committed job
+		f.learnt = append(f.learnt, req.Message)
+		return system2.Response{Text: `{"notes": ["Money is in whole pence: use money.ts, no new packages.", "go test ./... runs everything; it takes a few seconds."]}`}, nil
+	}
 	f.seen = append(f.seen, req.Message)
 	if len(f.seen) == 1 {
 		return system2.Response{Text: `{"ready": false, "to_owner": "", "to_cli": "Add a note with the 15% case."}`, CostUSD: 0.02}, nil
@@ -439,5 +444,81 @@ func TestTheAgentChecksTheWork(t *testing.T) {
 	reviewer.mu.Unlock()
 	if !strings.Contains(third, "asked for since") || !strings.Contains(third, "- Also cover 20% off.") {
 		t.Errorf("the check should know what the owner asked for since the brief:\n%s", third)
+	}
+}
+
+// A committed job teaches the agent about its folder: a few notes, from its
+// story, that the next job there starts with (in what Claude Code is told, and
+// in the brief they write); the job's page shows them, and the owner can take
+// one out.
+func TestAJobTeachesTheAgentAboutItsFolder(t *testing.T) {
+	ta := newTestAPI(t)
+	ada := ta.signUp(t)
+	zara := ta.raiseZara(t, ada)
+	fake, reviewer := &fakeCoder{}, &fakeReviewer{}
+	ta.jobs.Adapter = fake
+	ta.jobs.SetReviewer(reviewer)
+	t.Cleanup(func() { ta.jobs.SetReviewer(nil) })
+	repo := gitRepo(t)
+	ctx := context.Background()
+	st := store.New(ta.db).For(zara)
+	folder := jobs.Folder{ID: "f1", Name: "shop-site", Path: repo}
+	j, err := ta.jobs.Begin(ctx, zara, folder, "Fix the basket rounding", "Round once.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		for end := time.Now().Add(20 * time.Second); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
+			rows, _ := st.Chat(ctx, "", 100)
+			for _, r := range rows {
+				if r.Kind == memory.ChatJobAsk && r.SettledAt.IsZero() {
+					var p struct{ Job, Ask string }
+					json.Unmarshal(r.Payload, &p)
+					ta.jobs.Answer(ctx, zara, p.Job, p.Ask, jobs.Once, "No new packages: use money.ts.")
+				}
+			}
+		}
+	}()
+	waitFor(t, "the job to be ready", func() bool { g, _ := ta.jobs.Get(ctx, zara, j.ID); return g.Status == jobs.Ready })
+	rec, out := ta.do(t, "POST", "/v1/agents/"+zara+"/jobs/"+j.ID+"/commit", map[string]any{"message": "Round the basket total once"}, ada, site)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("commit: %d %v", rec.Code, out)
+	}
+	waitFor(t, "the notes", func() bool { n, _ := ta.jobs.Notes(ctx, zara, "f1"); return len(n) == 2 })
+	reviewer.mu.Lock()
+	learnt := reviewer.learnt
+	reviewer.mu.Unlock()
+	if len(learnt) != 1 || !strings.Contains(learnt[0], "Committed it") || !strings.Contains(learnt[0], "(nothing yet)") {
+		t.Errorf("it should learn from the job's story, from nothing yet: %q", learnt)
+	}
+
+	// The page shows them, and the next job there starts with them.
+	_, out = ta.do(t, "GET", "/v1/agents/"+zara+"/jobs/"+j.ID, nil, ada, "")
+	if notes := data(out)["notes"].([]any); len(notes) != 2 || notes[0] != "Money is in whole pence: use money.ts, no new packages." {
+		t.Errorf("the page's notes: %v", notes)
+	}
+	if d := ta.jobs.Tool(zara, []jobs.Folder{folder}, "Opus 5.5").Describe(); !strings.Contains(d, "What you keep about shop-site") || !strings.Contains(d, "use money.ts") {
+		t.Errorf("the brief isn't told what they keep:\n%s", d)
+	}
+	fake.mu.Lock()
+	before := len(fake.started)
+	fake.mu.Unlock()
+	next, err := ta.jobs.Begin(ctx, zara, folder, "Add a test", "Add a test.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the next job to start", func() bool { fake.mu.Lock(); defer fake.mu.Unlock(); return len(fake.started) > before })
+	fake.mu.Lock()
+	system := fake.started[before].System
+	fake.mu.Unlock()
+	if !strings.Contains(system, "What earlier jobs in this repository taught") || !strings.Contains(system, "use money.ts") {
+		t.Errorf("Claude Code isn't told what earlier jobs taught:\n%s", system)
+	}
+	waitFor(t, "the next job to end", func() bool { g, _ := ta.jobs.Get(ctx, zara, next.ID); return g.Status == jobs.Ready })
+
+	// The owner takes one out.
+	rec, out = ta.do(t, "POST", "/v1/agents/"+zara+"/jobs/"+j.ID+"/notes", map[string]any{"notes": []string{"go test ./... runs everything; it takes a few seconds."}}, ada, site)
+	if rec.Code != http.StatusOK || len(data(out)["notes"].([]any)) != 1 {
+		t.Errorf("taking one out: %d %v", rec.Code, out)
 	}
 }

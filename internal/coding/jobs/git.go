@@ -198,6 +198,7 @@ func (s *Service) Commit(ctx context.Context, agent, id, message string) (Job, e
 		return Job{}, err
 	}
 	s.step(ctx, j.ID, WhoOwner, "Committed it", strings.SplitN(message, "\n", 2)[0])
+	go s.learn(s.ctx, j) // what the job taught, for the next in this folder
 	s.editCard(ctx, j, func(c *Card) { c.Now = "Committed on " + orDefault(j.Branch, j.Base) + ", on this computer" })
 	return j, nil
 }

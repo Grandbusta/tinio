@@ -38,14 +38,24 @@ func (start) Name() string { return "code.start" }
 
 func (t start) Describe() string {
 	names := make([]string, len(t.folders))
+	var known []string
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	for i, f := range t.folders {
 		names[i] = f.Name
+		if notes, err := t.s.Notes(ctx, t.agent, f.ID); err == nil && len(notes) > 0 {
+			known = append(known, notesNote("What you keep about "+f.Name+" from earlier jobs (put what matters in the brief):", notes))
+		}
+	}
+	extra := ""
+	if len(known) > 0 {
+		extra = "\n" + strings.Join(known, "\n")
 	}
 	return `Start a coding job: Claude Code writes the code in one of the owner's folders that's a git repository (` + strings.Join(names, ", ") +
 		`), on a copy of it on its own branch, and you see it through. Use it when they want code written, fixed or changed there. ` +
 		`Arguments: {"folder": "its name", "title": "the job in a few words, e.g. Fix the basket rounding", ` +
 		`"brief": "what to do and why, what done looks like (tests to add or pass), the repository's rules that matter, and what not to touch"}. ` +
-		`Read the folder first (its README, AGENTS.md or CLAUDE.md, the code in question), so the brief is specific. The owner sees the brief and says yes first.`
+		`Read the folder first (its README, AGENTS.md or CLAUDE.md, the code in question), so the brief is specific. The owner sees the brief and says yes first.` + extra
 }
 
 func (start) Class() action.Class { return action.Code }

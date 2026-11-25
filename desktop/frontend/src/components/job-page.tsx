@@ -28,7 +28,7 @@ type Job = {
 };
 type Step = { at: string; who: "agent" | "cli" | "owner" | "tinio"; what: string; detail: string };
 type Change = { path: string; added: number; removed: number; patch: string };
-type Page = { job: Job; steps: Step[]; changes: Change[]; github: { installed: boolean; signed_in: boolean; account: string }; origin: boolean };
+type Page = { job: Job; steps: Step[]; changes: Change[]; github: { installed: boolean; signed_in: boolean; account: string }; origin: boolean; notes: string[] };
 type Note = { file: string; line: number; text: string };
 
 const pill: Record<Job["status"], [string, string]> = {
@@ -178,16 +178,42 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
                       <summary className="cursor-pointer text-accent-text">What it printed</summary>
                       <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-surface-2 p-2 font-mono text-[11.5px] whitespace-pre-wrap">{s.detail}</pre>
                     </details>
-                  ) : s.detail && (s.who === "agent" || s.who === "owner") ? (
+                  ) : s.detail && (s.who === "agent" || s.who === "owner") && !s.what.startsWith("Kept what") ? (
                     <span className="text-[13px] text-fg/80">{s.detail}</span>
                   ) : (
                     s.detail &&
+                    !s.what.startsWith("Kept what") &&
                     !s.what.includes(s.detail.slice(0, 24)) && <span className="line-clamp-3 font-mono text-[12px] break-all text-muted">{s.detail}</span>
                   )}
                 </span>
               </li>
             ))}
           </ol>
+          {page.notes.length > 0 && (
+            <div className="flex flex-col gap-2 border-t border-line pt-4">
+              <h3 className="text-[14px] font-semibold">What {name} keeps about {j.folder}</h3>
+              <p className="m-0 text-xs text-muted">Learnt from the jobs you&apos;ve committed here. The next job here starts with these.</p>
+              <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                {page.notes.map((n, i) => (
+                  <li key={i} className="flex items-start gap-2 text-[13px]">
+                    <span className="min-w-0 flex-1">{n}</span>
+                    <button
+                      type="button"
+                      aria-label={`Take out: ${n}`}
+                      title="Take this out"
+                      disabled={!!busy}
+                      onClick={() => act("notes", "notes", { notes: page.notes.filter((_, k) => k !== i) })}
+                      className="grid size-7 flex-none place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6L6 18" />
+                      </svg>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
 
         <section aria-labelledby="changes" className="flex min-w-0 flex-[999_1_480px] flex-col gap-3 border-l border-line px-8 pt-5 pb-8 max-[900px]:border-l-0 max-[900px]:px-4">

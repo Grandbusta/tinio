@@ -216,6 +216,9 @@ func (s *Service) verdict(ctx context.Context, rv system2.Reasoner, j Job, name,
 	if len(asked) > 0 {
 		later = fmt.Sprintf("\n\n# What %s asked for since, in order\nThese change the brief: where they differ from it, %s's words win.\n%s", owner, owner, strings.Join(asked, "\n"))
 	}
+	if notes, err := s.Notes(ctx, j.Agent, j.Folder); err == nil && len(notes) > 0 {
+		later += "\n\n" + notesNote("# What you keep about this repository from earlier jobs", notes)
+	}
 	rules := rulesOf(j.Dir)
 	if rules == "" {
 		rules = "(the repository has no AGENTS.md, CLAUDE.md or CONTRIBUTING.md)"

@@ -72,7 +72,17 @@ func (r *run) system(set Settings) string {
 	return fmt.Sprintf("You're doing a coding job for %s through Tinio, %s. Follow the repository's own rules. "+
 		"Don't commit, push or open pull requests: Tinio does that, with %s's yes. "+
 		"If something you need isn't allowed, say what you'd do instead. "+
-		"When you finish, say in two or three sentences what you changed and how you checked it.", r.owner, where, r.owner)
+		"When you finish, say in two or three sentences what you changed and how you checked it.", r.owner, where, r.owner) +
+		r.knownNote()
+}
+
+// knownNote is what the agent keeps about the job's folder, for the CLI.
+func (r *run) knownNote() string {
+	notes, err := r.s.Notes(context.Background(), r.job.Agent, r.job.Folder)
+	if err != nil || len(notes) == 0 {
+		return ""
+	}
+	return "\n\n" + notesNote("What earlier jobs in this repository taught (follow these unless this job says otherwise):", notes)
 }
 
 func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {

@@ -90,6 +90,12 @@ lays it over the page until you pick a chat. The chat keeps a reading width, cen
 where they were fully round; the message box and segmented controls 12px. Avatars, dots,
 round icon buttons and progress bars stay round.
 
+**What jobs teach the agent:** when you commit a job, the agent reads its story and keeps
+up to eight short notes about that folder: how its tests run and what was already
+failing, rules you gave, what you sent back and why. The next job there starts with
+them, in the brief the agent writes, in what Claude Code is told, and in the agent's
+checks. A job's page lists them, and you can take any out.
+
 **Coding jobs in the morning:** an agent's morning knows their coding jobs that still
 want something from you: one ready to look at (with what they made of it), a question
 waiting on you, one that stopped, a commit not pushed. A morning item about a job is tied

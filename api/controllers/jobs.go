@@ -113,7 +113,15 @@ func (j *Jobs) One(c *gin.Context) error {
 	if err != nil {
 		return err
 	}
-	utils.SuccessWithData(c, http.StatusOK, gin.H{"job": viewOf(x), "steps": steps, "changes": changes, "github": j.Jobs.Finder.GH(c), "origin": j.Jobs.HasOrigin(c, x)})
+	notes, err := j.Jobs.Notes(c, x.Agent, x.Folder)
+	if err != nil {
+		return err
+	}
+	if notes == nil {
+		notes = []string{}
+	}
+	utils.SuccessWithData(c, http.StatusOK, gin.H{"job": viewOf(x), "steps": steps, "changes": changes, "github": j.Jobs.Finder.GH(c),
+		"origin": j.Jobs.HasOrigin(c, x), "notes": notes})
 	return nil
 }
 
@@ -156,6 +164,32 @@ func (j *Jobs) Back(c *gin.Context) error {
 func (j *Jobs) GoBack(c *gin.Context) error {
 	x, err := j.Jobs.GoBack(c, c.Param("id"), c.Param("job"))
 	return j.after(c, x, err)
+}
+
+// Notes sets what the agent keeps about the job's folder: the owner taking one out.
+func (j *Jobs) Notes(c *gin.Context) error {
+	var b struct {
+		Notes []string `json:"notes"`
+	}
+	if err := c.ShouldBindJSON(&b); err != nil || b.Notes == nil {
+		return utils.ErrBadRequest
+	}
+	x, err := j.Jobs.Get(c, c.Param("id"), c.Param("job"))
+	if err != nil {
+		if errors.Is(err, jobs.ErrNoJob) {
+			return utils.ErrNoSuchJob
+		}
+		return err
+	}
+	if err := j.Jobs.SaveNotes(c, x.Agent, x.Folder, b.Notes); err != nil {
+		return err
+	}
+	notes, err := j.Jobs.Notes(c, x.Agent, x.Folder)
+	if err != nil {
+		return err
+	}
+	utils.SuccessWithData(c, http.StatusOK, gin.H{"notes": notes})
+	return nil
 }
 
 // Commit commits the job on its branch, on this computer: the owner's yes.

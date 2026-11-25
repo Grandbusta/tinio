@@ -14,6 +14,17 @@ CREATE TABLE coding_steps (
     PRIMARY KEY (job_id, seq),
     FOREIGN KEY (job_id) REFERENCES coding_jobs(id) ON DELETE CASCADE
 );
+-- What an agent keeps about each of their folders from the coding jobs done in it: a
+-- few short notes (how its tests run, rules the owner gave, what was sent back), for
+-- their next brief, the CLI and their checks.
+CREATE TABLE coding_notes (
+    agent_id TEXT NOT NULL,
+    folder_id TEXT NOT NULL,
+    notes TEXT DEFAULT '[]' NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (agent_id, folder_id),
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+);
 ALTER TABLE coding_jobs ADD COLUMN base_sha TEXT DEFAULT '' NOT NULL;
 ALTER TABLE coding_jobs ADD COLUMN rounds INTEGER DEFAULT 0 NOT NULL;
 ALTER TABLE coding_jobs ADD COLUMN commit_sha TEXT DEFAULT '' NOT NULL;
@@ -24,4 +35,5 @@ ALTER TABLE coding_jobs DROP COLUMN pr_url;
 ALTER TABLE coding_jobs DROP COLUMN commit_sha;
 ALTER TABLE coding_jobs DROP COLUMN rounds;
 ALTER TABLE coding_jobs DROP COLUMN base_sha;
+DROP TABLE coding_notes;
 DROP TABLE coding_steps;
