@@ -70,6 +70,66 @@ type Service struct {
 	runs     map[string]*run         // by job id: those with a CLI running
 	reviewer system2.Reasoner        // what agents check work with; nil: they don't
 	gates    map[string]*coding.Gate // by job id: what the owner allowed for the job, kept across its rounds
+	parked   map[string]*parked      // by job id: its CLI, left open after a round for the next
+}
+
+// A parked CLI is a job's, left open after a round finished, for a while: the
+// next round (the owner's reply, or the agent sending it back) goes straight in,
+// with nothing started or loaded again.
+type parked struct {
+	sess   coding.Session
+	model  string
+	cancel context.CancelFunc
+	timer  *time.Timer
+}
+
+// parkFor is how long a CLI waits for the next round before it's closed; after
+// that, the next round resumes its session in a new one.
+const parkFor = 2 * time.Minute
+
+// park keeps job's CLI open for the next round, for parkFor.
+func (s *Service) park(job string, sess coding.Session, model string, cancel context.CancelFunc) {
+	p := &parked{sess: sess, model: model, cancel: cancel}
+	s.mu.Lock()
+	if s.parked == nil {
+		s.parked = map[string]*parked{}
+	}
+	old := s.parked[job]
+	s.parked[job] = p
+	p.timer = time.AfterFunc(parkFor, func() {
+		if s.unpark(job, "") == p {
+			p.close()
+		}
+	})
+	s.mu.Unlock()
+	if old != nil {
+		old.close()
+	}
+}
+
+// unpark takes job's parked CLI, if it has one still running with model ("":
+// any); nil if not.
+func (s *Service) unpark(job, model string) *parked {
+	s.mu.Lock()
+	p := s.parked[job]
+	delete(s.parked, job)
+	s.mu.Unlock()
+	if p == nil {
+		return nil
+	}
+	p.timer.Stop()
+	if !p.sess.Alive() || (model != "" && p.model != model) {
+		p.close()
+		return nil
+	}
+	return p
+}
+
+func (p *parked) close() {
+	go func() {
+		p.sess.Close()
+		p.cancel()
+	}()
 }
 
 // gate is job's gate, the same each round while Tinio runs.
@@ -351,7 +411,7 @@ func (s *Service) Begin(ctx context.Context, agent string, f Folder, title, brie
 	s.mu.Lock()
 	s.runs[id] = r
 	s.mu.Unlock()
-	go r.drive(ad, set, coding.Job{Dir: j.Dir, Brief: j.Brief, System: r.system(set), Model: set.Model, MaxTurns: set.MaxSteps})
+	go r.drive(ad, set, coding.Job{Dir: j.Dir, Brief: j.Brief, System: r.system(set), Model: set.Model, MaxTurns: set.MaxSteps}, nil)
 	return j, nil
 }
 
@@ -437,11 +497,55 @@ func (s *Service) Reply(ctx context.Context, agent, job, text string) error {
 	if err != nil {
 		return err
 	}
-	if j.Session == "" || j.Status == Cancelled {
-		return ErrNoJob
+	if _, err := os.Stat(j.Dir); j.Dir == "" || err != nil {
+		return ErrNoJob // its copy is gone: there's nothing to carry on in
 	}
+	// Ended any way (finished, stopped, stopped by you, failed): it carries on. With no
+	// session to resume, Claude Code starts afresh in the copy, told where it stands.
 	s.step(ctx, j.ID, WhoOwner, "Sent more", text)
+	if j.Session == "" {
+		text = s.freshBrief(ctx, j, text)
+	}
 	return s.carryOn(ctx, j, text, "Carrying on with what you said")
+}
+
+// Checking is whether the agent is checking the job's last round now.
+func (s *Service) Checking(job string) bool {
+	s.mu.Lock()
+	r := s.runs[job]
+	s.mu.Unlock()
+	return r != nil && r.isChecking()
+}
+
+// Saying is what the job's CLI is writing now, so far: "" when nothing.
+func (s *Service) Saying(job string) string {
+	s.mu.Lock()
+	r := s.runs[job]
+	s.mu.Unlock()
+	if r == nil {
+		return ""
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.saying
+}
+
+// freshBrief is what a new Claude Code session is told to carry j on with text:
+// the job's brief and where it got to, the earlier rounds' work already in its copy.
+func (s *Service) freshBrief(ctx context.Context, j Job, text string) string {
+	var b strings.Builder
+	b.WriteString("You're carrying on a coding job in this copy of the repository. What earlier rounds did is already here, uncommitted or on this branch: look at git status and git diff before you change anything.\n\nThe job's brief was:\n")
+	b.WriteString(j.Brief)
+	if steps, err := s.Steps(ctx, j.ID); err == nil {
+		for i := len(steps) - 1; i >= 0; i-- {
+			if st := steps[i]; st.Who == WhoCLI && st.Detail != "" && (st.What == "Finished" || st.What == "Stopped" || st.What == "Didn't work out" || st.What == "Stopped by you") {
+				b.WriteString("\n\nWhere it got to, as last said:\n" + st.Detail)
+				break
+			}
+		}
+	}
+	b.WriteString("\n\nWhat to do now:\n" + text)
+	return b.String()
 }
 
 // carryOn starts another round of j, in its CLI session, with text.
@@ -464,7 +568,7 @@ func (s *Service) carryOn(ctx context.Context, j Job, text, now string) error {
 	if err := s.save(ctx, j); err != nil {
 		return err
 	}
-	go r.drive(ad, set, coding.Job{Dir: j.Dir, Brief: text, System: r.system(set), Model: set.Model, MaxTurns: set.MaxSteps, Resume: j.Session})
+	go r.drive(ad, set, coding.Job{Dir: j.Dir, Brief: text, System: r.system(set), Model: set.Model, MaxTurns: set.MaxSteps, Resume: j.Session}, s.unpark(j.ID, set.Model))
 	return nil
 }
 

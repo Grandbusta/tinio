@@ -252,10 +252,13 @@ In to_owner, write to %[2]s in at most three short sentences, under 60 words: wh
 func (r *run) review(ctx context.Context, rv system2.Reasoner, said string) {
 	j := r.snapshot()
 	name := r.s.agentName(ctx, j.Agent)
+	// Ready for the owner at once: the check goes on beside it, and they needn't wait.
 	r.mu.Lock()
-	r.card.Status, r.card.Now = Working, name+" is checking the work"
+	r.job.Status, r.card.Status, r.card.Now = Ready, Ready, name+" is checking the work"
 	r.reviewing = true
+	ready := r.job
 	r.mu.Unlock()
+	r.s.save(context.Background(), ready)
 	defer func() {
 		r.mu.Lock()
 		r.reviewing = false
@@ -272,7 +275,9 @@ func (r *run) review(ctx context.Context, rv system2.Reasoner, said string) {
 		r.s.step(ctx, j.ID, WhoAgent, what, c.Output)
 	}
 	if ctx.Err() != nil {
-		r.finish(r.stoppedStatus(), "It was stopped while "+name+" checked it.")
+		if !r.isQuiet() {
+			r.finish(r.stoppedStatus(), "It was stopped while "+name+" checked it.")
+		}
 		return
 	}
 	r.now(name+" is reading the changes", true)
@@ -283,7 +288,9 @@ func (r *run) review(ctx context.Context, rv system2.Reasoner, said string) {
 	r.mu.Unlock()
 	switch {
 	case ctx.Err() != nil:
-		r.finish(r.stoppedStatus(), "It was stopped while "+name+" checked it.")
+		if !r.isQuiet() {
+			r.finish(r.stoppedStatus(), "It was stopped while "+name+" checked it.")
+		}
 		return
 	case err != nil:
 		r.s.Log.Warn("jobs: the agent couldn't check the work", "job", j.ID, "err", err)
@@ -308,6 +315,34 @@ func (r *run) review(ctx context.Context, rv system2.Reasoner, said string) {
 	r.s.save(context.Background(), j)
 	r.now(name+" sent it back: "+firstLine(v.ToCLI), true)
 	r.again = v.ToCLI
+}
+
+// isQuiet is whether the owner acted while the work was checked, so the check
+// ends without a word.
+func (r *run) isQuiet() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.quiet
+}
+
+// isChecking is whether the agent is checking the round's work.
+func (r *run) isChecking() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.reviewing
+}
+
+// endCheck ends the agent's check without a word, and waits for the run to end:
+// the owner is acting on the work (committing it).
+func (r *run) endCheck() {
+	r.mu.Lock()
+	r.quiet = true
+	stop := r.stop
+	r.mu.Unlock()
+	if stop != nil {
+		stop()
+	}
+	r.wait()
 }
 
 func (r *run) stoppedStatus() string {

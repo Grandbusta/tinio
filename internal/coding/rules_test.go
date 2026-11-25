@@ -27,7 +27,20 @@ func TestRules(t *testing.T) {
 		{"Bash", map[string]any{"command": "npm test"}, true},
 		{"Bash", map[string]any{"command": "npm install decimal.js"}, false},
 		{"Bash", map[string]any{"command": "go test ./... && rm -rf /"}, false},
-		{"Bash", map[string]any{"command": "go test ./... | tail"}, false},
+		{"Bash", map[string]any{"command": "go test ./... | tail"}, true},
+		{"Bash", map[string]any{"command": "go test -v ./... 2>&1 | tail -20"}, true},
+		{"Bash", map[string]any{"command": "go vet ./... && echo vet ok; gofmt -l .; echo \"exit $?\""}, true},
+		{"Bash", map[string]any{"command": "CGO_ENABLED=0 go test ./..."}, true},
+		{"Bash", map[string]any{"command": "PATH=/tmp/evil:$PATH go test ./..."}, false},
+		{"Bash", map[string]any{"command": "cd " + in("pkg") + " && go test ./..."}, true},
+		{"Bash", map[string]any{"command": "cd /etc && cat passwd"}, false},
+		{"Bash", map[string]any{"command": "grep -rn \"Draft\" ."}, true},
+		{"Bash", map[string]any{"command": "grep -rn root /etc"}, false},
+		{"Bash", map[string]any{"command": "find . -name '*.go'"}, true},
+		{"Bash", map[string]any{"command": "find . -name '*.go' -delete"}, false},
+		{"Bash", map[string]any{"command": "go test ./... 2>/dev/null"}, true},
+		{"Bash", map[string]any{"command": "go test ./... > out.txt"}, false},
+		{"Bash", map[string]any{"command": "go test ./... | sh"}, false},
 		{"Bash", map[string]any{"command": "go testify"}, false},
 		{"Bash", map[string]any{"command": "gofmt -l .; go vet ./... && go test -v ./...; git status --short"}, true},
 		{"Bash", map[string]any{"command": "cat README.md go.mod; go version"}, true},
@@ -92,5 +105,17 @@ func TestTheGateRemembersForTheJob(t *testing.T) {
 	other := Event{Kind: Ask, Tool: "Bash", Input: map[string]any{"command": "npm install left-pad"}}
 	if _, decided, _ := g.Decide(other); decided {
 		t.Fatal("a different install was allowed too")
+	}
+	// A command that only works allowed once for the job runs again with other arguments.
+	lint := Event{Kind: Ask, Tool: "Bash", Input: map[string]any{"command": "golangci-lint run ./... && make lint-fix"}}
+	g.AllowForJob(lint)
+	again := Event{Kind: Ask, Tool: "Bash", Input: map[string]any{"command": "make lint-fix && golangci-lint run --fix ./basket/... | tail -5"}}
+	if ok, decided, _ := g.Decide(again); !ok || !decided {
+		t.Fatal("the same commands with other arguments were asked again")
+	}
+	script := Event{Kind: Ask, Tool: "Bash", Input: map[string]any{"command": "python3 scripts/check.py"}}
+	g.AllowForJob(script)
+	if _, decided, _ := g.Decide(Event{Kind: Ask, Tool: "Bash", Input: map[string]any{"command": "python3 -c 'import os'"}}); decided {
+		t.Fatal("allowing one script allowed any python")
 	}
 }

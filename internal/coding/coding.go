@@ -27,6 +27,7 @@ type Job struct {
 const (
 	Started = "started" // SessionID is the CLI's session, for Resume
 	Said    = "said"    // Text is what it wrote
+	Saying  = "saying"  // Text is what it's writing, so far: Said follows with all of it
 	Step    = "step"    // Tool and Input: something it did that didn't need asking
 	Changed = "changed" // Path: a file it changed (also a Step)
 	Ask     = "ask"     // AskID, Tool, Input: it wants to do this; answer it
@@ -68,6 +69,8 @@ type Session interface {
 	Choose(askID string, answers map[string]string) error
 	Interrupt() error
 	Close() error
+	// Alive is whether it can still take more: the CLI hasn't ended.
+	Alive() bool
 }
 
 // An Adapter starts jobs with one CLI.

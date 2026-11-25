@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Grandbusta/tinio/internal/clis"
 )
@@ -29,6 +30,7 @@ func (c Claude) args(job Job) []string {
 		"--setting-sources", "project", // the repository's CLAUDE.md and .claude settings, none of the owner's
 		"--strict-mcp-config", // and none of their MCP servers
 		"--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+		"--include-partial-messages", // its words as it writes them
 		"--permission-prompt-tool", "stdio", "--permission-mode", "manual"}
 	if job.System != "" {
 		args = append(args, "--append-system-prompt", job.System)
@@ -154,6 +156,17 @@ func (s *claudeSession) Interrupt() error {
 	return s.write(map[string]any{"type": "control_request", "request_id": id, "request": map[string]any{"subtype": "interrupt"}})
 }
 
+func (s *claudeSession) Alive() bool {
+	select {
+	case <-s.done:
+		return false
+	default:
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.closed
+}
+
 func (s *claudeSession) Close() error {
 	s.mu.Lock()
 	if !s.closed {
@@ -185,7 +198,14 @@ type cline struct {
 	IsError   bool            `json:"is_error"`
 	Cost      float64         `json:"total_cost_usd"`
 	Turns     int             `json:"num_turns"`
-	RequestID string          `json:"request_id"`
+	Event     struct {
+		Type  string `json:"type"`
+		Delta struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"delta"`
+	} `json:"event"`
+	RequestID string `json:"request_id"`
 	Request   struct {
 		Subtype  string         `json:"subtype"`
 		ToolName string         `json:"tool_name"`
@@ -199,12 +219,29 @@ func (s *claudeSession) read(out io.Reader) {
 	sc := bufio.NewScanner(out)
 	sc.Buffer(make([]byte, 1<<20), 64<<20)
 	ended := false
+	var saying strings.Builder // the text being written now
+	var told time.Time
 	for sc.Scan() {
 		var l cline
 		if json.Unmarshal(sc.Bytes(), &l) != nil {
 			continue
 		}
 		switch l.Type {
+		case "stream_event":
+			switch {
+			case l.Event.Type == "content_block_start" || l.Event.Type == "message_start":
+				saying.Reset()
+			case l.Event.Type == "content_block_delta" && l.Event.Delta.Type == "text_delta":
+				saying.WriteString(l.Event.Delta.Text)
+				// Told at most ten times a second: enough to read it being written.
+				if time.Since(told) > 100*time.Millisecond {
+					told = time.Now()
+					select {
+					case s.events <- Event{Kind: Saying, Text: saying.String()}:
+					default: // behind: the next says it all
+					}
+				}
+			}
 		case "system":
 			if l.Subtype == "init" {
 				s.events <- Event{Kind: Started, SessionID: l.SessionID}

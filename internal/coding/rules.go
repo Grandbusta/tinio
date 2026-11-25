@@ -15,6 +15,7 @@ import (
 type Rules struct {
 	Dir      string   // the job's copy
 	Commands []string // run as they are, or with more arguments: "go test ./...", "npm test"
+	Allowed  []string // what the owner allowed for this job, the same way (Gate.AllowForJob)
 }
 
 // reading is the tools that only read, or only plan.
@@ -23,41 +24,75 @@ var reading = []string{"Read", "Glob", "Grep", "LS", "NotebookRead", "TodoWrite"
 // changing is the tools that change files, and where they say which.
 var changing = map[string]string{"Edit": "file_path", "Write": "file_path", "MultiEdit": "file_path", "NotebookEdit": "notebook_path"}
 
-// sequence splits a chain into its commands: run one after another, or on
-// the last one's success or failure.
-var sequence = regexp.MustCompile(`&&|\|\||;|\n`)
+// sequence splits a chain into its commands: run one after another, on the
+// last one's success or failure, or piped one into the next.
+var sequence = regexp.MustCompile(`&&|\|\||\||;|\n`)
 
-// chained is a command that pipes, redirects, or runs another inside it.
-var chained = regexp.MustCompile("\\||`|\\$\\(|>|<|&")
+// quiet is output sent nowhere, or errors sent with the output: still one command.
+var quiet = regexp.MustCompile(`\s*(?:[12&]?>\s*/dev/null|2>&1)`)
 
-// readOnly are commands any job may run: they only look.
-var readOnly = []string{"git status", "git diff", "git log", "git show", "ls", "pwd", "cat", "head", "tail", "wc", "go version", "node --version"}
+// chained is a command that redirects, runs another inside it, or runs in the
+// background.
+var chained = regexp.MustCompile("`|\\$\\(|>|<|&")
+
+// readOnly are commands any job may run: they only look, or only say something.
+var readOnly = []string{"git status", "git diff", "git log", "git show", "git branch", "git rev-parse", "git ls-files", "git blame",
+	"pwd", "go version", "node --version", "echo", "printf", "true", "false", "which", "command -v", "type", "date", "sleep", "test", "["}
+
+// looking are commands that only read the files they're given, all of which must
+// be in the copy.
+var looking = []string{"cat", "head", "tail", "wc", "ls", "tree", "stat", "file", "diff", "sort", "uniq", "cut", "tr", "grep", "rg", "find", "basename", "dirname", "cd"}
 
 // runs is whether a single command is one the job runs on its own.
 func (r Rules) runs(c string) bool {
-	for _, allowed := range append(append([]string{}, r.Commands...), readOnly...) {
+	for _, allowed := range append(append(append([]string{}, r.Commands...), r.Allowed...), readOnly...) {
 		if c == allowed || strings.HasPrefix(c, allowed+" ") {
-			if strings.HasPrefix(allowed, "cat") || strings.HasPrefix(allowed, "head") || strings.HasPrefix(allowed, "tail") || strings.HasPrefix(allowed, "wc") || strings.HasPrefix(allowed, "ls") {
-				return r.argsInside(c)
-			}
 			return true
+		}
+	}
+	for _, allowed := range looking {
+		if c == allowed || strings.HasPrefix(c, allowed+" ") {
+			if allowed == "find" && regexp.MustCompile(`\s-(exec|execdir|ok|delete|fprint)`).MatchString(c) {
+				return false // find that runs or deletes
+			}
+			return r.argsInside(c)
 		}
 	}
 	return false
 }
 
-// argsInside is whether every path c names is inside the copy: cat, head,
-// tail, wc and ls only look at what they're given.
+// argsInside is whether every path c names is inside the copy. A word without a
+// slash is a pattern or a name in the copy; one with a slash, or ~, is a path.
 func (r Rules) argsInside(c string) bool {
 	for _, f := range strings.Fields(c)[1:] {
+		f = strings.Trim(f, `"'`)
 		if strings.HasPrefix(f, "-") {
 			continue
 		}
-		if !r.inside(f) {
+		if (strings.ContainsAny(f, "/~") || f == "..") && !r.inside(f) {
 			return false
 		}
 	}
 	return true
+}
+
+// unset are the variables a command may not be given in front of it: they'd
+// change what runs.
+var unset = regexp.MustCompile(`^(PATH|LD_\w*|DYLD_\w*|NODE_OPTIONS|BASH_ENV|ENV)=`)
+
+// bare is c without the variables set in front of it ("CGO_ENABLED=0 go test"),
+// or "" when one of them would change what runs.
+func bare(c string) string {
+	for {
+		f := strings.Fields(c)
+		if len(f) < 2 || !regexp.MustCompile(`^[A-Za-z_]\w*=\S*$`).MatchString(f[0]) {
+			return c
+		}
+		if unset.MatchString(f[0]) {
+			return ""
+		}
+		c = strings.TrimSpace(strings.TrimPrefix(c, f[0]))
+	}
 }
 
 // Allows is whether the rules let a job use tool with input on its own, and
@@ -77,8 +112,8 @@ func (r Rules) Allows(tool string, input map[string]any) (bool, string) {
 		return true, "a change inside the copy"
 	case tool == "Bash":
 		c, _ := input["command"].(string)
-		c = strings.ReplaceAll(c, "2>&1", "") // its errors with its output: still one command
-		// A chain of commands is allowed when each one is: "gofmt -l .; go test ./...".
+		c = quiet.ReplaceAllString(c, "")
+		// A chain of commands is allowed when each one is: "gofmt -l .; go test ./... | tail -20".
 		parts := sequence.Split(c, -1)
 		for _, part := range parts {
 			part = strings.TrimSpace(part)
@@ -86,7 +121,10 @@ func (r Rules) Allows(tool string, input map[string]any) (bool, string) {
 				continue
 			}
 			if chained.MatchString(part) {
-				return false, "it pipes, redirects or runs a command inside another"
+				return false, "it redirects, runs in the background or runs a command inside another"
+			}
+			if part = bare(part); part == "" {
+				return false, "it changes what runs, with PATH or the like"
 			}
 			if !r.runs(part) {
 				if len(parts) > 1 {
@@ -217,10 +255,44 @@ func (g *Gate) Decide(e Event) (ok, decided bool, why string) {
 	return false, false, ""
 }
 
-// AllowForJob remembers the owner's "allow for this job" for e.
+// AllowForJob remembers the owner's "allow for this job" for e. For a command,
+// each command in it is allowed again with other arguments ("make lint-fix",
+// "golangci-lint run"), unless it installs, removes, sends or reaches out:
+// those only as they were.
 func (g *Gate) AllowForJob(e Event) {
 	if g.ok == nil {
 		g.ok = map[string]bool{}
 	}
 	g.ok[key(e.Tool, e.Input)] = true
+	c, _ := e.Input["command"].(string)
+	if e.Tool != "Bash" || c == "" {
+		return
+	}
+	for _, part := range sequence.Split(quiet.ReplaceAllString(c, ""), -1) {
+		part = bare(strings.TrimSpace(part))
+		if part == "" || chained.MatchString(part) {
+			continue
+		}
+		g.Rules.Allowed = append(g.Rules.Allowed, head(part))
+	}
+}
+
+// risky are the words after which a command is allowed again only as it was.
+var risky = regexp.MustCompile(`^(install|i|add|remove|rm|uninstall|publish|push|deploy|exec|x|dlx)$`)
+
+// head is what of command part "allow for this job" allows again: the program
+// and its subcommand ("go generate", "make lint"), or the whole of it when it
+// installs, removes, sends or reaches out, or the program is one that does.
+func head(part string) string {
+	f := strings.Fields(part)
+	if len(f) == 0 || regexp.MustCompile(`^(curl|wget|ssh|scp|rsync|sudo|rm|mv|chmod|chown|git|npx|bunx|pip|pipx|brew|apt|docker|kubectl|python3?|node|bash|sh|zsh|ruby|perl|php|deno|bun|eval|xargs|env)$`).MatchString(f[0]) {
+		return part
+	}
+	if len(f) > 1 && !strings.HasPrefix(f[1], "-") && !strings.ContainsAny(f[1], "/.") {
+		if risky.MatchString(f[1]) {
+			return part
+		}
+		return f[0] + " " + f[1]
+	}
+	return f[0]
 }

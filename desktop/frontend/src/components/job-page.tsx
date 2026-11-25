@@ -28,7 +28,16 @@ type Job = {
 };
 type Step = { at: string; who: "agent" | "cli" | "owner" | "tinio"; what: string; detail: string };
 type Change = { path: string; added: number; removed: number; patch: string };
-type Page = { job: Job; steps: Step[]; changes: Change[]; github: { installed: boolean; signed_in: boolean; account: string }; origin: boolean; notes: string[] };
+type Page = {
+  job: Job;
+  steps: Step[];
+  changes: Change[];
+  github: { installed: boolean; signed_in: boolean; account: string };
+  origin: boolean;
+  notes: string[];
+  saying?: string; // what Claude Code is writing now, so far
+  checking?: boolean; // the agent is checking the last round (it's ready meanwhile)
+};
 type Note = { file: string; line: number; text: string };
 
 const pill: Record<Job["status"], [string, string]> = {
@@ -121,11 +130,12 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
   }, [load]);
   const going = page?.job.status === "working" || page?.job.status === "waiting";
   useEffect(() => setPicked(""), [going]);
+  const checking = !!page?.checking;
   useEffect(() => {
-    if (!going) return;
+    if (!going && !checking) return;
     const t = setInterval(load, 1000); // what it does shows as it does it
     return () => clearInterval(t);
-  }, [going, load]);
+  }, [going, checking, load]);
 
   async function act(what: string, path: string, body: unknown, after?: () => void) {
     setBusy(what);
@@ -157,7 +167,7 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
   const planDone = plan.filter((t) => t.status === "completed").length;
   // What it's doing now: its latest action or words, this round.
   const nowStep = live && [...live.items].reverse().find((s) => s.what !== "Planned" && !s.what.startsWith("Asked to "));
-  const nowText = nowStep ? (nowStep.what === "Said" ? firstLine(nowStep.detail) : nowStep.what) : "Starting";
+  const nowText = page.saying ? firstLine(page.saying) : nowStep ? (nowStep.what === "Said" ? firstLine(nowStep.detail) : nowStep.what) : "Starting";
 
   // The top of the bar: the last word on the job, by who said it.
   const top: { agent: boolean; who: string; text: ReactNode } = going
@@ -175,7 +185,18 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
       ? { agent: false, who: "Pull request open", text: <>On <code>{j.branch}</code>. Pushing again adds what&apos;s committed since.</> }
       : j.commit
         ? { agent: false, who: "Committed", text: <>On <code>{j.branch || j.base}</code>, on this computer, as you. Nothing has left it.</> }
-        : verdict
+        : checking
+          ? {
+              agent: true,
+              who: `${name} is checking it`,
+              text: (
+                <span className="inline-flex items-center gap-2">
+                  <span aria-hidden="true" className="size-2 flex-none animate-pulse rounded-full bg-accent" />
+                  Claude Code finished: it&apos;s ready for you while {name} runs the tests and reads the changes.
+                </span>
+              ),
+            }
+          : verdict
           ? { agent: true, who: `${name} checked it`, text: <MessageText text={verdict} /> }
           : finished?.detail
             ? { agent: false, who: j.status === "ready" ? "Claude Code finished" : "Claude Code stopped", text: <MessageText text={finished.detail} /> }
@@ -284,7 +305,7 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
             )}
             {[...story].reverse().map((r, i) =>
               r === live ? (
-                <LiveRound key={r.n} r={r} total={story.length} />
+                <LiveRound key={r.n} r={r} total={story.length} saying={page.saying} />
               ) : (
                 <PastRound
                   key={r.n}
@@ -603,67 +624,65 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
               </span>
             </div>
             {going && ask}
-            {j.status !== "cancelled" && (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  say();
-                }}
-                className="flex flex-col gap-2 rounded-xl border border-line-strong bg-surface py-2 pr-2 pl-4 focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-accent"
-              >
-                {canDecide && notes.length > 0 && (
-                  <span className="flex flex-wrap gap-1.5 pt-0.5">
-                    {notes.map((n, i) => (
-                      <span key={i} className="inline-flex max-w-full items-center gap-2 rounded-lg bg-surface-2 py-1 pr-1 pl-2.5 text-[13px]">
-                        <code className="flex-none">
-                          {n.file.split("/").pop()}:{n.line}
-                        </code>
-                        <span className="min-w-0 truncate">{n.text}</span>
-                        <button type="button" aria-label="Take this note out" onClick={() => setNotes((ns) => ns.filter((_, k) => k !== i))} className="grid size-6 flex-none place-items-center rounded-md text-muted hover:bg-line hover:text-fg">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-                            <path d="M6 6l12 12M18 6L6 18" />
-                          </svg>
-                        </button>
-                      </span>
-                    ))}
-                  </span>
-                )}
-                <span className="flex items-end gap-2.5">
-                  <label htmlFor="job-say" className="sr-only">
-                    {placeholder}
-                  </label>
-                  {/* Enter sends; Shift+Enter starts a new line. */}
-                  <textarea
-                    ref={box}
-                    id="job-say"
-                    rows={1}
-                    value={note}
-                    maxLength={4000}
-                    onChange={(e) => setNote(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                        e.preventDefault();
-                        say();
-                      }
-                    }}
-                    placeholder={placeholder}
-                    className="max-h-48 min-h-10 min-w-0 flex-1 resize-none bg-transparent py-2 text-[14.5px] leading-6 text-fg outline-none"
-                  />
-                  <button
-                    type="submit"
-                    aria-label="Send"
-                    disabled={!!busy || !canSend}
-                    className="grid size-10 flex-none place-items-center rounded-full bg-accent text-accent-ink hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
-                  >
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M5 12h14" />
-                      <path d="M13 6l6 6-6 6" />
-                    </svg>
-                  </button>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                say();
+              }}
+              className="flex flex-col gap-2 rounded-xl border border-line-strong bg-surface py-2 pr-2 pl-4 focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-accent"
+            >
+              {canDecide && notes.length > 0 && (
+                <span className="flex flex-wrap gap-1.5 pt-0.5">
+                  {notes.map((n, i) => (
+                    <span key={i} className="inline-flex max-w-full items-center gap-2 rounded-lg bg-surface-2 py-1 pr-1 pl-2.5 text-[13px]">
+                      <code className="flex-none">
+                        {n.file.split("/").pop()}:{n.line}
+                      </code>
+                      <span className="min-w-0 truncate">{n.text}</span>
+                      <button type="button" aria-label="Take this note out" onClick={() => setNotes((ns) => ns.filter((_, k) => k !== i))} className="grid size-6 flex-none place-items-center rounded-md text-muted hover:bg-line hover:text-fg">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                          <path d="M6 6l12 12M18 6L6 18" />
+                        </svg>
+                      </button>
+                    </span>
+                  ))}
                 </span>
-              </form>
-            )}
-            {j.status !== "cancelled" && <span className="-mt-1 pl-1 text-xs text-muted">{hint}</span>}
+              )}
+              <span className="flex items-end gap-2.5">
+                <label htmlFor="job-say" className="sr-only">
+                  {placeholder}
+                </label>
+                {/* Enter sends; Shift+Enter starts a new line. */}
+                <textarea
+                  ref={box}
+                  id="job-say"
+                  rows={1}
+                  value={note}
+                  maxLength={4000}
+                  onChange={(e) => setNote(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      say();
+                    }
+                  }}
+                  placeholder={placeholder}
+                  className="max-h-48 min-h-10 min-w-0 flex-1 resize-none bg-transparent py-2 text-[14.5px] leading-6 text-fg outline-none"
+                />
+                <button
+                  type="submit"
+                  aria-label="Send"
+                  disabled={!!busy || !canSend}
+                  className="grid size-10 flex-none place-items-center rounded-full bg-accent text-accent-ink hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
+                >
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M5 12h14" />
+                    <path d="M13 6l6 6-6 6" />
+                  </svg>
+                </button>
+              </span>
+            </form>
+            <span className="-mt-1 pl-1 text-xs text-muted">{hint}</span>
             {j.commit && j.branch && !page.origin && <span className="text-xs text-muted">The repository has no origin, so there&apos;s nowhere to push it.</span>}
             {j.commit && page.origin && !page.github.signed_in && <span className="text-xs text-muted">Sign in to GitHub&apos;s gh on this computer to push.</span>}
           </>
@@ -787,11 +806,11 @@ function Plan({ plan }: { plan: Todo[] }) {
 const small = "text-xs font-semibold text-muted";
 
 // LiveRound is the round under way, as it goes: its plan, its latest words, what it's doing.
-function LiveRound({ r, total }: { r: Round; total: number }) {
+function LiveRound({ r, total, saying }: { r: Round; total: number; saying?: string }) {
   const [all, setAll] = useState(false);
   const acts = [...r.actions].reverse();
   const shown = all ? acts : acts.slice(0, 6);
-  const words = r.said[r.said.length - 1];
+  const words = saying || r.said[r.said.length - 1]; // as it's written, then as it was
   const done = r.plan.filter((t) => t.status === "completed").length;
   return (
     <section aria-label={`Round ${r.n}, working`} className="overflow-hidden rounded-xl border border-accent/30 bg-accent-soft/20">
@@ -810,6 +829,7 @@ function LiveRound({ r, total }: { r: Round; total: number }) {
           {words ? (
             <div className="rounded-lg border border-line bg-bg px-3 py-2.5 text-sm">
               <MessageText text={words} />
+              {saying && <span aria-hidden="true" className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse rounded-[1px] bg-accent align-[-2px]" />}
             </div>
           ) : (
             <span className="text-sm text-muted">Nothing yet.</span>

@@ -236,11 +236,13 @@ func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan s
 	h.Connections = &connect.Store{DB: d, Key: *cfg.Key}
 	h.Folders = &folders.Store{DB: d, Rules: folders.Rules{Data: cfg.DataDir}, Versions: filepath.Join(cfg.DataDir, "versions")}
 	h.Jobs = svc
-	// Agents check coding jobs' work with the model they make works with.
-	if ms.Work != nil {
-		svc.SetReviewer(ms.Work)
-	} else {
+	// Agents check coding jobs' work with the model they reply with, at its low
+	// effort: a verdict on a diff and a test run comes in seconds, where the works
+	// model took ten. The works model only when there's no other.
+	if ms.System2 != nil {
 		svc.SetReviewer(ms.System2)
+	} else {
+		svc.SetReviewer(ms.Work)
 	}
 	if cl, ok := finder.Get(ctx, clis.Claude); ok && cl.SignedIn {
 		if set, err := codingSettings(ctx, d); err == nil {

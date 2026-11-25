@@ -135,7 +135,8 @@ func (j *Jobs) One(c *gin.Context) error {
 		notes = []string{}
 	}
 	utils.SuccessWithData(c, http.StatusOK, gin.H{"job": viewOf(x), "steps": steps, "changes": changes, "github": j.Jobs.Finder.GH(c),
-		"origin": j.Jobs.HasOrigin(c, x), "notes": notes})
+		"origin": j.Jobs.HasOrigin(c, x), "notes": notes, "saying": j.Jobs.Saying(x.ID),
+		"checking": j.Jobs.Checking(x.ID)})
 	return nil
 }
 

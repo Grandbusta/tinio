@@ -73,6 +73,7 @@ func (s *fakeSession) Events() <-chan coding.Event { return s.events }
 func (s *fakeSession) Send(string) error           { return nil }
 func (s *fakeSession) Interrupt() error            { return nil }
 func (s *fakeSession) Close() error                { return nil }
+func (s *fakeSession) Alive() bool                 { return false } // each round its own script
 func (s *fakeSession) Choose(_ string, answers map[string]string) error {
 	s.f.mu.Lock()
 	s.f.answers = append(s.f.answers, "chose "+answers["Which word for the status?"])
@@ -239,6 +240,24 @@ func TestACodingJob(t *testing.T) {
 		}
 	}
 	waitFor(t, "it to finish again", func() bool { g, _ := ta.jobs.Get(ctx, zara, j.ID); return g.Status == jobs.Ready && g.CostUSD > 0.24 })
+
+	// Ended with no session left to resume, it still carries on: Claude Code starts
+	// afresh in the copy, told the brief and where it got to.
+	if _, err := ta.db.Exec(ctx, `UPDATE coding_jobs SET session = '' WHERE id = $1`, j.ID); err != nil {
+		t.Fatal(err)
+	}
+	if rec, out := ta.do(t, "POST", "/v1/agents/"+zara+"/jobs/"+j.ID+"/back", map[string]any{"note": "Now add a test for 20% off.", "plain": true}, ada, site); rec.Code != http.StatusOK {
+		t.Fatalf("carrying on with no session: %d %v", rec.Code, out)
+	}
+	waitFor(t, "it to carry on afresh", func() bool { fake.mu.Lock(); defer fake.mu.Unlock(); return len(fake.started) == 4 })
+	fake.mu.Lock()
+	fresh := fake.started[3]
+	fake.mu.Unlock()
+	if fresh.Resume != "" || !strings.Contains(fresh.Brief, "carrying on a coding job") || !strings.Contains(fresh.Brief, "Round once, on the total.") ||
+		!strings.HasSuffix(fresh.Brief, "Now add a test for 20% off.") {
+		t.Errorf("carried on afresh with %+v", fresh)
+	}
+	waitFor(t, "it to finish a third time", func() bool { g, _ := ta.jobs.Get(ctx, zara, j.ID); return g.Status == jobs.Ready && g.CostUSD > 0.29 })
 }
 
 // After a job: its page shows what it did and its changes, by round; going
@@ -409,7 +428,7 @@ func TestTheAgentChecksTheWork(t *testing.T) {
 	}()
 	for end := time.Now().Add(60 * time.Second); ; time.Sleep(50 * time.Millisecond) {
 		g, _ := ta.jobs.Get(ctx, zara, j.ID)
-		if g.Status == jobs.Ready && g.Rounds == 2 {
+		if g.Status == jobs.Ready && g.Rounds == 2 && !ta.jobs.Checking(j.ID) { // ready at once, then checked
 			break
 		}
 		if time.Now().After(end) {

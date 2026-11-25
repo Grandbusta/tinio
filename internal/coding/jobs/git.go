@@ -135,6 +135,9 @@ func (s *Service) GoBack(ctx context.Context, agent, id string) (Job, error) {
 	if j.Rounds == 0 || j.CommitSHA != "" {
 		return Job{}, errors.New("there's no round to go back from")
 	}
+	if p := s.unpark(j.ID, ""); p != nil {
+		p.close() // what it remembers is of the round undone
+	}
 	last := roundRef(j.ID, j.Rounds)
 	back := j.BaseSHA
 	if j.Rounds > 1 {
@@ -171,8 +174,11 @@ func (s *Service) GoBack(ctx context.Context, agent, id string) (Job, error) {
 // Commit commits j's copy on its branch, as the owner, with message: on their
 // yes. Only on this computer: pushing is another yes.
 func (s *Service) Commit(ctx context.Context, agent, id, message string) (Job, error) {
-	if _, ok := s.running(agent, id); ok {
-		return Job{}, errors.New("the job is still working: let it finish first")
+	if r, ok := s.running(agent, id); ok {
+		if !r.isChecking() {
+			return Job{}, errors.New("the job is still working: let it finish first")
+		}
+		r.endCheck() // ready, and only being checked: the owner's yes needn't wait for it
 	}
 	j, err := s.Get(ctx, agent, id)
 	if err != nil {

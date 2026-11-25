@@ -42,6 +42,8 @@ type run struct {
 	// and carries on once with instead, if they said what to do.
 	refused bool
 	instead string
+	saying  string     // what it's writing now, so far; "" between its words
+	quiet   bool       // the owner acted while it was checked (committed): the check ends without a word
 	showing sync.Mutex // one card update at a time, each of the latest state
 }
 
@@ -92,7 +94,9 @@ func (r *run) knownNote() string {
 	return "\n\n" + notesNote("What earlier jobs in this repository taught (follow these unless this job says otherwise):", notes)
 }
 
-func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {
+// drive runs a round: in kept, the job's CLI left open after the last round, or
+// a new one.
+func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job, kept *parked) {
 	limit := time.Duration(set.Minutes) * time.Minute
 	if limit <= 0 {
 		limit = 30 * time.Minute
@@ -129,24 +133,59 @@ func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {
 
 	// Where the round starts in its story, with what started it.
 	r.s.step(context.Background(), r.job.ID, WhoTinio, RoundStarted, cj.Brief)
-	sess, err := ad.Start(ctx, cj)
-	if err != nil {
-		r.end(Failed, "Claude Code didn't start: "+err.Error(), coding.Event{})
-		return
+	// The CLI lives past the round (parked for the next), so it has its own context;
+	// the round's ending early (its time up, or stopped) ends it.
+	var sess coding.Session
+	var stopCLI context.CancelFunc
+	started := false
+	if kept != nil {
+		if err := kept.sess.Send(cj.Brief); err == nil {
+			sess, stopCLI, started = kept.sess, kept.cancel, true
+		} else {
+			kept.close()
+		}
 	}
+	if sess == nil {
+		cliCtx, cancelCLI := context.WithCancel(r.s.ctx)
+		s, err := ad.Start(cliCtx, cj)
+		if err != nil {
+			cancelCLI()
+			r.end(Failed, "Claude Code didn't start: "+err.Error(), coding.Event{})
+			return
+		}
+		sess, stopCLI = s, cancelCLI
+	}
+	roundDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done(): // out of time, or stopped
+			stopCLI()
+		case <-roundDone:
+		}
+	}()
 	r.mu.Lock()
 	r.session = sess
 	r.mu.Unlock()
 	ended := false
+again:
 	for e := range sess.Events() {
 		switch e.Kind {
 		case coding.Started:
+			started = true
 			r.mu.Lock()
 			r.job.Session = e.SessionID
 			j := r.job
 			r.mu.Unlock()
 			r.s.save(context.Background(), j)
+		case coding.Saying:
+			r.mu.Lock()
+			r.saying = r.inCopy(e.Text)
+			r.mu.Unlock()
+			r.now(firstLine(e.Text), false)
 		case coding.Said:
+			r.mu.Lock()
+			r.saying = ""
+			r.mu.Unlock()
 			r.now(firstLine(e.Text), false)
 			r.s.step(context.Background(), r.job.ID, WhoCLI, Said, r.inCopy(e.Text))
 		case coding.Step:
@@ -175,13 +214,45 @@ func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {
 		case coding.Ask:
 			r.ask(e)
 		case coding.Done:
+			if e.Status == coding.Failed && !started && cj.Resume != "" {
+				// Claude Code no longer has the session to resume: it starts afresh in the
+				// copy, told where the job stands.
+				go sess.Close()
+				stopCLI()
+				cj.Resume = ""
+				cj.Brief = r.s.freshBrief(context.Background(), r.snapshot(), cj.Brief)
+				cliCtx, cancelCLI := context.WithCancel(r.s.ctx)
+				stopCLI = cancelCLI
+				if fresh, err := ad.Start(cliCtx, cj); err == nil {
+					r.s.Log.Info("jobs: the session was gone; started afresh", "job", r.job.ID)
+					sess = fresh
+					r.mu.Lock()
+					r.session = fresh
+					r.mu.Unlock()
+					goto again
+				}
+			}
 			ended = true
+			close(roundDone)
+			r.mu.Lock()
+			r.saying = ""
+			r.mu.Unlock()
 			status := map[string]string{coding.Completed: Ready, coding.Stopped: Stopped, coding.Failed: Failed}[e.Status]
-			go sess.Close()
 			r.mu.Lock()
 			refused, instead := r.refused, r.instead
 			r.refused, r.instead = false, ""
 			r.mu.Unlock()
+			// Finished (or stopped where the owner said no), it stays open for the next
+			// round; out of steps, or failed, it's done with.
+			if (e.Status == coding.Completed || refused) && !r.cancelled() && sess.Alive() {
+				r.s.park(r.job.ID, sess, cj.Model, stopCLI)
+			} else {
+				s := sess
+				go func() {
+					s.Close()
+					stopCLI()
+				}()
+			}
 			text := e.Text
 			if refused { // it stopped where the owner said no: nothing finished to check
 				status = Stopped
@@ -200,6 +271,7 @@ func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {
 				j := r.snapshot()
 				go r.s.Reply(context.Background(), j.Agent, j.ID, instead) // one round, with what to do instead
 			}
+			break again // the CLI stays open, parked: the round is over
 		}
 	}
 	if !ended {
