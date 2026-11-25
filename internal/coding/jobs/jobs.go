@@ -481,9 +481,15 @@ func (s *Service) Choose(ctx context.Context, agent, job, ask string, answers ma
 // Reply sends the owner's words to the job: to it as it works, or, when it
 // has finished or stopped, carrying it on with them.
 func (s *Service) Reply(ctx context.Context, agent, job, text string) error {
+	return s.sendMore(ctx, agent, job, text, WhoOwner)
+}
+
+// sendMore is Reply, with who sent it: the owner, or the agent carrying the job
+// on with the owner's yes.
+func (s *Service) sendMore(ctx context.Context, agent, job, text, who string) error {
 	if r, ok := s.running(agent, job); ok {
 		if r.hear(text) {
-			s.step(ctx, job, WhoOwner, "Sent more", text)
+			s.step(ctx, job, who, "Sent more", text)
 			return nil
 		}
 		if st := r.snapshot().Status; st == Working || st == Waiting {
@@ -502,7 +508,7 @@ func (s *Service) Reply(ctx context.Context, agent, job, text string) error {
 	}
 	// Ended any way (finished, stopped, stopped by you, failed): it carries on. With no
 	// session to resume, Claude Code starts afresh in the copy, told where it stands.
-	s.step(ctx, j.ID, WhoOwner, "Sent more", text)
+	s.step(ctx, j.ID, who, "Sent more", text)
 	if j.Session == "" {
 		text = s.freshBrief(ctx, j, text)
 	}

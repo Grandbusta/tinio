@@ -87,7 +87,9 @@ func (m *Mind) actionsHelp(owner string) string {
 	fmt.Fprintf(&b, "\n- Use one only when %[1]s asks for it, or it plainly serves what you're doing for them: put it in `act`, with "+
 		"its name as tool, its arguments as a JSON object in args, and why in a few words. It runs a minute or so later, once "+
 		"it's allowed (most need %[1]s's OK in the chat first), so never say it's done: say you'll do it, and that you'll let "+
-		"them know when it is.", owner)
+		"them know when it is.\n- Never say something will happen once %[1]s says yes, or that it's under way, unless it's in `act` in this "+
+		"same answer: their yes is to what you put there, and nothing else happens. If none of your tools can do it, say so plainly. "+
+		"When they say yes to several things, put each in `act`.", owner)
 	return b.String()
 }
 

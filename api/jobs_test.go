@@ -258,6 +258,35 @@ func TestACodingJob(t *testing.T) {
 		t.Errorf("carried on afresh with %+v", fresh)
 	}
 	waitFor(t, "it to finish a third time", func() bool { g, _ := ta.jobs.Get(ctx, zara, j.ID); return g.Status == jobs.Ready && g.CostUSD > 0.29 })
+
+	// The agent carries the job on, with the owner's yes: by its title, in its copy.
+	carry := ta.jobs.CarryOnTool(zara, []jobs.Folder{{ID: "f1", Name: "shop-site", Path: repo}})
+	if d := carry.Describe(); !strings.Contains(d, j.ID+": Fix the basket rounding (") || !strings.Contains(d, "ready for the owner") {
+		t.Errorf("the carry-on tool doesn't list the job: %s", d)
+	}
+	args := `{"job": "Fix the basket rounding", "what": "Also add a requirements-gathering skill."}`
+	if err := carry.Check(args); err != nil {
+		t.Fatal(err)
+	}
+	if title, _, quote := carry.(interface{ Explain(string) (string, string, string) }).Explain(args); title != "Carry on the coding job Fix the basket rounding?" || quote != "Also add a requirements-gathering skill." {
+		t.Errorf("the owner's card: %q %q", title, quote)
+	}
+	if _, err := carry.Do(ctx, args, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "it to be carried on", func() bool { fake.mu.Lock(); defer fake.mu.Unlock(); return len(fake.started) == 5 })
+	steps, _ = ta.jobs.Steps(ctx, j.ID)
+	sent := false
+	for _, st := range steps {
+		sent = sent || (st.Who == jobs.WhoAgent && st.What == "Sent more" && st.Detail == "Also add a requirements-gathering skill.")
+	}
+	if !sent {
+		t.Errorf("no step for the agent carrying it on: %+v", steps)
+	}
+	if err := carry.Check(`{"job": "Nothing like it", "what": "x"}`); err == nil {
+		t.Error("carried on a job that isn't theirs")
+	}
+	waitFor(t, "it to finish a fourth time", func() bool { g, _ := ta.jobs.Get(ctx, zara, j.ID); return g.Status == jobs.Ready && !ta.jobs.Checking(j.ID) })
 }
 
 // After a job: its page shows what it did and its changes, by round; going

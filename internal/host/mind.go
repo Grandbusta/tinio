@@ -463,7 +463,7 @@ func (h *Host) mind(ctx context.Context, r *runner) (m *mind.Mind, done func(), 
 				}
 			}
 			if d := h.Jobs.Tool(r.row.id, mine, h.Coder); d != nil {
-				doers = append(doers, d)
+				doers = append(doers, d, h.Jobs.CarryOnTool(r.row.id, mine))
 			}
 		}
 	}
