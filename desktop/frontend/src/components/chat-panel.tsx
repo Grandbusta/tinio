@@ -119,6 +119,8 @@ export function SidePanel(props: {
   show: (topic: string) => void;
   startTopic: () => void;
   jobs: JobRow[];
+  job: string; // the job open in the chat's place; "" when none
+  openJob: (job: string) => void;
 }) {
   const { panel, close } = props;
   useEffect(() => {
@@ -143,7 +145,7 @@ export function SidePanel(props: {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
         {panel === "topics" && <Topics {...props} />}
-        {panel === "jobs" && <Jobs agent={props.agent} jobs={props.jobs} />}
+        {panel === "jobs" && <Jobs agent={props.agent} jobs={props.jobs} open={props.job} openJob={props.openJob} />}
         {panel === "files" && <Files agent={props.agent} />}
       </div>
     </aside>
@@ -218,7 +220,12 @@ const groups: { head: string; has: (j: JobRow) => boolean; pill: string; word: (
   { head: "Stopped", has: (j) => ["stopped", "failed", "cancelled"].includes(j.status) && !j.commit, pill: "bg-surface-2 text-muted", word: (j) => (j.status === "failed" ? "Didn't work" : "Stopped") },
 ];
 
-function Jobs({ agent, jobs }: { agent: string; jobs: JobRow[] }) {
+// jobOrder is the jobs as the panel lists them, group by group: the arrow keys move along it.
+export function jobOrder(jobs: JobRow[]) {
+  return groups.flatMap((g) => jobs.filter(g.has));
+}
+
+function Jobs({ agent, jobs, open, openJob }: { agent: string; jobs: JobRow[]; open: string; openJob: (job: string) => void }) {
   const [folder, setFolder] = useState("");
   const folders = [...new Set(jobs.map((j) => j.folder))];
   const shown = jobs.filter((j) => !folder || j.folder === folder);
@@ -244,7 +251,17 @@ function Jobs({ agent, jobs }: { agent: string; jobs: JobRow[] }) {
           <div key={g.head} className="flex flex-col gap-0.5">
             <span className="px-2.5 pb-1 text-xs font-semibold text-muted">{g.head}</span>
             {in_.map((j) => (
-              <Link key={j.id} href={`/agents/${agent}/jobs/${j.id}`} {...early(`/agents/${agent}/jobs/${j.id}`)} className={row}>
+              <Link
+                key={j.id}
+                href={`/agents/${agent}?job=${j.id}`}
+                aria-current={open === j.id ? "true" : undefined}
+                onClick={(e) => {
+                  e.preventDefault();
+                  openJob(j.id);
+                }}
+                {...early(`/agents/${agent}/jobs/${j.id}`)}
+                className={`${row} aria-[current=true]:bg-line`}
+              >
                 <ServiceLogo service="claude" size={26} />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <b className="text-[13.5px] leading-snug font-semibold">{j.title}</b>

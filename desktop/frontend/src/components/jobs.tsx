@@ -96,7 +96,7 @@ export function JobCard({ row, agent, name }: { row: ChatRow; agent: string; nam
       )}
       <div className="flex flex-wrap items-center gap-2">
         <Link
-          href={`/agents/${agent}/jobs/${p.job}`}
+          href={`/agents/${agent}?job=${p.job}`}
           {...early(`/agents/${agent}/jobs/${p.job}`)}
           className="inline-flex min-h-10 items-center rounded-lg border border-line-strong px-4 text-[13px] font-semibold text-fg no-underline hover:border-fg"
         >

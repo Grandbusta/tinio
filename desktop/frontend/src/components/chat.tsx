@@ -9,7 +9,9 @@ import { MessageText } from "@/components/message-text";
 import { WorkPreview } from "@/components/work-preview";
 import { NoKey } from "@/components/first-run";
 import { JobAskCard, JobCard } from "@/components/jobs";
-import { PanelIcons, SidePanel, useJobs, usePanel } from "@/components/chat-panel";
+import { JobPage } from "@/components/job-page";
+import { useRouter, useSearchParams } from "next/navigation";
+import { jobOrder, PanelIcons, SidePanel, useJobs, usePanel } from "@/components/chat-panel";
 import { ComposerFolders } from "@/components/folders";
 import { resets, UsageBanner } from "@/components/usage";
 import { call, type ChatRow, type Topic } from "@/lib/api";
@@ -72,6 +74,12 @@ export function Chat({ id }: { id: string }) {
   const [menu, setMenu] = useState(""); // the row whose menu is open
   const [searching, setSearching] = useState(false);
   const [panel, setPanel] = usePanel();
+  // A job opens in the chat's place (?job=), with the chat kept as it was underneath.
+  const job = useSearchParams().get("job") ?? "";
+  const router = useRouter();
+  const chatAt = useRef(0); // where the chat was scrolled to, kept while a job is open
+  const jobOpen = useRef(false);
+  jobOpen.current = !!job;
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<ChatRow[] | null>(null); // what a search found, newest first
   const [hit, setHit] = useState(0); // the one shown
@@ -105,7 +113,8 @@ export function Chat({ id }: { id: string }) {
   function show(topic: string) {
     setInTopic(topic);
     setMenu("");
-    window.history.replaceState(null, "", topic ? `?topic=${topic}` : window.location.pathname);
+    // Through the router, so a job open in the chat's place closes too.
+    router.replace(topic ? `${window.location.pathname}?topic=${topic}` : window.location.pathname);
   }
   useEffect(() => {
     if (account) loadTopics();
@@ -223,14 +232,34 @@ export function Chat({ id }: { id: string }) {
   useEffect(() => {
     const page = end.current?.closest("main");
     if (!page) return;
-    const track = () => (atEnd.current = page.scrollHeight - page.scrollTop - page.clientHeight < 160);
+    const track = () => {
+      if (jobOpen.current) return; // it's the job scrolling, not the chat
+      atEnd.current = page.scrollHeight - page.scrollTop - page.clientHeight < 160;
+      chatAt.current = page.scrollTop;
+    };
     page.addEventListener("scroll", track, { passive: true });
     return () => page.removeEventListener("scroll", track);
   }, [ready]);
   useEffect(() => {
     const page = end.current?.closest("main");
-    if (page && atEnd.current) page.scrollTop = page.scrollHeight;
+    if (page && atEnd.current && !jobOpen.current) page.scrollTop = page.scrollHeight;
   }, [visible.length, thinking, draft]);
+  // Opening a job starts it at its top, with the jobs beside it on a wide window (on a
+  // narrow one the panel would cover it, so it closes); closing it puts the chat back
+  // where it was.
+  const hadJob = useRef(false);
+  useEffect(() => {
+    const page = end.current?.closest("main");
+    if (job) {
+      if (window.matchMedia("(max-width: 1100px)").matches) setPanel("");
+      else if (panel !== "jobs") setPanel("jobs");
+      page?.scrollTo({ top: 0 });
+    } else if (hadJob.current && page) {
+      page.scrollTop = atEnd.current ? page.scrollHeight : chatAt.current;
+    }
+    hadJob.current = !!job;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job]);
 
   // What's on screen is read: marked when it arrives while you're looking, or when you
   // come back to the tab.
@@ -383,7 +412,33 @@ export function Chat({ id }: { id: string }) {
     );
   }
 
+  useEffect(() => {
+    if (!job) return;
+    const key = (e: KeyboardEvent) => {
+      const t = e.target;
+      if ((t instanceof Element && t.closest("input, textarea, select, [contenteditable]")) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "Escape") return closeJob();
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const order = jobOrder(jobs);
+      const at = order.findIndex((x) => x.id === job);
+      const next = order[at + (e.key === "ArrowDown" ? 1 : -1)];
+      if (!next) return;
+      e.preventDefault();
+      openJob(next.id);
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  });
   const name = agent?.name ?? "";
+  // where is the chat's address with the job (or none) in it, keeping the topic.
+  const where = (j: string) => {
+    const q = new URLSearchParams();
+    if (inTopic) q.set("topic", inTopic);
+    if (j) q.set("job", j);
+    return q.size ? `/agents/${id}?${q}` : `/agents/${id}`;
+  };
+  const openJob = (j: string) => router.push(where(j));
+  const closeJob = () => router.push(where(""));
   const startTopic = () => {
     setStarting(true);
     setReplyTo(null);
@@ -393,6 +448,8 @@ export function Chat({ id }: { id: string }) {
   return (
     <div className="flex min-h-full">
       <div className="flex min-w-0 flex-1 flex-col">
+      {job && <JobPage key={job} agent={id} job={job} back={closeJob} />}
+      <div className={job ? "hidden" : "contents"}>
       <header className="sticky top-0 z-10 flex flex-col border-b border-line bg-bg">
         <div className="flex items-center gap-1 px-4 py-2 max-[900px]:px-2 max-[900px]:py-1.5">
           <Link href="/agents" aria-label="Back to chats" className="grid size-11 flex-none place-items-center rounded-full text-muted hover:text-fg min-[901px]:hidden">
@@ -654,6 +711,7 @@ export function Chat({ id }: { id: string }) {
       </form>
       {error && <p role="alert" className="mx-auto w-full max-w-[960px] px-10 pb-4 text-sm text-bad-text max-[900px]:px-3">{error}</p>}
       </div>
+      </div>
       <SidePanel
         agent={id}
         name={name}
@@ -664,6 +722,8 @@ export function Chat({ id }: { id: string }) {
         show={show}
         startTopic={startTopic}
         jobs={jobs}
+        job={job}
+        openJob={openJob}
       />
     </div>
   );

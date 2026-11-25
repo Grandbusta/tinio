@@ -10,6 +10,7 @@ type WailsRuntime = {
   EventsOn: (name: string, cb: (data: unknown) => void) => () => void;
   EventsEmit: (name: string, data?: unknown) => void;
   BrowserOpenURL: (url: string) => void;
+  WindowIsFullscreen: () => Promise<boolean>;
 };
 // Wails puts its runtime only into a page at an address ending in "/", so a page loaded
 // at any other (reloading a chat) loads it itself. In a plain browser there's none.
@@ -108,6 +109,20 @@ function inTheWindow(wails: WailsRuntime) {
   window.addEventListener("blur", looking);
   document.addEventListener("visibilitychange", looking);
   looking();
+
+  // Full screen or not, read again whenever the window changes size (going full screen
+  // does): see globals.css.
+  let sizing: ReturnType<typeof setTimeout> | undefined;
+  const fullscreen = () =>
+    wails
+      .WindowIsFullscreen()
+      .then((on) => document.documentElement.toggleAttribute("data-fullscreen", on))
+      .catch(() => {});
+  window.addEventListener("resize", () => {
+    clearTimeout(sizing);
+    sizing = setTimeout(fullscreen, 150);
+  });
+  fullscreen();
 
   // A notification clicked: that agent's chat.
   wails.EventsOn("open", (agent) => {

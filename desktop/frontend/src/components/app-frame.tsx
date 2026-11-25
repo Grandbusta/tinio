@@ -2,7 +2,7 @@
 
 import { Mark, Portrait, portraits, type Character as Who } from "@tinio/brand";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { flushSync } from "react-dom";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTheme } from "@/components/theme";
@@ -76,6 +76,7 @@ function where(path: string): { open?: string; page: Page } {
 // area changes, easing in.
 export function AppFrame({ children }: { children: ReactNode }) {
   const path = usePathname();
+  const jobOpen = useSearchParams().has("job"); // a coding job open in the chat's place
   const { open, page } = where(path);
   const router = useRouter();
   const account = useAccount();
@@ -129,8 +130,8 @@ export function AppFrame({ children }: { children: ReactNode }) {
     m.addEventListener("change", on);
     return () => m.removeEventListener("change", on);
   }, []);
-  useEffect(() => setFoldNow(null), [path]);
-  const onOne = page === "jobs" || (page === "works" && path.split("/").length > 4);
+  useEffect(() => setFoldNow(null), [path, jobOpen]);
+  const onOne = page === "jobs" || jobOpen || (page === "works" && path.split("/").length > 4);
   const auto = narrow || onOne;
   const folded = foldNow ?? (chosenFold || auto);
   const toggleFold = useCallback(() => {
@@ -209,7 +210,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
           ref={pageArea}
           className={`flex min-w-0 flex-1 flex-col overflow-y-auto [view-transition-name:page] ${page === "chat" ? "bg-chat" : ""} ${showsAbout ? "hidden" : ""}`}
         >
-          <div key={path} className="page-in flex min-w-0 flex-1 flex-col">
+          <div key={path} className="flex min-w-0 flex-1 flex-col">
             {children}
           </div>
         </main>

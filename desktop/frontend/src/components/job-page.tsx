@@ -69,7 +69,8 @@ function lines(patch: string) {
 // again.
 const seen = new Map<string, Page>();
 
-export function JobPage({ agent, job }: { agent: string; job: string }) {
+// back, when it's open in the chat's place, puts the chat back.
+export function JobPage({ agent, job, back }: { agent: string; job: string; back?: () => void }) {
   const { agent: a } = useFrame();
   const [page, setPage] = useState<Page | null>(() => seen.get(`${agent}/${job}`) ?? null);
   const [round, setRound] = useState(0); // 0: all of it
@@ -129,7 +130,15 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
   return (
     <div className="flex min-h-full flex-col">
       <div className="flex flex-col gap-2.5 border-b border-line px-8 pt-8 pb-4 max-[900px]:px-4">
-        <Link href={`/agents/${agent}`} className="-ml-2 inline-flex min-h-11 items-center gap-1 self-start px-2 text-sm font-semibold text-accent-text">
+        <Link
+          href={`/agents/${agent}`}
+          onClick={(e) => {
+            if (!back) return;
+            e.preventDefault();
+            back();
+          }}
+          className="-ml-2 inline-flex min-h-11 items-center gap-1 self-start px-2 text-sm font-semibold text-accent-text"
+        >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M15 6l-6 6 6 6" />
           </svg>

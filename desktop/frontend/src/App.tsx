@@ -6,7 +6,6 @@ import { AppFrame } from "@/components/app-frame";
 import { CharacterPage } from "@/components/character";
 import { Chat } from "@/components/chat";
 import { AgentToolsPage, ConnectionsPage, ConnectPage } from "@/components/connections";
-import { JobPage } from "@/components/job-page";
 import { FirstRun, keySkipped, ready, skipKeyForNow, useSources } from "@/components/first-run";
 import { AddFolderPage } from "@/components/folders";
 import { GrowthPage } from "@/components/growth";
@@ -115,13 +114,10 @@ function PageFor({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+// A job's own address opens it in its chat's place (a morning's link, say).
 function JobRoute() {
   const { id = "", job = "" } = useParams();
-  return (
-    <Titled title="Coding job">
-      <JobPage key={`${id}/${job}`} agent={id} job={job} />
-    </Titled>
-  );
+  return <Navigate to={`/agents/${id}?job=${job}`} replace />;
 }
 
 function Work() {

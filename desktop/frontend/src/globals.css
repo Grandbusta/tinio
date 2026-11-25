@@ -20,6 +20,18 @@ body {
   font-family: var(--font-sans);
 }
 
+/* In macOS full screen the window's hidden title bar still lies along its top, unseen,
+   and takes the clicks there: the app starts below it (main.tsx says when). */
+html[data-fullscreen] body {
+  padding-top: 28px;
+}
+html[data-fullscreen] .h-dvh {
+  height: calc(100dvh - 28px);
+}
+html[data-fullscreen] .min-h-dvh {
+  min-height: calc(100dvh - 28px);
+}
+
 /* Opening or closing About, and arriving from a page outside the frame: the page area
    eases in, the rail and the list stay still. */
 @view-transition {
@@ -48,7 +60,8 @@ body {
   }
 }
 
-/* A page shown in the frame eases in, as About does. */
+/* About eases in over the page. A page itself shows at once, as in a coding app: fading it
+   in from nothing reads as waiting. */
 .page-in {
   animation: page-in 220ms ease-out both;
 }
