@@ -568,7 +568,7 @@ export function status(a: Summary, about: string) {
 
 // early has a link start loading its page's data when it's pointed at, touched or focused:
 // every page under an agent reads from the API path that is its own address.
-function early(href: string) {
+export function early(href: string) {
   const start = () => prefetch(href);
   return { onMouseEnter: start, onFocus: start, onTouchStart: start };
 }

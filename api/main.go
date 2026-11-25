@@ -120,6 +120,7 @@ func Start(ctx context.Context, log *slog.Logger) (*Tinio, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	svc := &jobs.Service{DB: d, Finder: finder, Data: cfg.DataDir, Log: log.With("component", "jobs"),
 		Settings: func(ctx context.Context) (jobs.Settings, error) { return codingSettings(ctx, d) }}
+	go finder.GHNow(ctx) // asked once now, so the first job page isn't kept waiting
 	if err := svc.Start(ctx); err != nil {
 		cancel()
 		d.Close()

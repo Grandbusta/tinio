@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@tinio/ui";
 import { useState } from "react";
+import { early } from "@/components/app-frame";
 import { MessageText } from "@/components/message-text";
 import { ServiceLogo } from "@/components/service-logo";
 import { call, type ChatRow } from "@/lib/api";
@@ -96,6 +97,7 @@ export function JobCard({ row, agent, name }: { row: ChatRow; agent: string; nam
       <div className="flex flex-wrap items-center gap-2">
         <Link
           href={`/agents/${agent}/jobs/${p.job}`}
+          {...early(`/agents/${agent}/jobs/${p.job}`)}
           className="inline-flex min-h-10 items-center rounded-lg border border-line-strong px-4 text-[13px] font-semibold text-fg no-underline hover:border-fg"
         >
           {going ? "Open the job" : "Look at the changes"}

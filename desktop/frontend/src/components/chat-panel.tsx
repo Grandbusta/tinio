@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { early } from "@/components/app-frame";
 import { ServiceLogo } from "@/components/service-logo";
 import { call, type Topic, type Work } from "@/lib/api";
 
@@ -243,7 +244,7 @@ function Jobs({ agent, jobs }: { agent: string; jobs: JobRow[] }) {
           <div key={g.head} className="flex flex-col gap-0.5">
             <span className="px-2.5 pb-1 text-xs font-semibold text-muted">{g.head}</span>
             {in_.map((j) => (
-              <Link key={j.id} href={`/agents/${agent}/jobs/${j.id}`} className={row}>
+              <Link key={j.id} href={`/agents/${agent}/jobs/${j.id}`} {...early(`/agents/${agent}/jobs/${j.id}`)} className={row}>
                 <ServiceLogo service="claude" size={26} />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <b className="text-[13.5px] leading-snug font-semibold">{j.title}</b>

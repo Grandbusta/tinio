@@ -226,7 +226,7 @@ func (s *Service) Push(ctx context.Context, agent, id, body string) (Job, error)
 	case j.Branch == "":
 		return Job{}, errors.New("it worked in the repository itself, on " + j.Base + ": push it yourself")
 	}
-	gh := s.Finder.GH(ctx)
+	gh := s.Finder.GHNow(ctx)
 	if !gh.SignedIn {
 		return Job{}, errors.New("GitHub's gh isn't signed in on this computer: run gh auth login")
 	}

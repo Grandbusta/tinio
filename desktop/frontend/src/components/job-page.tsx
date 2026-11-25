@@ -65,9 +65,13 @@ function lines(patch: string) {
   return out;
 }
 
+// seen is each job page as last read, so going back to one draws it at once while it's read
+// again.
+const seen = new Map<string, Page>();
+
 export function JobPage({ agent, job }: { agent: string; job: string }) {
   const { agent: a } = useFrame();
-  const [page, setPage] = useState<Page | null>(null);
+  const [page, setPage] = useState<Page | null>(() => seen.get(`${agent}/${job}`) ?? null);
   const [round, setRound] = useState(0); // 0: all of it
   const [shut, setShut] = useState<Set<string>>(new Set()); // files folded away
   const [noting, setNoting] = useState<{ file: string; line: number } | null>(null);
@@ -84,6 +88,7 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
   const load = useCallback(() => {
     call<Page>(`/agents/${agent}/jobs/${job}${round ? `?round=${round}` : ""}`).then((res) => {
       if (!res.ok) return setError(res.error.message);
+      if (!round) seen.set(`${agent}/${job}`, res.data);
       setPage(res.data);
     });
   }, [agent, job, round]);
@@ -107,7 +112,8 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
     load();
   }
 
-  if (!page) return <div className="p-10 text-sm text-muted">{error || "Loading"}</div>;
+  // Read as the link was pointed at, it's rarely not here yet: nothing is shown meanwhile.
+  if (!page) return error ? <div role="alert" className="p-10 text-sm text-bad-text">{error}</div> : null;
   const j = page.job;
   const name = a?.name ?? "Your agent";
   const who = (s: Step) => ({ agent: name, cli: "Claude Code", owner: "You", tinio: "Tinio" })[s.who];

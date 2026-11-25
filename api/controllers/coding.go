@@ -75,6 +75,6 @@ func (cd *Coding) answer(c *gin.Context) error {
 		return err
 	}
 	claude, _ := cd.Finder.Get(c, clis.Claude)
-	utils.SuccessWithData(c, http.StatusOK, codingView{Settings: s, Claude: claude, GitHub: cd.Finder.GH(c)})
+	utils.SuccessWithData(c, http.StatusOK, codingView{Settings: s, Claude: claude, GitHub: cd.Finder.GHNow(c)})
 	return nil
 }

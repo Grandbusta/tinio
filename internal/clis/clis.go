@@ -50,6 +50,11 @@ type Finder struct {
 	mu    sync.Mutex
 	found []CLI
 	at    time.Time
+
+	ghMu     sync.Mutex
+	gh       *GitHub   // as last asked; nil: not yet
+	ghAt     time.Time // when
+	ghAsking bool      // being asked again, in the background
 }
 
 // usualDirs are where the CLIs install themselves, which an app started from
@@ -124,6 +129,9 @@ func (f *Finder) Forget() {
 	f.mu.Lock()
 	f.found = nil
 	f.mu.Unlock()
+	f.ghMu.Lock()
+	f.gh = nil
+	f.ghMu.Unlock()
 }
 
 // Get is the CLI by id, as All found it.
@@ -228,8 +236,40 @@ type GitHub struct {
 // account is the login in `gh auth status`'s "Logged in to github.com account X".
 var account = regexp.MustCompile(`account (\S+)`)
 
-// GH is the `gh` on this computer, asked whether it's signed in to github.com.
+// GH is the `gh` on this computer and whether it's signed in to github.com, as
+// last asked: asking takes a second or so (it asks GitHub), so a page showing it
+// isn't kept waiting. Older than a minute, it's asked again in the background
+// for next time; only the first ask waits.
 func (f *Finder) GH(ctx context.Context) GitHub {
+	f.ghMu.Lock()
+	if f.gh == nil {
+		f.ghMu.Unlock()
+		return f.GHNow(ctx)
+	}
+	g := *f.gh
+	if time.Since(f.ghAt) > time.Minute && !f.ghAsking {
+		f.ghAsking = true
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			f.GHNow(ctx)
+		}()
+	}
+	f.ghMu.Unlock()
+	return g
+}
+
+// GHNow is GH asked now, for what has to be right: a push, or the settings
+// page after signing in.
+func (f *Finder) GHNow(ctx context.Context) GitHub {
+	g := f.askGH(ctx)
+	f.ghMu.Lock()
+	f.gh, f.ghAt, f.ghAsking = &g, time.Now(), false
+	f.ghMu.Unlock()
+	return g
+}
+
+func (f *Finder) askGH(ctx context.Context) GitHub {
 	g := GitHub{Path: f.Path("gh")}
 	if g.Path == "" {
 		return g
