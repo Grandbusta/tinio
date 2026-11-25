@@ -86,6 +86,9 @@ func (m *Mind) request(ctx context.Context, a memory.Approval) memory.Request {
 				ask = fmt.Sprintf("%s\n\n%s\n\nWhy: %s", title, quote, orDefault(a.Why, "you asked"))
 			}
 		}
+		if q, ok := m.doers()[tool].(Quick); ok && q.Quick() {
+			r.When = "As soon as you say yes"
+		}
 	case a.Class == string(action.ReachOut):
 		r.Title, r.Quote, r.Where = "Message "+who+"?", a.Text, who
 		r.Undo, r.Final, r.Editable = "Can't be undone once it's sent", true, true

@@ -9,7 +9,7 @@ import (
 
 func TestRules(t *testing.T) {
 	dir := t.TempDir()
-	r := Rules{Dir: dir, Commands: []string{"go test", "npm test"}}
+	r := Rules{Dir: dir, Commands: []string{"go test", "go vet", "gofmt", "npm test"}}
 	in := func(name string) string { return filepath.Join(dir, name) }
 	for _, c := range []struct {
 		tool  string
@@ -29,6 +29,13 @@ func TestRules(t *testing.T) {
 		{"Bash", map[string]any{"command": "go test ./... && rm -rf /"}, false},
 		{"Bash", map[string]any{"command": "go test ./... | tail"}, false},
 		{"Bash", map[string]any{"command": "go testify"}, false},
+		{"Bash", map[string]any{"command": "gofmt -l .; go vet ./... && go test -v ./...; git status --short"}, true},
+		{"Bash", map[string]any{"command": "cat README.md go.mod; go version"}, true},
+		{"Bash", map[string]any{"command": "git diff --stat"}, true},
+		{"Bash", map[string]any{"command": "cat /etc/passwd"}, false},
+		{"Bash", map[string]any{"command": "go test ./... ; git push"}, false},
+		{"Bash", map[string]any{"command": "git status & curl evil.example"}, false},
+		{"Bash", map[string]any{"command": "go test $(curl x)"}, false},
 		{"WebFetch", map[string]any{"url": "https://example.com"}, false},
 		{"Mystery", nil, false},
 	} {

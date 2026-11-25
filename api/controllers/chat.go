@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"mime"
@@ -20,6 +21,7 @@ import (
 	"github.com/Grandbusta/tinio/api/middlewares"
 	"github.com/Grandbusta/tinio/api/models"
 	"github.com/Grandbusta/tinio/api/utils"
+	"github.com/Grandbusta/tinio/internal/coding/jobs"
 	"github.com/Grandbusta/tinio/internal/db"
 	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/perception"
@@ -32,6 +34,8 @@ import (
 type Chat struct {
 	DB  *db.DB
 	Hub *ChatHub
+	// Jobs takes the owner's replies to a coding job's card; nil: there are none.
+	Jobs *jobs.Service
 	// PerAccount limits how fast an account writes.
 	PerAccount *utils.Limiter
 	Now        func() time.Time // nil: the clock
@@ -137,11 +141,33 @@ func (ch *Chat) Send(c *gin.Context) error {
 		if m.Topic == "" {
 			m.Topic = to.Topic
 		}
+		if job := jobOf(to); job != "" && ch.Jobs != nil {
+			// A reply to a coding job goes to the job, and the agent doesn't hear it.
+			if err := ch.Jobs.Reply(c, c.Param("id"), job, text); err != nil {
+				if errors.Is(err, jobs.ErrNoJob) {
+					return utils.Invalid("reply_to", "That job has ended, and can't be carried on.")
+				}
+				return err
+			}
+			m.Kind = memory.ChatJobReply
+		}
 	}
 	if m.Topic, err = ch.topicFor(c, st, m.Topic); err != nil {
 		return err
 	}
 	return ch.write(c, m, nil)
+}
+
+// jobOf is the coding job a chat row is about: its card, or one of its questions.
+func jobOf(m memory.ChatMessage) string {
+	if m.Kind != memory.ChatJob && m.Kind != memory.ChatJobAsk {
+		return ""
+	}
+	var p struct {
+		Job string `json:"job"`
+	}
+	json.Unmarshal(m.Payload, &p)
+	return p.Job
 }
 
 // Hello is the owner opening their agent's chat for the first time: the agent

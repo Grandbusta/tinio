@@ -576,7 +576,7 @@ type AgentSkill struct {
 type ChatMessage struct {
 	ID     string
 	Author string // ChatOwner or ChatAgent
-	Kind   string // ChatMessageKind ("" is one), ChatAsk, ChatChoice, ChatFile, ChatApprove, ChatPick, ChatHello or ChatReact
+	Kind   string // ChatMessageKind ("" is one), ChatAsk, ChatChoice, ChatFile, ChatApprove, ChatPick, ChatHello, ChatReact, ChatJob, ChatJobAsk or ChatJobReply
 	Text   string
 	// Payload says which request, call or file: for ChatApprove a
 	// perception.Answer, for ChatPick a perception.Pick. nil for a message.
@@ -594,13 +594,16 @@ const (
 	ChatSource = "web"
 
 	ChatMessageKind = "message"
-	ChatAsk         = "ask"     // the agent asks the owner's permission: Approve or Deny
-	ChatChoice      = "choice"  // the agent asks the owner to pick, for their judgment
-	ChatFile        = "file"    // the agent sends a file: its payload names it
-	ChatApprove     = "approve" // the owner's answer to an ask
-	ChatPick        = "pick"    // the owner's pick on a choice
-	ChatHello       = "hello"   // the owner opened the chat for the first time: never shown
-	ChatReact       = "react"   // the owner's thumb on a work: never shown
+	ChatAsk         = "ask"       // the agent asks the owner's permission: Approve or Deny
+	ChatChoice      = "choice"    // the agent asks the owner to pick, for their judgment
+	ChatFile        = "file"      // the agent sends a file: its payload names it
+	ChatApprove     = "approve"   // the owner's answer to an ask
+	ChatPick        = "pick"      // the owner's pick on a choice
+	ChatHello       = "hello"     // the owner opened the chat for the first time: never shown
+	ChatReact       = "react"     // the owner's thumb on a work: never shown
+	ChatJob         = "job"       // a coding job's card, updated as it goes: its payload is the job
+	ChatJobAsk      = "job_ask"   // a coding job's question to the owner: Allow once, for the job, or not
+	ChatJobReply    = "job_reply" // the owner's reply to a job: it goes to the job, never the agent
 )
 
 // HelloID is the id of an agent's hello row: the same for every agent, so

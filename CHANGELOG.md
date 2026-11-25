@@ -58,13 +58,21 @@ mornings and light mode, Opus 5.5 for works. Settings shows where they can think
 Code, and OpenCode and Codex when found) and lets each job pick a model from Claude Code or
 your key; what Claude Code says a call would cost counts toward the week's cap.
 
-**Coding jobs, the groundwork:** Settings has Coding jobs: who writes the code (Opus 5.5
-to start), working on a copy, the agent checking the work, how long a job may run, and
-GitHub through your own `gh`. Underneath, `internal/coding` runs a job with Claude Code and
-answers what it asks: on its own it reads, changes files in the copy and runs the
-repository's own test, lint and build commands; anything else is for you. A job follows
-the repository's CLAUDE.md and `.claude` settings, never your own Claude Code setup.
-Agents start jobs from the chat in the next step.
+**Coding jobs:** an agent with a folder they may make files in that's a git repository
+(Kenji, say) can hand a coding job to Claude Code. They read the code first and propose a
+job with its brief; on your yes it starts at once, on a copy of the repository on its own
+branch (your checkout is never touched), in the project's own topic. One card in the chat
+shows it as it goes: what it's doing, the files it changed, and how it ended, with Claude
+Code's summary. On its own a job reads, changes files in its copy, and runs the
+repository's own test, lint and build commands and read-only looks (git status, cat);
+anything else comes to you as a card: Allow once, Allow for this job (the same isn't asked
+again), or Not this, with what it should do instead, which it reads. Reply to a job's card
+to tell it something, or to carry it on once it's done: the agent doesn't hear it. A strip
+at the top of the chat shows the jobs going on. A job follows the repository's CLAUDE.md
+and .claude settings, never your own Claude Code setup; jobs running when Tinio closes are
+stopped, and a reply carries them on. Settings has Coding jobs: who writes the code (Opus
+5.5 to start), on a copy or not, how long a job runs, and GitHub through your own gh.
+Approved tools that only start something (a job) run as soon as you say yes.
 
 **Folders on your computer:** add a folder in Settings, or with the + beside the message
 box, and choose which agents may use it, Read or Read and make files. They list, search

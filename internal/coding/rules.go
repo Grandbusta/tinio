@@ -23,8 +23,42 @@ var reading = []string{"Read", "Glob", "Grep", "LS", "NotebookRead", "TodoWrite"
 // changing is the tools that change files, and where they say which.
 var changing = map[string]string{"Edit": "file_path", "Write": "file_path", "MultiEdit": "file_path", "NotebookEdit": "notebook_path"}
 
-// chained is a command that runs more than one, or runs another inside it.
-var chained = regexp.MustCompile("&&|\\|\\||;|\\||`|\\$\\(|>|<|\n")
+// sequence splits a chain into its commands: run one after another, or on
+// the last one's success or failure.
+var sequence = regexp.MustCompile(`&&|\|\||;|\n`)
+
+// chained is a command that pipes, redirects, or runs another inside it.
+var chained = regexp.MustCompile("\\||`|\\$\\(|>|<|&")
+
+// readOnly are commands any job may run: they only look.
+var readOnly = []string{"git status", "git diff", "git log", "git show", "ls", "pwd", "cat", "head", "tail", "wc", "go version", "node --version"}
+
+// runs is whether a single command is one the job runs on its own.
+func (r Rules) runs(c string) bool {
+	for _, allowed := range append(append([]string{}, r.Commands...), readOnly...) {
+		if c == allowed || strings.HasPrefix(c, allowed+" ") {
+			if strings.HasPrefix(allowed, "cat") || strings.HasPrefix(allowed, "head") || strings.HasPrefix(allowed, "tail") || strings.HasPrefix(allowed, "wc") || strings.HasPrefix(allowed, "ls") {
+				return r.argsInside(c)
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// argsInside is whether every path c names is inside the copy: cat, head,
+// tail, wc and ls only look at what they're given.
+func (r Rules) argsInside(c string) bool {
+	for _, f := range strings.Fields(c)[1:] {
+		if strings.HasPrefix(f, "-") {
+			continue
+		}
+		if !r.inside(f) {
+			return false
+		}
+	}
+	return true
+}
 
 // Allows is whether the rules let a job use tool with input on its own, and
 // why, in a few words, for the job's record or the owner's card.
@@ -43,16 +77,28 @@ func (r Rules) Allows(tool string, input map[string]any) (bool, string) {
 		return true, "a change inside the copy"
 	case tool == "Bash":
 		c, _ := input["command"].(string)
-		c = strings.TrimSpace(strings.ReplaceAll(c, "2>&1", "")) // its errors with its output: still one command
-		if chained.MatchString(c) {
-			return false, "it runs more than one command"
-		}
-		for _, allowed := range r.Commands {
-			if c == allowed || strings.HasPrefix(c, allowed+" ") {
-				return true, "one of the repository's own commands"
+		c = strings.ReplaceAll(c, "2>&1", "") // its errors with its output: still one command
+		// A chain of commands is allowed when each one is: "gofmt -l .; go test ./...".
+		parts := sequence.Split(c, -1)
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			if chained.MatchString(part) {
+				return false, "it pipes, redirects or runs a command inside another"
+			}
+			if !r.runs(part) {
+				if len(parts) > 1 {
+					return false, "one of its commands isn't one the job runs on its own"
+				}
+				return false, "a command the job doesn't run on its own"
 			}
 		}
-		return false, "a command the job doesn't run on its own"
+		if len(parts) > 1 {
+			return true, "each of its commands is one the job runs on its own"
+		}
+		return true, "one of the repository's own commands"
 	case tool == "WebFetch" || tool == "WebSearch":
 		return false, "it reaches the internet"
 	}

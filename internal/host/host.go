@@ -30,6 +30,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/Grandbusta/tinio/internal/coding/jobs"
 	"github.com/Grandbusta/tinio/internal/connect"
 	"github.com/Grandbusta/tinio/internal/folders"
 	"github.com/Grandbusta/tinio/internal/memory"
@@ -72,8 +73,12 @@ type Host struct {
 	// Folders, if set, gives each agent the folders on this computer the
 	// owner gave them.
 	Folders *folders.Store
-	http    *http.Client
-	every   time.Duration // how often each agent ticks: a minute
+	// Jobs runs coding jobs, and Coder names the model that writes the code
+	// ("" when Claude Code isn't signed in: no agent gets code.start).
+	Jobs  *jobs.Service
+	Coder string
+	http  *http.Client
+	every time.Duration // how often each agent ticks: a minute
 
 	// starting lets so many agents start (load, and seed the first time) at
 	// once; a crowd starting together would crowd out everyone running.

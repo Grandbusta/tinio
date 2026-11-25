@@ -27,6 +27,7 @@ import (
 	"github.com/Grandbusta/tinio/api/models"
 	"github.com/Grandbusta/tinio/api/utils"
 	"github.com/Grandbusta/tinio/internal/character"
+	"github.com/Grandbusta/tinio/internal/coding/jobs"
 	"github.com/Grandbusta/tinio/internal/host"
 	"github.com/Grandbusta/tinio/internal/secret"
 	"github.com/Grandbusta/tinio/internal/store"
@@ -48,6 +49,7 @@ type testAPI struct {
 	connections *controllers.Connections
 	db          *tdb.DB
 	auth        *controllers.Auth
+	jobs        *jobs.Service
 	now         time.Time
 }
 
@@ -75,7 +77,12 @@ func newTestAPI(t *testing.T) *testAPI {
 	ctx, stop := context.WithCancel(context.Background())
 	go hub.Run(ctx)
 	t.Cleanup(stop)
-	chat := &controllers.Chat{DB: db, Hub: hub, PerAccount: utils.NewLimiter(2*time.Second, 30)}
+	ta.jobs = &jobs.Service{DB: db, Finder: finder, Data: t.TempDir(), Log: log,
+		Settings: func(ctx context.Context) (jobs.Settings, error) { return codingSettings(ctx, db) }}
+	if err := ta.jobs.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	chat := &controllers.Chat{DB: db, Hub: hub, PerAccount: utils.NewLimiter(2*time.Second, 30), Jobs: ta.jobs}
 	ta.auth = auth
 	key, _ := secret.ParseKey(secret.NewKey())
 	ta.connections = &controllers.Connections{DB: db, Key: &key, App: site, HTTP: http.DefaultClient, Log: log}

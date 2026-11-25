@@ -31,6 +31,18 @@ type Doer interface {
 	Do(ctx context.Context, args string, at time.Time) (string, error)
 }
 
+// A Quick tool is quick to run (it starts something and returns), so it runs
+// as soon as the owner says yes, not on the next tick.
+type Quick interface {
+	Quick() bool
+}
+
+// A Reporter is a tool that tells the owner itself what came of it (a coding
+// job's card, say), so no "Done" follows it.
+type Reporter interface {
+	Reports() bool
+}
+
 // An Explainer is a tool that says what it would do, in the owner's words, for
 // the card that asks them: a title, where, and the words or change itself.
 type Explainer interface {
@@ -150,6 +162,9 @@ func (m *Mind) approveAction(ctx context.Context, a memory.Approval, now time.Ti
 	case !moved:
 		return "the action was already settled"
 	case status == memory.ActionApproved:
+		if m.runAtOnce(ctx, now) {
+			return "it ran"
+		}
 		return "it runs on the next tick"
 	}
 	return "it won't run"
@@ -158,6 +173,20 @@ func (m *Mind) approveAction(ctx context.Context, a memory.Approval, now time.Ti
 // runActions runs what is approved, oldest first, and tells the owner what
 // came of each. A tool whose class has since been forbidden doesn't run.
 func (m *Mind) runActions(ctx context.Context, now time.Time) {
+	m.runApproved(ctx, now, false)
+}
+
+// runAtOnce runs what's approved whose tools are quick to run (Quick): on the
+// owner's yes, in the reply loop, so they don't wait for the next tick. It's
+// whether any ran.
+func (m *Mind) runAtOnce(ctx context.Context, now time.Time) bool {
+	return m.runApproved(ctx, now, true)
+}
+
+func (m *Mind) runApproved(ctx context.Context, now time.Time, quickOnly bool) (ran bool) {
+	// The tick and an owner's yes can both get here: one runs them at a time.
+	m.acting.Lock()
+	defer m.acting.Unlock()
 	as, err := m.Store.Actions(ctx, []string{memory.ActionApproved}, actionsPerTick)
 	if err != nil || len(as) == 0 {
 		if err != nil {
@@ -167,6 +196,10 @@ func (m *Mind) runActions(ctx context.Context, now time.Time) {
 	}
 	ds := m.doers()
 	for _, a := range as {
+		if q, ok := ds[a.Tool].(Quick); quickOnly && (!ok || !q.Quick()) {
+			continue
+		}
+		ran = true
 		log := m.Log.With("action", a.ID.String(), "tool", a.Tool)
 		status, result := memory.ActionDone, ""
 		start := time.Now()
@@ -182,8 +215,12 @@ func (m *Mind) runActions(ctx context.Context, now time.Time) {
 			continue
 		}
 		log.Info("ran an action", "status", status, "took", time.Since(start).Round(time.Millisecond).String())
+		if q, ok := ds[a.Tool].(Reporter); ok && q.Reports() && status == memory.ActionDone {
+			continue // it tells the owner itself, as it goes
+		}
 		m.tellDone(ctx, a, status, result, start)
 	}
+	return ran
 }
 
 // tellDone tells the owner what came of an action.

@@ -296,6 +296,7 @@ type Mind struct {
 	unfillable   map[ulid.ULID]bool   // works whose data it failed to write; not tried again until a restart
 	dataLeft     bool                 // the last tick filled in an old work's data, so there may be more
 	nextDue      time.Time            // what nextWake said after the last full tick; zero: work it out
+	acting       sync.Mutex           // held while approved actions run
 	sumLater     map[string]time.Time // topics that failed to be summed up, and when to try again
 }
 

@@ -87,7 +87,7 @@ export function CodingSection() {
       </h2>
       <p className="m-0 text-[13px] text-muted">
         An agent hands a coding job to Claude Code in one of their folders that&apos;s a git repository, answers what these rules allow, and brings you the
-        rest. Agents start them from the chat in the next update.
+        rest. Ask them in the chat; they propose the job, with its brief, and it starts on your yes.
       </p>
       {!coding.claude.usable && (
         <p role="status" className="m-0 text-[13px] text-bad-text">

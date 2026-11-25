@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/Grandbusta/tinio/internal/db"
@@ -82,6 +83,22 @@ func (s *Store) Hello(ctx context.Context, at time.Time) (bool, error) {
 }
 
 // Settle ends an ask or a choice, its text now saying how, and tells the app.
+// Update changes a row's text and payload in place: a coding job's card as it
+// goes. The chat is told, and shows it anew.
+func (s *Store) Update(ctx context.Context, id, text string, payload json.RawMessage) error {
+	tx, err := s.begin(ctx)
+	if err != nil {
+		return fmt.Errorf("update chat message: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `UPDATE chat_messages SET text = $3, payload = $4 WHERE agent_id = $1 AND id = $2`,
+		s.agent, id, text, nullJSON(payload)); err != nil {
+		return fmt.Errorf("update chat message: %w", err)
+	}
+	tx.Notify(FromAgent, s.agent+":"+id)
+	return tx.Commit(ctx)
+}
+
 func (s *Store) Settle(ctx context.Context, id, text string, at time.Time) error {
 	tag, err := s.exec(ctx, `UPDATE chat_messages SET text = $3, settled_at = $4 WHERE agent_id = $1 AND id = $2`, id, text, at)
 	if err != nil {
@@ -105,7 +122,8 @@ func (s *Store) Draft(_ context.Context, text string) error {
 
 // unheard is the owner's rows the agent hasn't perceived yet: one is heard
 // once the mind has saved it as a percept. $1 is the agent.
-const unheard = `FROM chat_messages c WHERE c.agent_id = $1 AND c.author = 'owner' AND NOT EXISTS (
+// A reply to a coding job goes to the job, so the agent never hears it.
+const unheard = `FROM chat_messages c WHERE c.agent_id = $1 AND c.author = 'owner' AND c.kind <> '` + memory.ChatJobReply + `' AND NOT EXISTS (
 	SELECT 1 FROM percepts p WHERE p.agent_id = $1 AND p.source = '` + memory.ChatSource + `' AND p.external_id = c.id)`
 
 const chatColumns = `id, author, kind, text, payload, at, settled_at, coalesce(topic_id, '') AS topic_id, coalesce(reply_to, '') AS reply_to`

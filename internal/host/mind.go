@@ -18,6 +18,7 @@ import (
 	"github.com/Grandbusta/tinio/internal/ability/reading"
 	"github.com/Grandbusta/tinio/internal/agent"
 	"github.com/Grandbusta/tinio/internal/channel/web"
+	"github.com/Grandbusta/tinio/internal/coding/jobs"
 	"github.com/Grandbusta/tinio/internal/config"
 	"github.com/Grandbusta/tinio/internal/decision"
 	"github.com/Grandbusta/tinio/internal/decision/questions"
@@ -449,6 +450,18 @@ func (h *Host) mind(ctx context.Context, r *runner) (m *mind.Mind, done func(), 
 		}
 		reads, ds := h.Folders.Tools(given, st, cfg.Tools.CallsPerDay)
 		abilities, doers = append(abilities, reads...), append(doers, ds...)
+		if h.Jobs != nil && h.Coder != "" {
+			// Coding jobs: in the folders they may make files in, with Claude Code there.
+			var mine []jobs.Folder
+			for _, f := range given {
+				if f.Write {
+					mine = append(mine, jobs.Folder{ID: f.ID, Name: f.Name, Path: f.Path})
+				}
+			}
+			if d := h.Jobs.Tool(r.row.id, mine, h.Coder); d != nil {
+				doers = append(doers, d)
+			}
+		}
 	}
 	done = func() {
 		for _, end := range closes {

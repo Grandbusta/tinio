@@ -34,6 +34,7 @@ import (
 	"github.com/Grandbusta/tinio/api/models"
 	"github.com/Grandbusta/tinio/api/utils"
 	"github.com/Grandbusta/tinio/internal/clis"
+	"github.com/Grandbusta/tinio/internal/coding/jobs"
 	internalconfig "github.com/Grandbusta/tinio/internal/config"
 	"github.com/Grandbusta/tinio/internal/connect"
 	"github.com/Grandbusta/tinio/internal/db"
@@ -117,14 +118,21 @@ func Start(ctx context.Context, log *slog.Logger) (*Tinio, error) {
 	}
 	log.Info("Tinio's data", "folder", cfg.DataDir)
 	ctx, cancel := context.WithCancel(ctx)
-	h, err := api(ctx, cfg, d, log)
+	svc := &jobs.Service{DB: d, Finder: finder, Data: cfg.DataDir, Log: log.With("component", "jobs"),
+		Settings: func(ctx context.Context) (jobs.Settings, error) { return codingSettings(ctx, d) }}
+	if err := svc.Start(ctx); err != nil {
+		cancel()
+		d.Close()
+		return nil, err
+	}
+	h, err := api(ctx, cfg, d, log, svc)
 	if err != nil {
 		cancel()
 		d.Close()
 		return nil, err
 	}
 	t := &Tinio{Config: cfg, DB: d, Handler: h, stop: cancel, worked: make(chan error, 1)}
-	go func() { t.worked <- work(ctx, cfg, d, log) }()
+	go func() { t.worked <- work(ctx, cfg, d, log, svc) }()
 	return t, nil
 }
 
@@ -151,10 +159,10 @@ func (t *Tinio) Stop() error {
 // work runs every agent on the owner's OpenAI key (OPENAI_API_KEY, or the one
 // set in the app) and the models chosen for each job. With no key it waits for
 // one, and when the owner changes the key or a model the agents start again.
-func work(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) error {
+func work(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger, svc *jobs.Service) error {
 	for {
 		changed, stop := d.Listen(models.KeysChanged, 1)
-		err := workOnce(ctx, cfg, d, changed, log)
+		err := workOnce(ctx, cfg, d, changed, log, svc)
 		stop()
 		if ctx.Err() != nil || err != nil {
 			return err
@@ -168,7 +176,7 @@ var finder = &clis.Finder{}
 // workOnce runs the agents until ctx is done or the key or models change
 // (nil), or waits for a change if what the jobs think with isn't there: the
 // key for OpenAI's models, Claude Code signed in for its own.
-func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan string, log *slog.Logger) error {
+func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan string, log *slog.Logger, svc *jobs.Service) error {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
 		var err error
@@ -222,6 +230,12 @@ func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan s
 	h.Days = true
 	h.Connections = &connect.Store{DB: d, Key: *cfg.Key}
 	h.Folders = &folders.Store{DB: d, Rules: folders.Rules{Data: cfg.DataDir}, Versions: filepath.Join(cfg.DataDir, "versions")}
+	h.Jobs = svc
+	if cl, ok := finder.Get(ctx, clis.Claude); ok && cl.SignedIn {
+		if set, err := codingSettings(ctx, d); err == nil {
+			h.Coder = set.ModelName // agents may start coding jobs
+		}
+	}
 	if s := os.Getenv("MAX_AGENTS"); s != "" {
 		if h.Max, err = strconv.Atoi(s); err != nil || h.Max < 1 {
 			return fmt.Errorf("MAX_AGENTS must be a whole number above 0, have %q", s)
@@ -242,7 +256,7 @@ func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan s
 }
 
 // api is the API, its chat streams running until ctx is done.
-func api(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) (http.Handler, error) {
+func api(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger, svc *jobs.Service) (http.Handler, error) {
 	owner, err := models.Owner(ctx, d, time.Now().UTC())
 	if err != nil {
 		return nil, err
@@ -259,7 +273,7 @@ func api(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) (ht
 	agents := &controllers.Agents{DB: d, Characters: characters}
 	hub := &controllers.ChatHub{DB: d, Log: log.With("component", "chat")}
 	go hub.Run(ctx)
-	chat := &controllers.Chat{DB: d, Hub: hub, PerAccount: utils.NewLimiter(2*time.Second, 30)}
+	chat := &controllers.Chat{DB: d, Hub: hub, PerAccount: utils.NewLimiter(2*time.Second, 30), Jobs: svc}
 	r := setupRouter(cfg, auth, agents, chat, &controllers.Today{DB: d}, &controllers.Works{DB: d, Formats: host.Formats()},
 		&controllers.Growth{DB: d}, &controllers.Judgment{DB: d}, &controllers.Mind{DB: d, Sets: sets},
 		&controllers.Memory{DB: d}, &controllers.Character{DB: d}, &controllers.Settings{DB: d}, &controllers.Skills{DB: d},
@@ -318,6 +332,12 @@ func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.
 	own.POST("/hello", ours, h(chat.Hello))
 	own.GET("/messages", h(chat.History))
 	own.POST("/messages", ours, h(chat.Send))
+	if chat.Jobs != nil {
+		jc := &controllers.Jobs{Jobs: chat.Jobs}
+		own.GET("/jobs", h(jc.List))
+		own.POST("/jobs/:job/asks/:ask", ours, h(jc.Answer))
+		own.POST("/jobs/:job/cancel", ours, h(jc.Cancel))
+	}
 	own.POST("/answers", ours, h(chat.Answer))
 	own.POST("/read", ours, h(chat.Read))
 	own.GET("/files/:file", h(chat.File))
@@ -369,4 +389,20 @@ func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.
 	authRoutes.POST("/passcode", middlewares.LimitByAddress(utils.NewLimiter(10*time.Second, 5), log), h(auth.SignIn))
 	authRoutes.POST("/signout", h(auth.SignOut))
 	return r
+}
+
+// codingSettings is how coding jobs run, as the owner set it in Settings.
+func codingSettings(ctx context.Context, d *db.DB) (jobs.Settings, error) {
+	c, err := models.CodingSettings(ctx, d)
+	if err != nil {
+		return jobs.Settings{}, err
+	}
+	id := strings.TrimPrefix(c.Coder, models.ClaudePrefix)
+	name := id
+	for _, m := range models.ClaudeModels {
+		if m.ID == id {
+			name = m.Name
+		}
+	}
+	return jobs.Settings{Model: id, ModelName: name, Copy: c.Copy, Minutes: c.Minutes, MaxSteps: c.MaxSteps}, nil
 }

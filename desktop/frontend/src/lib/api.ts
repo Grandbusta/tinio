@@ -38,7 +38,7 @@ export type Request = {
 export type ChatRow = {
   id: string;
   author: "owner" | "agent";
-  kind: "message" | "ask" | "choice" | "file" | "approve" | "pick" | "hello" | "react";
+  kind: "message" | "ask" | "choice" | "file" | "approve" | "pick" | "hello" | "react" | "job" | "job_ask" | "job_reply";
   text: string;
   payload?: {
     approval?: string;
@@ -55,7 +55,8 @@ export type ChatRow = {
     read?: string[]; // what was read to write a reply
     good?: boolean; // a thumb on work: how it landed, and what was off
     note?: string;
-  } & Request;
+  } & Request &
+    JobPayload;
   at: string;
   settled_at?: string;
   topic?: string; // the topic it's in, as the agent sorted it or you chose; none for small talk
@@ -318,4 +319,25 @@ export type AgentTools = {
   changes: Verdict; // what a change asks, as their settings say
   comments: Verdict;
   web: Verdict; // auto: the web and Wikipedia are theirs; forbid: off in their settings
+};
+
+// A coding job's card (kind "job"), updated as it goes, or one of its questions
+// (kind "job_ask": ask, tool, detail, and why it's asked).
+export type JobPayload = {
+  job?: string;
+  folder?: string;
+  branch?: string;
+  base?: string;
+  cli?: string;
+  model?: string;
+  status?: "working" | "waiting" | "ready" | "stopped" | "failed" | "cancelled";
+  now?: string;
+  files?: string[];
+  steps?: number;
+  asking?: number;
+  cost_usd?: number;
+  summary?: string;
+  ask?: string;
+  tool?: string;
+  detail?: string;
 };

@@ -8,6 +8,7 @@ import { FileIcon, kindOf } from "@/components/file-icon";
 import { MessageText } from "@/components/message-text";
 import { WorkPreview } from "@/components/work-preview";
 import { NoKey } from "@/components/first-run";
+import { JobAskCard, JobCard, JobsStrip } from "@/components/jobs";
 import { ComposerFolders } from "@/components/folders";
 import { resets, UsageBanner } from "@/components/usage";
 import { call, type ChatRow, type Topic } from "@/lib/api";
@@ -25,7 +26,7 @@ import { call, type ChatRow, type Topic } from "@/lib/api";
 // than a reply does (resting, or something went wrong), and the chat says so.
 const waitFor = 2 * 60_000;
 
-const shown = new Set<ChatRow["kind"]>(["message", "ask", "choice", "file"]);
+const shown = new Set<ChatRow["kind"]>(["message", "ask", "choice", "file", "job", "job_ask", "job_reply"]);
 
 function byId(a: ChatRow, b: ChatRow) {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
@@ -353,12 +354,12 @@ export function Chat({ id }: { id: string }) {
 
   // answer sends your tap on a card once: the card's buttons wait while it's on its way,
   // and if it doesn't count, the card says why.
-  async function answer(row: ChatRow, body: Record<string, unknown>, said: string) {
+  async function answer(row: ChatRow, body: Record<string, unknown>, said: string, path?: string) {
     if (inFlight.current.has(row.id)) return;
     inFlight.current.add(row.id);
     setAnswering((a) => ({ ...a, [row.id]: true }));
     setCardError((e) => ({ ...e, [row.id]: "" }));
-    const res = await call(`/agents/${id}/answers`, body);
+    const res = await call(path ?? `/agents/${id}/answers`, body);
     inFlight.current.delete(row.id);
     setAnswering((a) => ({ ...a, [row.id]: false }));
     if (!res.ok) return setCardError((e) => ({ ...e, [row.id]: res.error.message }));
@@ -461,6 +462,7 @@ export function Chat({ id }: { id: string }) {
             }}
           />
         )}
+        {ready && <JobsStrip rows={rows ?? []} />}
       </header>
       {keySet === false ? <NoKey name={agent?.name} /> : <UsageBanner />}
       {inTopic && (
@@ -695,13 +697,15 @@ type Card = {
   tapped?: string;
   busy?: boolean;
   failed?: string;
-  answer: (row: ChatRow, body: Record<string, unknown>, said: string) => void;
+  answer: (row: ChatRow, body: Record<string, unknown>, said: string, path?: string) => void;
 };
 
 // quote is what a message replies to, and who said it ("" if it's no longer here).
 function Row({ agent, first, quote, ...props }: Card & { agent: string; first: boolean; quote?: { who: string; text: string } }) {
   const { row, name, tapped, busy, failed, answer } = props;
-  if (row.kind === "message") {
+  if (row.kind === "job") return <JobCard row={row} agent={agent} name={name} />;
+  if (row.kind === "job_ask") return <JobAskCard {...props} agent={agent} />;
+  if (row.kind === "message" || row.kind === "job_reply") {
     const mine = row.author === "owner";
     return (
       <div className={`${mine ? yours : theirs} ${first ? (mine ? tail.yours : tail.theirs) : ""}`}>

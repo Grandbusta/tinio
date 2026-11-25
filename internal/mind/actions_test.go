@@ -186,3 +186,27 @@ func TestAReplyLooksBeforeItAnswers(t *testing.T) {
 		t.Error("someone but its owner can have it look")
 	}
 }
+
+// quickDoer is a tool that only starts something, so it runs on the owner's
+// yes and tells them itself.
+type quickDoer struct{ *fakeDoer }
+
+func (quickDoer) Quick() bool   { return true }
+func (quickDoer) Reports() bool { return true }
+
+func TestAQuickActionRunsOnTheYes(t *testing.T) {
+	d := &fakeDoer{name: "notes.write_file", class: action.Write}
+	m, s, asker, r, _ := actionMind(d, save)
+	m.Doers = []Doer{quickDoer{d}}
+	m.handle(context.Background(), fromOwner("Save that plan to my folder"))
+	sent := len(r.sent)
+	m.handle(context.Background(), tap(owner, asker.ids[0], true))
+	if len(d.done) != 1 || s.actions[0].Status != memory.ActionDone {
+		t.Fatalf("not run on the yes: done %d, %+v", len(d.done), s.actions[0])
+	}
+	for _, said := range r.sent[sent:] {
+		if strings.Contains(said, "Done: notes.write_file") {
+			t.Errorf("a tool that reports itself was followed by %q", said)
+		}
+	}
+}

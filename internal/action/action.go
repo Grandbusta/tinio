@@ -23,6 +23,7 @@ const (
 	Publish         Class = "publish"
 	Spend           Class = "spend"            // spend money (later)
 	ExternalMessage Class = "external_message" // email, a post or a DM outside the chat, through a tool
+	Code            Class = "code"             // start a coding job: a CLI writing code in one of the owner's folders
 )
 
 type Verdict string
@@ -42,7 +43,7 @@ type Policy struct {
 func Defaults() map[Class]Verdict {
 	return map[Class]Verdict{
 		Remember: Auto, Reply: Auto, ReadWeb: Auto, UseTools: Auto,
-		ReachOut: Ask, Commit: Ask, Publish: Ask, Write: Ask,
+		ReachOut: Ask, Commit: Ask, Publish: Ask, Write: Ask, Code: Ask,
 		ExternalMessage: Ask, Spend: Forbid,
 	}
 }
