@@ -155,3 +155,41 @@ func TestNoResultSaysWhatItWrote(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// A format's property names Claude's API refuses (a topic's title, say) go as
+// p1, p2... and come back as they were.
+func TestUnsafeNamesAreRenamedAndRestored(t *testing.T) {
+	c, sent := fakeClaude(t, []any{result("", map[string]any{"p1": map[string]any{"answer": "yes"}, "plain": 1})}, "")
+	schema := map[string]any{"type": "object", "required": []any{"Basket total bug", "plain"}, "properties": map[string]any{
+		"Basket total bug": map[string]any{"type": "object", "properties": map[string]any{"answer": map[string]any{"type": "string"}}},
+		"plain":            map[string]any{"type": "integer"},
+	}}
+	got, err := c.Reason(context.Background(), system2.Request{Instructions: "x", Message: "y", Format: &system2.Format{Name: "topic", Schema: schema}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal([]byte(got.Text), &out); err != nil || out["Basket total bug"] == nil || out["plain"] == nil {
+		t.Fatalf("text %s, %v", got.Text, err)
+	}
+	args, _ := sent()
+	sch := args[slices.Index(args, "--json-schema")+1]
+	if strings.Contains(sch, "Basket total bug") || !strings.Contains(sch, `"p1"`) {
+		t.Fatalf("schema sent %s", sch)
+	}
+}
+
+// The reply comes first in the format sent, with every other property after it.
+func TestTheReplyIsAskedForFirst(t *testing.T) {
+	s := replyFirst()
+	var v map[string]any
+	if err := json.Unmarshal([]byte(s), &v); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(s, `{"properties":{"reply":`) {
+		t.Fatalf("starts %.60s", s)
+	}
+	if len(v["properties"].(map[string]any)) != len(system2.ReplyWithFacts["properties"].(map[string]any)) || v["additionalProperties"] != false {
+		t.Fatalf("properties or the rest differ: %.200s", s)
+	}
+}

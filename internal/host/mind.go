@@ -217,7 +217,9 @@ func ModelsFrom(log *slog.Logger, t Thinking) (Models, error) {
 		return system2.WithoutEmDashes(&claudecode.Client{Program: t.Claude, Model: model, Effort: effort, Dir: t.Dir})
 	}
 	if model, ok := claude["reply"]; ok {
-		m.System2 = cc(model, "")
+		// Low effort: no thinking before it writes, so the first words come in
+		// about 2s, not 4 (measured 25 November 2026); works keep their effort.
+		m.System2 = cc(model, "low")
 	}
 	if model, ok := claude["day"]; ok {
 		m.Day = cc(model, "low") // every day, for every agent: kept light

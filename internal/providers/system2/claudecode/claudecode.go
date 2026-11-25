@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -83,7 +84,8 @@ func prompt(req system2.Request) string {
 	return b.String()
 }
 
-func (c *Client) args(req system2.Request) []string {
+// args are the command's for req; schema is its format's, made safe ("" for none).
+func (c *Client) args(req system2.Request, schema string) []string {
 	args := []string{"-p", "--safe-mode", "--output-format", "stream-json", "--verbose",
 		"--system-prompt", req.Instructions + noFolder,
 		"--tools", "", "--strict-mcp-config", "--no-session-persistence", "--model", c.Model}
@@ -93,11 +95,8 @@ func (c *Client) args(req system2.Request) []string {
 	if req.Draft != nil && req.Format == nil {
 		args = append(args, "--include-partial-messages")
 	}
-	switch {
-	case req.CollectFacts:
-		args = append(args, "--json-schema", mustJSON(system2.ReplyWithFacts))
-	case req.Format != nil:
-		args = append(args, "--json-schema", mustJSON(req.Format.Schema))
+	if schema != "" {
+		args = append(args, "--json-schema", schema)
 	}
 	return args
 }
@@ -152,7 +151,18 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 	}
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, c.Program, c.args(req)...)
+	var (
+		schema string
+		names  renames
+	)
+	switch {
+	case req.CollectFacts:
+		schema = replyFirst()
+	case req.Format != nil:
+		safe, n := safeSchema(req.Format.Schema)
+		schema, names = mustJSON(safe), n
+	}
+	cmd := exec.CommandContext(ctx, c.Program, c.args(req, schema)...)
 	cmd.Dir = c.Dir
 	cmd.Env = clis.Env(os.Environ(), c.Program)
 	cmd.Stdin = strings.NewReader(prompt(req))
@@ -237,6 +247,13 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 			return spent, errors.New("claude code: no answer in the shape asked for")
 		}
 		text = string(result.Structured)
+		if len(names) > 0 {
+			var v any
+			if err := json.Unmarshal(result.Structured, &v); err != nil {
+				return spent, fmt.Errorf("claude code: %w", err)
+			}
+			text = mustJSON(names.restore(v, ""))
+		}
 	}
 	got := system2.Response{Text: text}
 	if req.CollectFacts {
@@ -252,6 +269,122 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 		return spent, errors.New("claude code: no reply text")
 	}
 	return got, nil
+}
+
+// replyFirst is ReplyWithFacts with "reply" first among its properties. The
+// model writes them in the order given, and JSON from a Go map is alphabetical:
+// "reply" came after the facts, so a reply that promised a work showed its
+// first words only after writing the promise out, 9.6s in, not 1.5s
+// (measured 25 November 2026).
+func replyFirst() string {
+	props := system2.ReplyWithFacts["properties"].(map[string]any)
+	rest := map[string]any{}
+	for k, v := range props {
+		if k != "reply" {
+			rest[k] = v
+		}
+	}
+	others := mustJSON(rest)
+	top := map[string]any{}
+	for k, v := range system2.ReplyWithFacts {
+		if k != "properties" {
+			top[k] = v
+		}
+	}
+	t := mustJSON(top)
+	return `{"properties":{"reply":` + mustJSON(props["reply"]) + `,` + others[1:] + `,` + t[1:]
+}
+
+// Claude's API takes property names of letters, digits, _ . and - only, up to
+// 64; a format may have others (a topic's title, say).
+var safeName = regexp.MustCompile(`^[a-zA-Z0-9_.-]{1,64}$`)
+
+// renames are the names a format's properties had, by where they are (a path
+// of names, [] for an array's items) and the name they were given.
+type renames map[string]map[string]string
+
+// safeSchema is schema with every property name Claude's API refuses renamed
+// p1, p2..., and how to name them back.
+func safeSchema(schema map[string]any) (map[string]any, renames) {
+	names := renames{}
+	var walk func(node map[string]any, path string) map[string]any
+	walk = func(node map[string]any, path string) map[string]any {
+		out := map[string]any{}
+		for k, v := range node {
+			out[k] = v
+		}
+		if props, ok := node["properties"].(map[string]any); ok {
+			safe := map[string]any{}
+			given := map[string]string{} // original → safe
+			for name, sub := range props {
+				to := name
+				if !safeName.MatchString(name) {
+					to = fmt.Sprintf("p%d", len(given)+1)
+					for _, taken := props[to]; taken; _, taken = props[to] {
+						to += "_"
+					}
+					given[name] = to
+					if names[path] == nil {
+						names[path] = map[string]string{}
+					}
+					names[path][to] = name
+				}
+				if m, ok := sub.(map[string]any); ok {
+					sub = walk(m, path+"."+name)
+				}
+				safe[to] = sub
+			}
+			out["properties"] = safe
+			var req []string
+			switch r := node["required"].(type) {
+			case []string:
+				req = r
+			case []any:
+				for _, name := range r {
+					if s, ok := name.(string); ok {
+						req = append(req, s)
+					}
+				}
+			}
+			if req != nil {
+				r := make([]string, len(req))
+				for i, name := range req {
+					r[i] = name
+					if to, ok := given[name]; ok {
+						r[i] = to
+					}
+				}
+				out["required"] = r
+			}
+		}
+		if items, ok := node["items"].(map[string]any); ok {
+			out["items"] = walk(items, path+"[]")
+		}
+		return out
+	}
+	return walk(schema, ""), names
+}
+
+// restore gives v, an answer to a schema safeSchema made, its names back.
+func (n renames) restore(v any, path string) any {
+	switch x := v.(type) {
+	case map[string]any:
+		out := map[string]any{}
+		for k, sub := range x {
+			name := k
+			if orig, ok := n[path][k]; ok {
+				name = orig
+			}
+			out[name] = n.restore(sub, path+"."+name)
+		}
+		return out
+	case []any:
+		for i := range x {
+			x[i] = n.restore(x[i], path+"[]")
+		}
+		return x
+	}
+	return v
 }
 
 func lastLines(s string, n int) string {
