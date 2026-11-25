@@ -30,6 +30,7 @@ import (
 	s1openai "github.com/Grandbusta/tinio/internal/providers/system1/openai"
 	"github.com/Grandbusta/tinio/internal/providers/system1/reasoned"
 	"github.com/Grandbusta/tinio/internal/providers/system2"
+	"github.com/Grandbusta/tinio/internal/providers/system2/claudecode"
 	s2openai "github.com/Grandbusta/tinio/internal/providers/system2/openai"
 	"github.com/Grandbusta/tinio/internal/render"
 	"github.com/Grandbusta/tinio/internal/render/archive"
@@ -148,6 +149,93 @@ func OpenAIWith(log *slog.Logger, apiKey string, chosen Chosen) (Models, error) 
 	e := cfg.Embedding
 	m.Embedder = embedopenai.New(e.APIKey, e.Model, e.BaseURL, price(e.Model))
 	m.Library = library.New("", "")
+	return m, nil
+}
+
+// ClaudePrefix marks a choice that thinks with Claude Code: "claude:" and the
+// model's id. Any other choice is an OpenAI model's name, or "" for the default.
+const ClaudePrefix = "claude:"
+
+// Thinking is where each job's thinking is done: the owner's OpenAI key, their
+// own Claude Code, or both.
+type Thinking struct {
+	APIKey string            // "" when there's no key
+	Chosen map[string]string // by job (reply, decision, day, light, work): an OpenAI model, ClaudePrefix and a model, or ""
+	Claude string            // the `claude` to run; "" when it isn't found
+	Dir    string            // an empty folder for Claude Code to run in
+}
+
+// NeedsKey is whether any job thinks with the OpenAI key.
+func (t Thinking) NeedsKey() bool {
+	for _, job := range []string{"reply", "decision", "day", "light", "work"} {
+		if !strings.HasPrefix(t.Chosen[job], ClaudePrefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// ModelsFrom is each job's model from where it thinks: OpenAI on the key, or
+// Claude Code on the owner's plan. Without a key nothing is embedded, and
+// decision sets that name a model are answered by the replies' model.
+func ModelsFrom(log *slog.Logger, t Thinking) (Models, error) {
+	open := Chosen{}
+	claude := map[string]string{}
+	for job, choice := range t.Chosen {
+		if model, ok := strings.CutPrefix(choice, ClaudePrefix); ok {
+			claude[job] = model
+			continue
+		}
+		switch job {
+		case "reply":
+			open.Reply = choice
+		case "decision":
+			open.Decision = choice
+		case "day":
+			open.Day = choice
+		case "light":
+			open.Light = choice
+		case "work":
+			open.Work = choice
+		}
+	}
+	if len(claude) > 0 && t.Claude == "" {
+		return Models{}, errors.New("host: Claude Code isn't on this computer, or Tinio can't find it")
+	}
+	var m Models
+	if t.APIKey != "" {
+		var err error
+		if m, err = OpenAIWith(log, t.APIKey, open); err != nil {
+			return Models{}, err
+		}
+	} else if t.NeedsKey() {
+		return Models{}, errors.New("host: set your OpenAI key, or think with Claude Code, to run agents")
+	} else {
+		m.Library = library.New("", "")
+	}
+	cc := func(model, effort string) system2.Reasoner {
+		return system2.WithoutEmDashes(&claudecode.Client{Program: t.Claude, Model: model, Effort: effort, Dir: t.Dir})
+	}
+	if model, ok := claude["reply"]; ok {
+		m.System2 = cc(model, "")
+	}
+	if model, ok := claude["day"]; ok {
+		m.Day = cc(model, "low") // every day, for every agent: kept light
+	}
+	if model, ok := claude["light"]; ok {
+		m.Light = cc(model, "low")
+	}
+	if model, ok := claude["work"]; ok {
+		m.Work = cc(model, "")
+	}
+	if model, ok := claude["decision"]; ok {
+		// Low effort: a set's answers are short, and a reply waits on them.
+		m.System1 = reasoned.Model{Reasoner: cc(model, "low")}
+	}
+	if t.APIKey == "" {
+		reply := claude["reply"]
+		m.reasoner = func(_, effort string) system2.Reasoner { return cc(reply, effort) }
+	}
 	return m, nil
 }
 

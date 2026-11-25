@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,25 +14,27 @@ import (
 
 // Models are the models the agents use for each of their jobs: replies,
 // decisions, their work on the clock (the morning, what they watch, the weekly
-// look back), light mode and works. The owner picks one of the
-// models Tinio has prices for; a job set in the environment (OPENAI_MODEL, ...)
-// is shown and can't be changed here.
+// look back), light mode and works. The owner picks one of OpenAI's models
+// Tinio has prices for, or one of Claude Code's; a job set in the environment
+// (OPENAI_MODEL, ...) is shown and can't be changed here.
 type Models struct {
 	DB *db.DB
 }
 
 type modelOption struct {
-	Model  string  `json:"model"`
-	Input  float64 `json:"input"`  // USD per 1M tokens
+	Model  string  `json:"model"`  // as chosen: "gpt-6-luna", "claude:claude-haiku-5-5"
+	Name   string  `json:"name"`   // as shown: "gpt-6-luna", "Haiku 5.5"
+	Source string  `json:"source"` // "openai" or "claude"
+	Input  float64 `json:"input"`  // USD per 1M tokens; 0 for Claude Code, which reports its own
 	Output float64 `json:"output"` // USD per 1M tokens
 }
 
 type jobView struct {
 	Job     string        `json:"job"`
-	Model   string        `json:"model"`   // "" for work: the replies' model
+	Model   string        `json:"model"`   // "" for work on the key: the replies' model
 	From    string        `json:"from"`    // "app", "environment" or "default"
-	Default string        `json:"default"` // "" for work: the replies' model
-	Models  []modelOption `json:"models"`  // dearest first
+	Default string        `json:"default"` // with the source in use; "" for work on the key: the replies' model
+	Models  []modelOption `json:"models"`  // Claude Code's then OpenAI's, dearest first
 }
 
 func (m *Models) Get(c *gin.Context) error {
@@ -61,7 +62,7 @@ func (m *Models) Choose(c *gin.Context) error {
 	if chosen[job.Name].From == "environment" {
 		return utils.Invalid("model", "It's set in the environment ("+job.Env+") where Tinio runs: change it there.")
 	}
-	if *in.Model != "" && !slices.Contains(job.Models, *in.Model) {
+	if *in.Model != "" && !job.Allows(*in.Model) {
 		return utils.Invalid("model", "Pick one of the models listed.")
 	}
 	if err := models.ChooseModel(c, m.DB, job.Name, *in.Model, time.Now().UTC()); err != nil {
@@ -76,15 +77,25 @@ func (m *Models) answer(c *gin.Context) error {
 	if err != nil {
 		return err
 	}
+	source, err := models.Source(c, m.DB)
+	if err != nil {
+		return err
+	}
 	out := make([]jobView, 0, len(models.Jobs))
 	for _, j := range models.Jobs {
 		v := jobView{Job: j.Name, Model: chosen[j.Name].Model, From: chosen[j.Name].From, Default: j.Default}
+		if source == models.SourceClaude {
+			v.Default = models.ClaudePrefix + j.Claude
+		}
+		for _, cm := range models.ClaudeModels {
+			v.Models = append(v.Models, modelOption{Model: models.ClaudePrefix + cm.ID, Name: cm.Name, Source: models.SourceClaude})
+		}
 		for _, name := range j.Models {
 			p := pricing.OpenAI[name]
-			v.Models = append(v.Models, modelOption{Model: name, Input: p.Input, Output: p.Output})
+			v.Models = append(v.Models, modelOption{Model: name, Name: name, Source: models.SourceOpenAI, Input: p.Input, Output: p.Output})
 		}
 		out = append(out, v)
 	}
-	utils.SuccessWithData(c, http.StatusOK, gin.H{"jobs": out})
+	utils.SuccessWithData(c, http.StatusOK, gin.H{"source": source, "jobs": out})
 	return nil
 }

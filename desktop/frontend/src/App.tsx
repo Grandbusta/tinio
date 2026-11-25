@@ -6,7 +6,7 @@ import { AppFrame } from "@/components/app-frame";
 import { CharacterPage } from "@/components/character";
 import { Chat } from "@/components/chat";
 import { AgentToolsPage, ConnectionsPage, ConnectPage } from "@/components/connections";
-import { FirstRun, keySkipped, skipKeyForNow, useKeys } from "@/components/first-run";
+import { FirstRun, keySkipped, ready, skipKeyForNow, useSources } from "@/components/first-run";
 import { AddFolderPage } from "@/components/folders";
 import { GrowthPage } from "@/components/growth";
 import { JudgmentPage } from "@/components/judgment";
@@ -22,16 +22,19 @@ import { YouPage } from "@/components/usage";
 import { WhoYouAre } from "@/components/who-you-are";
 import { WorkPage, WorksPage } from "@/components/works";
 
-// The app's pages, at the web app's addresses. Before anything, your OpenAI key, the one
-// thing you bring; it can wait, but nobody replies without it.
+// The app's pages, at the web app's addresses. Before anything, where your agents think
+// (Claude Code or your OpenAI key), the one thing you bring; it can wait, but nobody
+// replies without it.
 export function App() {
-  const [keys, reload] = useKeys();
+  const [sources, reload] = useSources();
   const [skipped, setSkipped] = useState(keySkipped);
-  if (!keys) return <Starting />;
-  if (!keys.openai.set && !skipped)
+  if (!sources) return <Starting />;
+  if (!ready(sources) && !skipped)
     return (
       <FirstRun
+        sources={sources}
         onDone={reload}
+        onAgain={reload}
         onSkip={() => {
           skipKeyForNow();
           setSkipped(true);

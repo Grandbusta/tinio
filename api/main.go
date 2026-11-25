@@ -18,6 +18,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/Grandbusta/tinio/api/middlewares"
 	"github.com/Grandbusta/tinio/api/models"
 	"github.com/Grandbusta/tinio/api/utils"
+	"github.com/Grandbusta/tinio/internal/clis"
 	internalconfig "github.com/Grandbusta/tinio/internal/config"
 	"github.com/Grandbusta/tinio/internal/connect"
 	"github.com/Grandbusta/tinio/internal/db"
@@ -160,8 +162,12 @@ func work(ctx context.Context, cfg config.Config, d *db.DB, log *slog.Logger) er
 	}
 }
 
-// workOnce runs the agents until ctx is done or the key changes (nil), or
-// waits for a key if there's none.
+// finder finds the coding CLIs on this computer, for the API and the agents.
+var finder = &clis.Finder{}
+
+// workOnce runs the agents until ctx is done or the key or models change
+// (nil), or waits for a change if what the jobs think with isn't there: the
+// key for OpenAI's models, Claude Code signed in for its own.
 func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan string, log *slog.Logger) error {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
@@ -170,20 +176,42 @@ func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan s
 			return err
 		}
 	}
-	if apiKey == "" {
-		log.Info("waiting for your OpenAI key: set it in the app")
+	chosen, err := models.ChosenModels(ctx, d)
+	if err != nil {
+		return err
+	}
+	t := host.Thinking{APIKey: apiKey, Chosen: map[string]string{}, Dir: filepath.Join(cfg.DataDir, "thinking")}
+	for job, c := range chosen {
+		t.Chosen[job] = c.Model
+	}
+	wait := ""
+	usesClaude := false
+	for _, m := range t.Chosen {
+		usesClaude = usesClaude || strings.HasPrefix(m, models.ClaudePrefix)
+	}
+	if usesClaude {
+		finder.Forget()
+		if cl, ok := finder.Get(ctx, clis.Claude); ok && cl.SignedIn {
+			t.Claude = cl.Path
+		} else {
+			wait = "Claude Code to be signed in on this computer"
+		}
+	}
+	if t.NeedsKey() && apiKey == "" {
+		wait = "your OpenAI key: set it in the app"
+	}
+	if wait != "" {
+		log.Info("waiting for " + wait)
 		select {
 		case <-ctx.Done():
 		case <-changed:
 		}
 		return nil
 	}
-	chosen, err := models.ChosenModels(ctx, d)
-	if err != nil {
+	if err := os.MkdirAll(t.Dir, 0o700); err != nil {
 		return err
 	}
-	ms, err := host.OpenAIWith(log, apiKey, host.Chosen{Reply: chosen["reply"].Model, Decision: chosen["decision"].Model,
-		Day: chosen["day"].Model, Light: chosen["light"].Model, Work: chosen["work"].Model})
+	ms, err := host.ModelsFrom(log, t)
 	if err != nil {
 		return err
 	}
@@ -270,6 +298,9 @@ func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.
 	v1.GET("/keys", signedIn, h(keys.Get))
 	v1.POST("/keys", ours, signedIn, h(keys.Set))
 	aiModels := &controllers.Models{DB: keys.DB}
+	sources := &controllers.Sources{DB: keys.DB, Key: keys.Key, Finder: finder}
+	v1.GET("/sources", signedIn, h(sources.Get))
+	v1.POST("/sources", ours, signedIn, h(sources.Use))
 	fd := &controllers.Folders{DB: keys.DB, Rules: folders.Rules{Data: cfg.DataDir}}
 	v1.GET("/folders", signedIn, h(fd.List))
 	v1.GET("/folders/peek", signedIn, h(fd.Peek))

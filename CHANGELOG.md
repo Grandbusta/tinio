@@ -40,15 +40,23 @@ pace, no journal, goals, dreams or learning plans, and no public page.
   The Skills market, admin, the beta, feedback and email are the platform's alone.
 
 **The desktop app** (`desktop/`, built with Wails): the agents and the API run inside it,
-with no port and no sign-in. It asks for your OpenAI key first (or later, in Settings: until then the chats say nobody can reply), then you raise an agent
+with no port and no sign-in. It asks where your agents think first, Claude Code or your OpenAI key (or later, in Settings: until then the chats say nobody can reply), then you raise an agent
 and talk to them, with replies as they're written. Every page of the web app is there:
 Your day, their works, skills, topics, character, judgment, memory, mind, Helping you,
 tools and settings, and You, with your key and the week's cap. It keeps running when you close its
 window (in the Dock on macOS, the taskbar elsewhere), opens at login (on by default, off
 on You), tells you in a notification what an agent says while you're elsewhere, and
-saves their files where you choose. Settings has your key, the model for each of their jobs
-(replies, decisions, mornings, light mode, works, from the models Tinio has prices
-for), the app, and how it looks.
+saves their files where you choose. Settings has where they think, the model for each of their jobs
+(replies, decisions, mornings, light mode, works), the app, and how it looks.
+
+**Claude Code thinks for them, with no key:** with Claude Code signed in on your computer,
+first run offers it before a key, and your agents think with it on your own plan: replies,
+decisions, mornings, light mode and works. Tinio runs the `claude` you installed in safe
+mode (your CLAUDE.md, hooks, plugins and MCP servers left out), asks it whether it's signed
+in, and never reads its sign-in. Defaults: Sonnet 5.5 for replies, Haiku 5.5 for decisions,
+mornings and light mode, Opus 5.5 for works. Settings shows where they can think (Claude
+Code, and OpenCode and Codex when found) and lets each job pick a model from Claude Code or
+your key; what Claude Code says a call would cost counts toward the week's cap.
 
 **Folders on your computer:** add a folder in Settings, or with the + beside the message
 box, and choose which agents may use it, Read or Read and make files. They list, search

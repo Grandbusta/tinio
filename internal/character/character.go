@@ -23,6 +23,9 @@ type Character struct {
 	Timezone    string   `yaml:"timezone"`
 	Personality []string `yaml:"personality"`
 	Makes       []Craft  `yaml:"makes"`
+	// Hello is how they introduce themselves the first time they meet their
+	// owner, in place of saying plainly that they're an AI; "" for that.
+	Hello string `yaml:"hello"`
 	// Skills and Family are copied into memory the first time; after that
 	// memory wins. Family is who the agent knows from the start: their owner.
 	Skills []Skill    `yaml:"skills"`

@@ -46,3 +46,19 @@ func TestAHelloIsSaidEvenIfItCantBeWritten(t *testing.T) {
 		t.Errorf("sent %q", r.sent)
 	}
 }
+
+// A character that says how they introduce themselves does that instead of
+// saying they're an AI.
+func TestAHelloTheCharacterShapes(t *testing.T) {
+	s2 := &fakeSystem2{}
+	m, _ := newMind(&fakeReplier{}, &fakeSystem1{}, s2)
+	m.Life.Hello = "Introduce yourself as a software engineer."
+	m.handle(context.Background(), perception.Percept{ID: ulid.Make(), Source: "web", ExternalID: "hello", Thread: "web",
+		Speaker: sam, SpeakerName: "Sam", Kind: perception.KindHello, At: now})
+	if len(s2.requests) != 1 {
+		t.Fatalf("asked System 2 %d times", len(s2.requests))
+	}
+	if note := s2.requests[0].Note; !strings.Contains(note, "as a software engineer") || strings.Contains(note, "an AI") {
+		t.Errorf("note %q", note)
+	}
+}

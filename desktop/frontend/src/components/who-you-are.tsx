@@ -137,7 +137,7 @@ export function WhoYouAre({ characterKey }: { characterKey: string }) {
             </fieldset>
 
             <div className="rounded-lg border border-warn-text/20 bg-warn-soft px-4 py-3.5 text-sm text-warn-text">
-              You&apos;ll talk with {c.name} right here, on this computer. They think with your OpenAI key, within the week&apos;s cap you set on You.
+              You&apos;ll talk with {c.name} right here, on this computer. They think with what you chose in Settings, Claude Code or your OpenAI key, within the week&apos;s cap you set on You.
             </div>
 
             {error && error.code !== "invalid" && <p role="alert" className="text-sm text-bad-text">{error.message}</p>}

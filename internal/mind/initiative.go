@@ -464,10 +464,17 @@ func (m *Mind) hello(ctx context.Context, p perception.Percept) {
 	if m.morningOn() {
 		note += " Say too that each morning you'll send them their few things for the day, with what you can get ready first."
 	}
-	note += fmt.Sprintf(" Say plainly that you're an AI. Then ask %s one question: what they'd most like help with.", n.speaker)
+	plain := fmt.Sprintf("Hi %s, I'm %s. I'm an AI, and I'll always say so. Tell me a little about yourself?", n.speaker, m.Life.Name)
+	if m.Life.Hello != "" {
+		// Their character says how they introduce themselves: as what they do.
+		note += " " + m.Life.Hello
+		plain = fmt.Sprintf("Hi %s, I'm %s. What would you most like help with?", n.speaker, m.Life.Name)
+	} else {
+		note += " Say plainly that you're an AI."
+	}
+	note += fmt.Sprintf(" Then ask %s one question: what they'd most like help with.", n.speaker)
 	if m.speakFirst(ctx, p, person, nil, speech{action: "hello", note: note, approved: true}) != sent {
 		// It's said once, and the owner is waiting for it: a plain one beats none.
-		plain := fmt.Sprintf("Hi %s, I'm %s. I'm an AI, and I'll always say so. Tell me a little about yourself?", n.speaker, m.Life.Name)
 		if err := m.send(ctx, p, plain, nil, Said{}); err != nil {
 			m.Log.Warn("saying hello failed", "percept", p.ID.String(), "err", err)
 		}
