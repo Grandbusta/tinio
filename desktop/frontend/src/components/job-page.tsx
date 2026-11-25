@@ -283,7 +283,25 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
               </div>
             )}
             {[...story].reverse().map((r, i) =>
-              r === live ? <LiveRound key={r.n} r={r} total={story.length} /> : <PastRound key={r.n} r={r} total={story.length} open={i === 0 || (!!live && i === 1)} />,
+              r === live ? (
+                <LiveRound key={r.n} r={r} total={story.length} />
+              ) : (
+                <PastRound
+                  key={r.n}
+                  r={r}
+                  total={story.length}
+                  open={i === 0 || (!!live && i === 1)}
+                  changes={
+                    // Its own changes, when the copy was kept after it.
+                    story.length > 1 && r.n <= j.rounds
+                      ? () => {
+                          setRound(r.n);
+                          setPicked("changes");
+                        }
+                      : undefined
+                  }
+                />
+              ),
             )}
         {page.notes.length > 0 && (
           <details className="group rounded-lg border border-line px-4 py-1">
@@ -326,20 +344,16 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
         )}
         <section aria-label="Changes" hidden={tab !== "changes"} className="flex min-w-0 flex-1 flex-col gap-3 px-8 pt-5 pb-8 max-[900px]:px-4">
           <span className="text-[13px] text-muted">{going ? "Filling in as it works · " : ""}Tap a line to say something about it</span>
-          {j.rounds > 1 && (
-            <div role="group" aria-label="Which round" className="flex flex-wrap gap-1.5">
-              {[0, ...Array.from({ length: j.rounds }, (_, i) => i + 1)].map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  aria-pressed={round === r}
-                  onClick={() => setRound(r)}
-                  className="min-h-9 rounded-lg px-3 text-[13px] font-semibold text-muted hover:bg-surface-2 hover:text-fg aria-pressed:bg-line aria-pressed:text-fg"
-                >
-                  {r === 0 ? "All of it" : `Round ${r}`}
-                </button>
-              ))}
-            </div>
+          {round > 0 && (
+            // One round's changes, opened from How it went.
+            <span className="inline-flex items-center gap-1 self-start rounded-lg bg-line py-1 pr-1 pl-3 text-[13px] font-semibold">
+              Round {round}&apos;s changes only
+              <button type="button" aria-label="Show all the changes" onClick={() => setRound(0)} className="grid size-6 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </span>
           )}
           {page.changes.length === 0 && <p className="m-0 text-sm text-muted">{going ? "Nothing changed yet." : "No changes."}</p>}
           {page.changes.length > 0 && (
@@ -372,7 +386,7 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-3 max-[900px]:w-full">
           {page.changes.map((change, ci) => (
-                <div role="group" aria-label={change.path} id={`file-${ci}`} className="scroll-mt-[calc(var(--head)+12px)] overflow-hidden rounded-lg border border-line">
+                <div role="group" aria-label={change.path} id={`file-${ci}`} className="scroll-mt-[calc(var(--head)+12px)] overflow-clip rounded-lg border border-line">
                   <button
                     type="button"
                     aria-expanded={!shut.has(change.path)}
@@ -822,7 +836,7 @@ function LiveRound({ r, total }: { r: Round; total: number }) {
 }
 
 // PastRound is a round over: folded to a line, opened to its plan, words and actions.
-function PastRound({ r, total, open }: { r: Round; total: number; open: boolean }) {
+function PastRound({ r, total, open, changes }: { r: Round; total: number; open: boolean; changes?: () => void }) {
   const mins = r.end ? Math.max(1, Math.round((new Date(r.end.at).getTime() - new Date(r.at).getTime()) / 60000)) : 0;
   return (
     <details open={open} className="group rounded-lg border border-line px-4 py-1">
@@ -856,6 +870,11 @@ function PastRound({ r, total, open }: { r: Round; total: number; open: boolean 
             </div>
           ) : (
             <span className="text-sm text-muted">Nothing kept.</span>
+          )}
+          {changes && (
+            <button type="button" onClick={changes} className="self-start text-[13px] font-semibold text-accent-text">
+              See this round&apos;s changes
+            </button>
           )}
           {r.actions.length > 0 && (
             <details className="group/acts">
