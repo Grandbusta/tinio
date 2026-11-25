@@ -208,9 +208,9 @@ export function AppFrame({ children }: { children: ReactNode }) {
         )}
         <main
           ref={pageArea}
-          className={`flex min-w-0 flex-1 flex-col overflow-y-auto [view-transition-name:page] ${page === "chat" ? "bg-chat" : ""} ${showsAbout ? "hidden" : ""}`}
+          className={`flex min-w-0 flex-1 flex-col overflow-y-auto [view-transition-name:page] ${page === "chat" && !jobOpen ? "bg-chat" : ""} ${showsAbout ? "hidden" : ""}`}
         >
-          <div key={path} className="flex min-w-0 flex-1 flex-col">
+          <div key={path} className="page-in flex min-w-0 flex-1 flex-col">
             {children}
           </div>
         </main>

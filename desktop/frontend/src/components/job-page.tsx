@@ -128,7 +128,7 @@ export function JobPage({ agent, job, back }: { agent: string; job: string; back
   const canDecide = !going && !j.commit;
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="page-in flex min-h-full flex-col bg-bg">
       <div className="flex flex-col gap-2.5 border-b border-line px-8 pt-8 pb-4 max-[900px]:px-4">
         <Link
           href={`/agents/${agent}`}

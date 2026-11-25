@@ -55,15 +55,15 @@ html[data-fullscreen] .min-h-dvh {
 
 @keyframes page-in {
   from {
-    opacity: 0;
-    transform: translateY(10px);
+    opacity: 0.4;
+    transform: translateY(6px);
   }
 }
 
-/* About eases in over the page. A page itself shows at once, as in a coding app: fading it
-   in from nothing reads as waiting. */
+/* A page (and About, and a job) eases in: short, and never from nothing, which reads as
+   waiting. */
 .page-in {
-  animation: page-in 220ms ease-out both;
+  animation: page-in 160ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
