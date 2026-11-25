@@ -178,6 +178,25 @@ func TestMakingAndChangingFiles(t *testing.T) {
 	}
 }
 
+// A git repository is changed by a coding job, when there are coding jobs:
+// never directly, even one line. Without them, it's like any folder.
+func TestARepositoryIsChangedByACodingJob(t *testing.T) {
+	f, _ := shop(t) // it has a .git
+	os.WriteFile(filepath.Join(f.Path, "README.md"), []byte("| skill | status |\n"), 0o644)
+	change := map[string]string{"folder": "leaf & kettle", "file": "README.md", "find": "| skill | status |", "replace": "| skill | state |"}
+	coding := kit{s: Store{Versions: t.TempDir()}, fs: []Folder{f}, coding: true}
+	if err := coding.checkChange(change); err == nil || !strings.Contains(err.Error(), "coding job") {
+		t.Errorf("changed a repository directly: %v", err)
+	}
+	if err := coding.checkMake(map[string]string{"folder": "leaf & kettle", "file": "NOTES.md", "text": "x"}); err == nil {
+		t.Error("made a file in a repository directly")
+	}
+	plain := kit{s: Store{Versions: t.TempDir()}, fs: []Folder{f}}
+	if err := plain.checkChange(change); err != nil {
+		t.Errorf("without coding jobs, a repository is a folder like any: %v", err)
+	}
+}
+
 func TestSearchAndRead(t *testing.T) {
 	f, _ := shop(t)
 	k := kit{s: Store{Rules: Rules{}}, fs: []Folder{f}}

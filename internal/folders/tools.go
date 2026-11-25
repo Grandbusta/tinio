@@ -53,12 +53,17 @@ const (
 // Tools is what fs give an agent: listing, searching and reading as
 // abilities, limited to limit calls a day with the rest (st logs them); and,
 // for folders they may write in, making and changing files, only ever
-// proposed.
-func (s Store) Tools(fs []Folder, st tools.Store, limit int) (reads []ability.Ability, doers []mind.Doer) {
+// proposed. With coding, they have coding jobs: a folder that's a git
+// repository is changed by one, on its own branch and reviewed, never directly.
+func (s Store) Tools(fs []Folder, st tools.Store, limit int, coding bool) (reads []ability.Ability, doers []mind.Doer) {
 	if len(fs) == 0 {
 		return nil, nil
 	}
-	k := kit{s: s, fs: fs, st: st, limit: limit}
+	k := kit{s: s, fs: fs, st: st, limit: limit, coding: coding}
+	repos := ""
+	if coding {
+		repos = " Not in a folder that's a git repository: there, start a coding job (code.start) instead, even for one line."
+	}
 	names := k.names()
 	reads = []ability.Ability{
 		read{k: k, name: "folders.list", about: "List what's in the owner's folders on this computer: " + names + `. Query: {"folder": "its name", "path": "a folder inside it, or nothing for the top"}.`, run: k.list},
@@ -68,8 +73,8 @@ func (s Store) Tools(fs []Folder, st tools.Store, limit int) (reads []ability.Ab
 	for _, f := range fs {
 		if f.Write {
 			doers = []mind.Doer{
-				do{k: k, name: "folders.make_file", about: `Make a new text file (.md, .txt, .csv, .json, .html, ...) in one of the owner's folders you may make files in. Arguments: {"folder": "its name", "file": "its path inside the folder", "text": "all its words"}. It never replaces a file that's there.`, check: k.checkMake, run: k.makeFile, explain: k.explainMake},
-				do{k: k, name: "folders.change_file", about: `Change a text file in one of the owner's folders you may make files in, by replacing one passage that appears once. Arguments: {"folder": "its name", "file": "its path inside the folder", "find": "the exact words to replace", "replace": "what goes there instead"}. The old version is kept.`, check: k.checkChange, run: k.change, explain: k.explainChange},
+				do{k: k, name: "folders.make_file", about: `Make a new text file (.md, .txt, .csv, .json, .html, ...) in one of the owner's folders you may make files in. Arguments: {"folder": "its name", "file": "its path inside the folder", "text": "all its words"}. It never replaces a file that's there.` + repos, check: k.checkMake, run: k.makeFile, explain: k.explainMake},
+				do{k: k, name: "folders.change_file", about: `Change a text file in one of the owner's folders you may make files in, by replacing one passage that appears once. Arguments: {"folder": "its name", "file": "its path inside the folder", "find": "the exact words to replace", "replace": "what goes there instead"}. The old version is kept.` + repos, check: k.checkChange, run: k.change, explain: k.explainChange},
 			}
 			break
 		}
@@ -78,10 +83,11 @@ func (s Store) Tools(fs []Folder, st tools.Store, limit int) (reads []ability.Ab
 }
 
 type kit struct {
-	s     Store
-	fs    []Folder
-	st    tools.Store
-	limit int
+	s      Store
+	fs     []Folder
+	st     tools.Store
+	limit  int
+	coding bool // a git repository is changed by a coding job, not here
 }
 
 func (k kit) names() string {
@@ -379,6 +385,9 @@ func (k kit) writable(args map[string]string) (Folder, string, error) {
 	if !f.Write {
 		return Folder{}, "", fmt.Errorf("%s is read only: the owner can let you make files there in Settings", f.Name)
 	}
+	if k.coding && isRepo(f.Path) {
+		return Folder{}, "", fmt.Errorf("%s is a git repository: change it with a coding job (code.start), on its own branch, which the owner reviews; even one line", f.Name)
+	}
 	if !Writable(args["file"]) {
 		return Folder{}, "", fmt.Errorf("%q: only text files (.md, .txt, .csv, .json, .html, ...) are made or changed", args["file"])
 	}
@@ -532,4 +541,10 @@ func folderNames(fs []Folder) string {
 		out = append(out, f.Name)
 	}
 	return strings.Join(out, ", ")
+}
+
+// isRepo is whether dir is a git repository (its .git a folder, or a file for a worktree).
+func isRepo(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, ".git"))
+	return err == nil
 }

@@ -52,7 +52,7 @@ func (t start) Describe() string {
 		extra = "\n" + strings.Join(known, "\n")
 	}
 	return `Start a coding job: Claude Code writes the code in one of the owner's folders that's a git repository (` + strings.Join(names, ", ") +
-		`), on a copy of it on its own branch, and you see it through. Use it when they want code written, fixed or changed there. ` +
+		`), on a copy of it on its own branch, and you see it through. Use it for any change to files there, code or not (a README row, a doc, a config value), even one line: it's made on its own branch and the owner reviews it. ` +
 		`Arguments: {"folder": "its name", "title": "the job in a few words, e.g. Fix the basket rounding", ` +
 		`"brief": "what to do and why, what done looks like (tests to add or pass), the repository's rules that matter, and what not to touch"}. ` +
 		`Read the folder first (its README, AGENTS.md or CLAUDE.md, the code in question), so the brief is specific. The owner sees the brief and says yes first.` + extra

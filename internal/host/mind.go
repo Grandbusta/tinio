@@ -451,9 +451,10 @@ func (h *Host) mind(ctx context.Context, r *runner) (m *mind.Mind, done func(), 
 		if err != nil {
 			log.Warn("their folders weren't loaded", "err", err)
 		}
-		reads, ds := h.Folders.Tools(given, st, cfg.Tools.CallsPerDay)
+		coding := h.Jobs != nil && h.Coder != ""
+		reads, ds := h.Folders.Tools(given, st, cfg.Tools.CallsPerDay, coding)
 		abilities, doers = append(abilities, reads...), append(doers, ds...)
-		if h.Jobs != nil && h.Coder != "" {
+		if coding {
 			// Coding jobs: in the folders they may make files in, with Claude Code there.
 			var mine []jobs.Folder
 			for _, f := range given {
