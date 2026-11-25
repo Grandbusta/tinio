@@ -340,6 +340,8 @@ export type JobPayload = {
   ask?: string;
   tool?: string;
   detail?: string;
+  // Claude Code's own question to you (its AskUserQuestion), with the choices it offers.
+  questions?: { question: string; header?: string; multiSelect?: boolean; options: { label: string; description?: string }[] }[];
   rounds?: number;
   commit?: string;
   pr?: string;

@@ -58,11 +58,25 @@ func (j *Jobs) List(c *gin.Context) error {
 // of the job) or "no", with what they'd like instead.
 func (j *Jobs) Answer(c *gin.Context) error {
 	var in struct {
-		Answer string `json:"answer"`
-		Note   string `json:"note"`
+		Answer  string            `json:"answer"`
+		Note    string            `json:"note"`
+		Choices map[string]string `json:"choices"` // "choose": Claude Code's own question, answered
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		return utils.ErrBadRequest
+	}
+	if in.Answer == "choose" {
+		if len(in.Choices) == 0 {
+			return utils.Invalid("choices", "Choose an answer.")
+		}
+		if err := j.Jobs.Choose(c, c.Param("id"), c.Param("job"), c.Param("ask"), in.Choices); err != nil {
+			if errors.Is(err, jobs.ErrNoJob) {
+				return utils.Invalid("ask", "That question isn't waiting any more.")
+			}
+			return err
+		}
+		utils.SuccessWithData(c, http.StatusOK, gin.H{"answered": true})
+		return nil
 	}
 	if in.Answer != jobs.Once && in.Answer != jobs.ForJob && in.Answer != jobs.No {
 		return utils.Invalid("answer", "Answer once, job or no.")

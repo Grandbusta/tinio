@@ -69,8 +69,9 @@ function lines(patch: string) {
 // again.
 const seen = new Map<string, Page>();
 
-// back, when it's open in the chat's place, puts the chat back.
-export function JobPage({ agent, job, back }: { agent: string; job: string; back?: () => void }) {
+// back, when it's open in the chat's place, puts the chat back; ask is its question
+// waiting on you, as the chat docks it.
+export function JobPage({ agent, job, back, ask }: { agent: string; job: string; back?: () => void; ask?: ReactNode }) {
   const { agent: a } = useFrame();
   const [page, setPage] = useState<Page | null>(() => seen.get(`${agent}/${job}`) ?? null);
   const [round, setRound] = useState(0); // 0: all of it
@@ -86,6 +87,7 @@ export function JobPage({ agent, job, back }: { agent: string; job: string; back
   const [pushing, setPushing] = useState(false);
   const [undoing, setUndoing] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [wholeTop, setWholeTop] = useState(false); // a long last word, read in full
   const box = useRef<HTMLTextAreaElement>(null);
   // The message box grows with what's written, up to a point, as the chat's does.
   useEffect(() => {
@@ -145,7 +147,7 @@ export function JobPage({ agent, job, back }: { agent: string; job: string; back
         text: (
           <span className="inline-flex items-center gap-2">
             <span aria-hidden="true" className="size-2 flex-none animate-pulse rounded-full bg-accent" />
-            {j.status === "waiting" ? "Waiting on you: its question is in the chat" : step?.what || "Working"}
+            {j.status === "waiting" ? (ask ? "Waiting on you: its question is just below" : "Waiting on you") : step?.what || "Working"}
           </span>
         ),
       }
@@ -158,6 +160,7 @@ export function JobPage({ agent, job, back }: { agent: string; job: string; back
           : finished?.detail
             ? { agent: false, who: j.status === "ready" ? "Claude Code finished" : "Claude Code stopped", text: <MessageText text={finished.detail} /> }
             : { agent: false, who: "Claude Code", text: page.changes.length ? "Look it over: commit it, ask for changes, or undo it." : "It made no changes." };
+  const long = !going && !j.commit && !j.pr && ((verdict || finished?.detail || "").length > 240 || (verdict || finished?.detail || "").split("\n").length > 3);
   const placeholder = going
     ? `Tell the job something; ${name} passes it on`
     : j.commit
@@ -452,7 +455,7 @@ export function JobPage({ agent, job, back }: { agent: string; job: string; back
         </section>
       </div>
 
-      <div className="sticky bottom-0 flex flex-col gap-3 border-t border-line bg-bg px-8 py-3.5 max-[900px]:px-4">
+      <div className="sticky bottom-0 z-20 flex flex-col gap-3 border-t border-line bg-bg px-8 py-3.5 max-[900px]:px-4">
         {error && (
           <span role="alert" className="text-[13px] text-bad-text">
             {error}
@@ -533,7 +536,15 @@ export function JobPage({ agent, job, back }: { agent: string; job: string; back
                 {top.agent && a ? <Avatar agent={a} size={32} /> : <ServiceLogo service="claude" size={32} />}
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-[12.5px] font-semibold text-muted">{top.who}</span>
-                  <span className="max-w-[72ch] text-[14.5px] leading-normal">{top.text}</span>
+                  {/* Three lines at most, so the changes keep the room; the rest on asking. */}
+                  <span className={`max-w-[72ch] text-[14.5px] leading-normal ${long && !wholeTop ? "max-h-[4.5em] overflow-hidden [mask-image:linear-gradient(to_bottom,black_55%,transparent)]" : long ? "max-h-[40vh] overflow-y-auto" : ""}`}>
+                    {top.text}
+                  </span>
+                  {long && (
+                    <button type="button" aria-expanded={wholeTop} onClick={() => setWholeTop(!wholeTop)} className="self-start text-[13px] font-semibold text-accent-text">
+                      {wholeTop ? "Show less" : "Show all"}
+                    </button>
+                  )}
                 </span>
               </span>
               <span className="ml-auto flex flex-none flex-wrap items-center gap-1.5">
@@ -567,6 +578,7 @@ export function JobPage({ agent, job, back }: { agent: string; job: string; back
                 )}
               </span>
             </div>
+            {going && ask}
             {j.status !== "cancelled" && (
               <form
                 onSubmit={(e) => {

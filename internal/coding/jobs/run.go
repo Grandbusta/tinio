@@ -36,7 +36,11 @@ type run struct {
 	// says then goes into the next round.
 	reviewing bool
 	heard     []string
-	showing   sync.Mutex // one card update at a time, each of the latest state
+	// The owner said no to something it asked: the round stops there, unchecked,
+	// and carries on once with instead, if they said what to do.
+	refused bool
+	instead string
+	showing sync.Mutex // one card update at a time, each of the latest state
 }
 
 // show shows the job's card as it is now. Updates go one at a time, each
@@ -163,11 +167,27 @@ func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {
 			ended = true
 			status := map[string]string{coding.Completed: Ready, coding.Stopped: Stopped, coding.Failed: Failed}[e.Status]
 			go sess.Close()
-			r.roundOver(status, e.Text, e)
-			if rv := r.s.reviewerNow(); status == Ready && set.Review && rv != nil && !r.cancelled() {
+			r.mu.Lock()
+			refused, instead := r.refused, r.instead
+			r.refused, r.instead = false, ""
+			r.mu.Unlock()
+			text := e.Text
+			if refused { // it stopped where the owner said no: nothing finished to check
+				status = Stopped
+				text = "Stopped where you said no."
+				if t := strings.TrimSpace(e.Text); t != "" {
+					text += "\n\n" + t
+				}
+			}
+			r.roundOver(status, text, e)
+			if rv := r.s.reviewerNow(); !refused && status == Ready && set.Review && rv != nil && !r.cancelled() {
 				r.review(ctx, rv, e.Text)
 			} else {
-				r.finish(status, e.Text)
+				r.finish(status, text)
+			}
+			if refused && instead != "" && !r.cancelled() {
+				j := r.snapshot()
+				go r.s.Reply(context.Background(), j.Agent, j.ID, instead) // one round, with what to do instead
 			}
 		}
 	}
@@ -281,13 +301,13 @@ func (r *run) ask(e coding.Event) {
 	ok, decided, why := r.gate.Decide(e)
 	sess := r.session
 	r.mu.Unlock()
-	if decided {
-		sess.Answer(e.AskID, ok, why)
+	if decided && e.Tool != asksYou { // its own question is always the owner's
+		sess.Answer(e.AskID, ok, why, false)
 		return
 	}
 	// The owner's: a card with three answers.
 	b, _ := json.Marshal(map[string]any{"job": r.job.ID, "ask": e.AskID, "tool": e.Tool, "detail": r.inCopy(detail(e.Tool, e.Input)),
-		"why": whyAsked(r.gate.Rules, e)})
+		"why": whyAsked(r.gate.Rules, e), "questions": e.Input["questions"]})
 	row := ulid.Make().String()
 	r.mu.Lock()
 	j := r.job
@@ -295,7 +315,7 @@ func (r *run) ask(e coding.Event) {
 	if err := store.New(r.s.DB).For(j.Agent).SaveChat(context.Background(), memory.ChatMessage{ID: row, Author: memory.ChatAgent,
 		Kind: memory.ChatJobAsk, Text: r.inCopy(askText(e)), Payload: b, At: time.Now().UTC(), Topic: j.Topic}); err != nil {
 		r.s.Log.Warn("jobs: asking the owner failed; it's a no", "job", j.ID, "err", err)
-		sess.Answer(e.AskID, false, "Tinio couldn't ask the owner.")
+		sess.Answer(e.AskID, false, "Tinio couldn't ask the owner.", false)
 		return
 	}
 	r.mu.Lock()
@@ -335,10 +355,11 @@ func (r *run) answer(ctx context.Context, ask, answer, note string) error {
 		if n := strings.TrimSpace(note); n != "" {
 			why += " " + n
 		}
-		said = "You said no."
+		said = "You said no, so it stopped there."
 		if n := strings.TrimSpace(note); n != "" {
-			said += " " + n
+			said = "You said no: " + n + " It carries on with that."
 		}
+		r.refused, r.instead = true, strings.TrimSpace(note)
 	default:
 		r.asks[ask] = p
 		r.mu.Unlock()
@@ -356,7 +377,51 @@ func (r *run) answer(ctx context.Context, ask, answer, note string) error {
 	r.s.step(ctx, j.ID, WhoOwner, strings.TrimPrefix(strings.TrimSuffix(said, "."), "✅ "), strings.TrimSpace(note))
 	store.New(r.s.DB).For(j.Agent).Settle(ctx, p.row, r.inCopy(askText(p.event))+"\n\n"+said, time.Now().UTC())
 	r.now("", true)
-	return sess.Answer(ask, allow, why)
+	if !allow {
+		// It should stop there; if it hasn't before long, it's stopped.
+		go func() {
+			select {
+			case <-r.over:
+			case <-time.After(15 * time.Second):
+				r.mu.Lock()
+				still := r.refused && r.session == sess
+				r.mu.Unlock()
+				if still {
+					sess.Interrupt()
+				}
+			}
+		}()
+	}
+	return sess.Answer(ask, allow, why, !allow)
+}
+
+// choose answers Claude Code's own question with the owner's choices, by
+// question.
+func (r *run) choose(ctx context.Context, ask string, answers map[string]string) error {
+	r.mu.Lock()
+	p, ok := r.asks[ask]
+	if !ok || p.event.Tool != asksYou {
+		r.mu.Unlock()
+		return ErrNoJob
+	}
+	delete(r.asks, ask)
+	if len(r.asks) == 0 && r.job.Status == Waiting {
+		r.job.Status, r.card.Status = Working, Working
+	}
+	r.card.Asking = len(r.asks)
+	sess, j := r.session, r.job
+	r.mu.Unlock()
+	var said []string
+	for _, q := range questionsOf(p.event.Input) {
+		if a := strings.TrimSpace(answers[q.Question]); a != "" {
+			said = append(said, a)
+		}
+	}
+	r.s.save(ctx, j)
+	r.s.step(ctx, j.ID, WhoOwner, "Chose "+strings.Join(said, "; "), "")
+	store.New(r.s.DB).For(j.Agent).Settle(ctx, p.row, r.inCopy(askText(p.event))+"\n\nYou chose: "+strings.Join(said, "; ")+".", time.Now().UTC())
+	r.now("", true)
+	return sess.Choose(ask, answers)
 }
 
 func (r *run) send(text string) error {
@@ -442,7 +507,32 @@ func askVerb(tool string) string {
 }
 
 func askText(e coding.Event) string {
+	if e.Tool == asksYou {
+		var qs []string
+		for _, q := range questionsOf(e.Input) {
+			qs = append(qs, q.Question)
+		}
+		return "Claude Code asks you: " + strings.Join(qs, " ")
+	}
 	return "Claude Code wants to " + strings.ToLower(askVerb(e.Tool)) + ": " + detail(e.Tool, e.Input)
+}
+
+// asksYou is Claude Code's own question to the owner, with choices: never a
+// rule's to allow, always the owner's to answer.
+const asksYou = "AskUserQuestion"
+
+type question struct {
+	Question string `json:"question"`
+	Options  []struct {
+		Label string `json:"label"`
+	} `json:"options"`
+}
+
+func questionsOf(input map[string]any) []question {
+	var qs []question
+	b, _ := json.Marshal(input["questions"])
+	json.Unmarshal(b, &qs)
+	return qs
 }
 
 // detail is exactly what it would do: the command, the page, the file.

@@ -60,7 +60,12 @@ type Session interface {
 	Events() <-chan Event // closed when the CLI has ended
 	Send(text string) error
 	// Answer says yes or no to an Ask; why is what the CLI is told with a no.
-	Answer(askID string, allow bool, why string) error
+	// stop, with a no, also ends its turn there, as a No in Claude Code does:
+	// it waits to be told what to do instead rather than working round it.
+	Answer(askID string, allow bool, why string, stop bool) error
+	// Choose answers the CLI's own question (AskUserQuestion): each question's
+	// text, with what was chosen.
+	Choose(askID string, answers map[string]string) error
 	Interrupt() error
 	Close() error
 }

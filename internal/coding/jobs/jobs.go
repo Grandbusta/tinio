@@ -103,6 +103,11 @@ func (s *Service) Start(ctx context.Context) error {
 		}
 		s.editCard(ctx, j, func(c *Card) { c.Now = "Stopped when Tinio closed. Reply here to carry it on." })
 	}
+	// Its questions still open can't be answered now: the CLI that asked is gone.
+	if _, err := s.DB.Exec(ctx, `UPDATE chat_messages SET settled_at = $1, text = text || $2
+		WHERE kind = 'job_ask' AND settled_at IS NULL`, time.Now().UTC(), "\n\nThe job ended before you answered."); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -401,6 +406,16 @@ func (s *Service) Answer(ctx context.Context, agent, job, ask, answer, note stri
 		return ErrNoJob
 	}
 	return r.answer(ctx, ask, answer, note)
+}
+
+// Choose answers Claude Code's own question to the owner: each question's text,
+// with what they chose or wrote.
+func (s *Service) Choose(ctx context.Context, agent, job, ask string, answers map[string]string) error {
+	r, ok := s.running(agent, job)
+	if !ok {
+		return ErrNoJob
+	}
+	return r.choose(ctx, ask, answers)
 }
 
 // Reply sends the owner's words to the job: to it as it works, or, when it

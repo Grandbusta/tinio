@@ -59,10 +59,12 @@ func (s *fakeSession) play(n int, j coding.Job) {
 	s.events <- coding.Event{Kind: coding.Step, Tool: "Read", Input: map[string]any{"file_path": filepath.Join(j.Dir, "basket.go")}}
 	s.events <- coding.Event{Kind: coding.Step, Tool: "Edit", Input: map[string]any{"file_path": filepath.Join(j.Dir, "basket.go")}}
 	s.events <- coding.Event{Kind: coding.Changed, Tool: "Edit", Path: filepath.Join(j.Dir, "basket.go")}
-	ask("r1", "Edit", map[string]any{"file_path": filepath.Join(j.Dir, "basket.go")}) // the rules allow it
-	ask("r2", "Bash", map[string]any{"command": "npm install decimal.js"})            // the owner: for this job
-	ask("r3", "Bash", map[string]any{"command": "npm install decimal.js"})            // allowed again, unasked
-	ask("r4", "WebFetch", map[string]any{"url": "https://example.com/docs"})          // the owner: no
+	ask("r1", "Edit", map[string]any{"file_path": filepath.Join(j.Dir, "basket.go")})                                       // the rules allow it
+	ask("r2", "Bash", map[string]any{"command": "npm install decimal.js"})                                                  // the owner: for this job
+	ask("r3", "Bash", map[string]any{"command": "npm install decimal.js"})                                                  // allowed again, unasked
+	ask("r4", "WebFetch", map[string]any{"url": "https://example.com/docs"})                                                // the owner: no
+	ask("r5", "AskUserQuestion", map[string]any{"questions": []any{map[string]any{"question": "Which word for the status?", // the owner chooses
+		"options": []any{map[string]any{"label": "Draft"}, map[string]any{"label": "Written"}}}}})
 	os.WriteFile(filepath.Join(j.Dir, "basket.go"), []byte("package shop\n\n// Total rounds once.\nfunc Total() int { return 1131 }\n"), 0o644)
 	s.events <- coding.Event{Kind: coding.Done, Status: coding.Completed, Text: "Fixed it.", CostUSD: 0.15, Turns: 5}
 }
@@ -71,11 +73,21 @@ func (s *fakeSession) Events() <-chan coding.Event { return s.events }
 func (s *fakeSession) Send(string) error           { return nil }
 func (s *fakeSession) Interrupt() error            { return nil }
 func (s *fakeSession) Close() error                { return nil }
-func (s *fakeSession) Answer(_ string, allow bool, why string) error {
+func (s *fakeSession) Choose(_ string, answers map[string]string) error {
 	s.f.mu.Lock()
-	if allow {
+	s.f.answers = append(s.f.answers, "chose "+answers["Which word for the status?"])
+	s.f.mu.Unlock()
+	s.answered <- true
+	return nil
+}
+func (s *fakeSession) Answer(_ string, allow bool, why string, stop bool) error {
+	s.f.mu.Lock()
+	switch {
+	case allow:
 		s.f.answers = append(s.f.answers, "allow")
-	} else {
+	case stop:
+		s.f.answers = append(s.f.answers, "deny and stop: "+why)
+	default:
 		s.f.answers = append(s.f.answers, "deny: "+why)
 	}
 	s.f.mu.Unlock()
@@ -164,23 +176,44 @@ func TestACodingJob(t *testing.T) {
 	answer(asks()[0], map[string]any{"answer": "job"})
 	waitFor(t, "the second question", func() bool { return len(asks()) == 2 })
 	answer(asks()[1], map[string]any{"answer": "no", "note": "Use the docs in the repository."})
+	waitFor(t, "its own question", func() bool { return len(asks()) == 3 })
+	if a := asks()[2]; !strings.Contains(a.Text, "Claude Code asks you: Which word for the status?") || !strings.Contains(string(a.Payload), `"label":"Written"`) {
+		t.Errorf("its question %q %s", a.Text, a.Payload)
+	}
+	answer(asks()[2], map[string]any{"answer": "choose", "choices": map[string]string{"Which word for the status?": "Written"}})
 
 	waitFor(t, "the job to finish", func() bool { g, _ := ta.jobs.Get(ctx, zara, j.ID); return g.Status == jobs.Ready })
 	fake.mu.Lock()
 	got := strings.Join(fake.answers, " | ")
 	fake.mu.Unlock()
-	if got != "allow | allow | allow | deny: Ada said no. Use the docs in the repository." {
+	if got != "allow | allow | allow | deny and stop: Ada said no. Use the docs in the repository. | chose Written" {
 		t.Errorf("answers: %s", got)
 	}
 	a := asks()
-	if a[0].SettledAt.IsZero() || !strings.Contains(a[0].Text, "Allowed for this job") || !strings.Contains(a[1].Text, "You said no. Use the docs") {
+	if a[0].SettledAt.IsZero() || !strings.Contains(a[0].Text, "Allowed for this job") || !strings.Contains(a[1].Text, "You said no: Use the docs in the repository. It carries on with that.") ||
+		!strings.Contains(a[2].Text, "You chose: Written.") {
 		t.Errorf("questions settled as %q and %q", a[0].Text, a[1].Text)
+	}
+	// The no stopped the round there, unchecked, and it carried on once with what to do instead.
+	fake.mu.Lock()
+	instead := fake.started[1]
+	fake.mu.Unlock()
+	if instead.Resume != "s-1" || instead.Brief != "Use the docs in the repository." {
+		t.Errorf("carried on after the no with %+v", instead)
+	}
+	steps, _ := ta.jobs.Steps(ctx, j.ID)
+	stopped := false
+	for _, s := range steps {
+		stopped = stopped || (s.What == "Stopped" && strings.HasPrefix(s.Detail, "Stopped where you said no."))
+	}
+	if !stopped {
+		t.Errorf("no step for the round stopped at the no: %+v", steps)
 	}
 	card, ok, _ := st.ChatMessage(ctx, j.Card)
 	var c jobs.Card
 	json.Unmarshal(card.Payload, &c)
-	if !ok || card.Kind != memory.ChatJob || card.Topic != j.Topic || c.Status != jobs.Ready || c.Summary != "Fixed it." ||
-		len(c.Files) != 1 || c.Files[0] != "basket.go" || c.CostUSD != 0.15 || c.Asking != 0 {
+	if !ok || card.Kind != memory.ChatJob || card.Topic != j.Topic || c.Status != jobs.Ready || c.Summary != "Added the test." ||
+		len(c.Files) != 1 || c.Files[0] != "basket.go" || c.CostUSD != 0.2 || c.Asking != 0 || c.Rounds != 2 {
 		t.Errorf("card %v %+v", ok, c)
 	}
 	_, out := ta.do(t, "GET", "/v1/agents/"+zara+"/jobs", nil, ada, "")
@@ -192,9 +225,9 @@ func TestACodingJob(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("replying to the card: %d %v", rec.Code, out)
 	}
-	waitFor(t, "the job to carry on", func() bool { fake.mu.Lock(); defer fake.mu.Unlock(); return len(fake.started) == 2 })
+	waitFor(t, "the job to carry on", func() bool { fake.mu.Lock(); defer fake.mu.Unlock(); return len(fake.started) == 3 })
 	fake.mu.Lock()
-	again := fake.started[1]
+	again := fake.started[2]
 	fake.mu.Unlock()
 	if again.Resume != "s-1" || again.Brief != "Also add a test for 15% off." || again.Dir != j.Dir {
 		t.Errorf("carried on with %+v", again)
@@ -205,7 +238,7 @@ func TestACodingJob(t *testing.T) {
 			t.Error("the agent hears a reply meant for the job")
 		}
 	}
-	waitFor(t, "it to finish again", func() bool { g, _ := ta.jobs.Get(ctx, zara, j.ID); return g.Status == jobs.Ready && g.CostUSD > 0.19 })
+	waitFor(t, "it to finish again", func() bool { g, _ := ta.jobs.Get(ctx, zara, j.ID); return g.Status == jobs.Ready && g.CostUSD > 0.24 })
 }
 
 // After a job: its page shows what it did and its changes, by round; going

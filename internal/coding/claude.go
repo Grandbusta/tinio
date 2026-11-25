@@ -116,12 +116,12 @@ func (s *claudeSession) Send(text string) error {
 	return s.write(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": text}})
 }
 
-func (s *claudeSession) Answer(askID string, allow bool, why string) error {
+func (s *claudeSession) Answer(askID string, allow bool, why string, stop bool) error {
 	s.mu.Lock()
 	input := s.asked[askID]
 	delete(s.asked, askID)
 	s.mu.Unlock()
-	resp := map[string]any{"behavior": "deny", "message": why}
+	resp := map[string]any{"behavior": "deny", "message": why, "interrupt": stop}
 	if allow {
 		if input == nil {
 			input = map[string]any{}
@@ -130,6 +130,20 @@ func (s *claudeSession) Answer(askID string, allow bool, why string) error {
 	}
 	return s.write(map[string]any{"type": "control_response",
 		"response": map[string]any{"subtype": "success", "request_id": askID, "response": resp}})
+}
+
+func (s *claudeSession) Choose(askID string, answers map[string]string) error {
+	s.mu.Lock()
+	input := s.asked[askID]
+	delete(s.asked, askID)
+	s.mu.Unlock()
+	in := map[string]any{}
+	for k, v := range input {
+		in[k] = v
+	}
+	in["answers"] = answers // the questions as asked, and the answers: how Claude Code hears them
+	return s.write(map[string]any{"type": "control_response",
+		"response": map[string]any{"subtype": "success", "request_id": askID, "response": map[string]any{"behavior": "allow", "updatedInput": in}}})
 }
 
 func (s *claudeSession) Interrupt() error {

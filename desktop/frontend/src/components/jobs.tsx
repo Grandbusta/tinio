@@ -156,8 +156,11 @@ export function JobAskCard({ row, agent, tapped, busy, failed, answer, docked, m
   const [note, setNote] = useState("");
   const path = `/agents/${agent}/jobs/${p.job}/asks/${p.ask}`;
   const ended = row.settled_at ? row.text.split("\n\n").pop() : tapped;
-  const verb = (verbs[p.tool ?? ""] ?? `Use ${p.tool}`).toLowerCase();
-  const command = (
+  const choosing = p.tool === "AskUserQuestion" && !!p.questions?.length; // its own question, with choices
+  const verb = choosing ? "ask you something" : (verbs[p.tool ?? ""] ?? `Use ${p.tool}`).toLowerCase();
+  const command = choosing ? (
+    <span className="block text-[13.5px]">{p.questions!.map((q) => q.question).join(" ")}</span>
+  ) : (
     <code className="block max-h-40 overflow-y-auto rounded-md border border-line bg-surface-2 px-3 py-2 font-mono text-[12.5px] whitespace-pre-wrap text-fg [overflow-wrap:anywhere]">
       {p.detail}
     </code>
@@ -168,7 +171,7 @@ export function JobAskCard({ row, agent, tapped, busy, failed, answer, docked, m
       return (
         <span className="flex max-w-full items-center gap-2 self-start py-1 text-[13px] text-muted">
           <span aria-hidden="true" className="size-2 flex-none animate-pulse rounded-full bg-warn-text" />
-          Claude Code asked to {verb}: your answer is below the chat.
+          {choosing ? "Claude Code asked you something" : `Claude Code asked to ${verb}`}: your answer is below the chat.
         </span>
       );
     const no = (ended ?? "").startsWith("You said no");
@@ -191,6 +194,8 @@ export function JobAskCard({ row, agent, tapped, busy, failed, answer, docked, m
       </details>
     );
   }
+
+  if (choosing) return <Choices row={row} path={path} questions={p.questions!} busy={busy} failed={failed} answer={answer} more={more} />;
 
   return (
     <div className="flex w-full basis-full flex-col gap-2.5 rounded-xl border border-line bg-surface px-4 py-3.5 shadow-lg">
@@ -217,8 +222,9 @@ export function JobAskCard({ row, agent, tapped, busy, failed, answer, docked, m
       {noting && (
         <div className="flex flex-col gap-2">
           <label htmlFor={`note-${row.id}`} className="text-[13px] font-semibold">
-            What should it do instead? (it reads this)
+            It stops here. What should it do instead?
           </label>
+          <span className="-mt-1 text-[12.5px] text-muted">It carries on with what you write. Left empty, it waits for you to say.</span>
           <input
             id={`note-${row.id}`}
             autoFocus
@@ -242,6 +248,101 @@ export function JobAskCard({ row, agent, tapped, busy, failed, answer, docked, m
               Back
             </Button>
           </div>
+        </div>
+      )}
+      {failed && (
+        <span role="alert" className="text-[13px] text-bad-text">
+          {failed}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Choices is Claude Code asking you something, with the choices it offers: one question
+// with one choice goes at a tap; more, or several choices, once each has an answer. A
+// choice of your own words is always there.
+function Choices({ row, path, questions, busy, failed, answer, more }: {
+  row: ChatRow;
+  path: string;
+  questions: NonNullable<NonNullable<ChatRow["payload"]>["questions"]>;
+  busy?: boolean;
+  failed?: string;
+  answer: AskProps["answer"];
+  more: number;
+}) {
+  const [picked, setPicked] = useState<Record<string, string[]>>({});
+  const [own, setOwn] = useState<Record<string, string>>({});
+  const at = (q: string) => (own[q]?.trim() ? [own[q].trim()] : (picked[q] ?? []));
+  const send = (choices: Record<string, string>) =>
+    answer(row, { answer: "choose", choices }, `You chose: ${Object.values(choices).join("; ")}.`, path);
+  const all = () => Object.fromEntries(questions.map((q) => [q.question, at(q.question).join(", ")]));
+  const ready = questions.every((q) => at(q.question).length > 0);
+  const atOnce = questions.length === 1 && !questions[0].multiSelect;
+  const pick = (q: (typeof questions)[number], label: string) => {
+    if (atOnce) return send({ [q.question]: label });
+    setOwn((o) => ({ ...o, [q.question]: "" }));
+    setPicked((p) => {
+      const was = p[q.question] ?? [];
+      if (!q.multiSelect) return { ...p, [q.question]: [label] };
+      return { ...p, [q.question]: was.includes(label) ? was.filter((l) => l !== label) : [...was, label] };
+    });
+  };
+  return (
+    <div className="flex max-h-[45vh] w-full basis-full flex-col gap-3 overflow-y-auto rounded-xl border border-line bg-surface px-4 py-3.5 shadow-lg">
+      <span className="flex items-center gap-2">
+        <ServiceLogo service="claude" size={22} />
+        <b className="text-[14px]">Claude Code asks you</b>
+        {more > 0 && <span className="ml-auto text-xs text-muted">{more === 1 ? "1 more after this" : `${more} more after this`}</span>}
+      </span>
+      {questions.map((q, i) => (
+        <fieldset key={i} className="flex flex-col gap-2">
+          <legend className="mb-2 flex flex-col gap-0.5">
+            {q.header && <span className="text-xs font-semibold text-muted">{q.header}</span>}
+            <span className="text-[14.5px] font-semibold">{q.question}</span>
+          </legend>
+          <div className="flex flex-col gap-1.5">
+            {q.options.map((o) => {
+              const on = (picked[q.question] ?? []).includes(o.label) && !own[q.question]?.trim();
+              return (
+                <button
+                  key={o.label}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={atOnce ? undefined : on}
+                  onClick={() => pick(q, o.label)}
+                  className="flex flex-col items-start gap-0.5 rounded-lg border border-line px-3.5 py-2.5 text-left hover:border-line-strong hover:bg-surface-2 aria-pressed:border-accent aria-pressed:bg-accent-soft disabled:opacity-60"
+                >
+                  <b className="text-[13.5px] font-semibold">{o.label}</b>
+                  {o.description && <span className="text-[13px] leading-snug text-muted">{o.description}</span>}
+                </button>
+              );
+            })}
+            <label htmlFor={`own-${row.id}-${i}`} className="sr-only">
+              Something else
+            </label>
+            <input
+              id={`own-${row.id}-${i}`}
+              value={own[q.question] ?? ""}
+              onChange={(e) => setOwn((o) => ({ ...o, [q.question]: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && ready) {
+                  e.preventDefault();
+                  send(all());
+                }
+              }}
+              placeholder="Something else: say it in your words"
+              maxLength={500}
+              className="min-h-10 rounded-lg border border-line-strong bg-surface px-3.5 text-[13.5px]"
+            />
+          </div>
+        </fieldset>
+      ))}
+      {(!atOnce || own[questions[0].question]?.trim()) && (
+        <div>
+          <Button kind="primary" type="button" disabled={busy || !ready} onClick={() => send(all())}>
+            {busy ? "Sending" : "Send the answer"}
+          </Button>
         </div>
       )}
       {failed && (

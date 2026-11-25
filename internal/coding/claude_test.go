@@ -83,7 +83,7 @@ func TestAJobAnsweredBothWays(t *testing.T) {
 					ok, why = false, "Ada said no: use the docs in the repository."
 				}
 			}
-			if err := s.Answer(e.AskID, ok, why); err != nil {
+			if err := s.Answer(e.AskID, ok, why, false); err != nil {
 				t.Fatal(err)
 			}
 		case Done:
