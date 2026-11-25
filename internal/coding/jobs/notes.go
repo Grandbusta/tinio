@@ -96,6 +96,9 @@ func (s *Service) learn(ctx context.Context, j Job) {
 	}
 	var story strings.Builder
 	for _, st := range steps {
+		if st.What == Planned || st.What == RoundStarted {
+			continue
+		}
 		who := map[string]string{WhoAgent: "You", WhoCLI: "Claude Code", WhoOwner: "The owner", WhoTinio: "Tinio"}[st.Who]
 		fmt.Fprintf(&story, "- %s: %s", who, st.What)
 		if d := strings.TrimSpace(st.Detail); d != "" {

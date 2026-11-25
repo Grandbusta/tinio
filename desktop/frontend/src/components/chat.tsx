@@ -475,7 +475,7 @@ export function Chat({ id }: { id: string }) {
         />
       )}
       <div className={job ? "hidden" : "contents"}>
-      <header className="sticky top-0 z-10 flex flex-col border-b border-line bg-bg">
+      <header className="fs-top sticky top-0 z-10 flex flex-col border-b border-line bg-bg">
         <div className="flex items-center gap-1 px-4 py-2 max-[900px]:px-2 max-[900px]:py-1.5">
           <Link href="/agents" aria-label="Back to chats" className="grid size-11 flex-none place-items-center rounded-full text-muted hover:text-fg min-[901px]:hidden">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

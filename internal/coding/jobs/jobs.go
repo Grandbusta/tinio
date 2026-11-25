@@ -486,6 +486,16 @@ const (
 	WhoTinio = "tinio"
 )
 
+// The steps that tell a round as it goes, for the job's page: where each round
+// starts (Tinio, with what started it), what Claude Code said, and its plan
+// (its to-do list, as JSON, each time it changes). Its actions are steps of
+// their own, told as doing() says.
+const (
+	RoundStarted = "Round started"
+	Said         = "Said"
+	Planned      = "Planned"
+)
+
 // A Step is one thing in a job's story, told by who did it.
 type Step struct {
 	At     time.Time `json:"at"`

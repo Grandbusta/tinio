@@ -21,15 +21,13 @@ body {
 }
 
 /* In macOS full screen the window's hidden title bar still lies along its top, unseen,
-   and takes the clicks there: the app starts below it (main.tsx says when). */
-html[data-fullscreen] body {
-  padding-top: 28px;
-}
-html[data-fullscreen] .h-dvh {
-  height: calc(100dvh - 28px);
-}
-html[data-fullscreen] .min-h-dvh {
-  min-height: calc(100dvh - 28px);
+   and takes the clicks there (main.tsx says when): what sits at the top of a column
+   (fs-top) starts below it, its own background filling the strip. */
+html[data-fullscreen] .fs-top::before {
+  content: "";
+  display: block;
+  flex: none;
+  height: 28px;
 }
 
 /* Opening or closing About, and arriving from a page outside the frame: the page area

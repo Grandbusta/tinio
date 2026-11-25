@@ -133,7 +133,7 @@ export function SidePanel(props: {
   return (
     <aside
       aria-label={title}
-      className="sticky top-0 z-30 flex h-dvh w-[340px] flex-none flex-col border-l border-line bg-bg max-[1100px]:-ml-[340px] max-[1100px]:shadow-2xl max-[560px]:-ml-[100vw] max-[560px]:w-screen"
+      className="fs-top sticky top-0 z-30 flex h-dvh w-[340px] flex-none flex-col border-l border-line bg-bg max-[1100px]:-ml-[340px] max-[1100px]:shadow-2xl max-[560px]:-ml-[100vw] max-[560px]:w-screen"
     >
       <div className="flex items-center gap-2 px-4 pt-4 pb-2">
         <h2 className="flex-1 font-display text-base font-semibold">{title}</h2>
@@ -216,7 +216,7 @@ const groups: { head: string; has: (j: JobRow) => boolean; pill: string; word: (
   { head: "Needs you", has: (j) => j.status === "waiting", pill: "bg-warn-soft text-warn-text", word: () => "Needs you" },
   { head: "Working", has: (j) => j.status === "working", pill: "bg-accent-soft text-accent-text", word: () => "Working" },
   { head: "Ready for you", has: (j) => j.status === "ready" && !j.commit, pill: "bg-good-soft text-good-text", word: () => "Ready" },
-  { head: "Done", has: (j) => !!j.commit, pill: "bg-surface-2 text-muted", word: (j) => (j.pr ? "PR open" : "Committed") },
+  { head: "Done", has: (j) => !!j.commit && j.status !== "working" && j.status !== "waiting", pill: "bg-surface-2 text-muted", word: (j) => (j.pr ? "PR open" : "Committed") },
   { head: "Stopped", has: (j) => ["stopped", "failed", "cancelled"].includes(j.status) && !j.commit, pill: "bg-surface-2 text-muted", word: (j) => (j.status === "failed" ? "Didn't work" : "Stopped") },
 ];
 

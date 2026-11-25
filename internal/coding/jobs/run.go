@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -76,6 +78,7 @@ func (r *run) system(set Settings) string {
 	return fmt.Sprintf("You're doing a coding job for %s through Tinio, %s. Follow the repository's own rules. "+
 		"Don't commit, push or open pull requests: Tinio does that, with %s's yes. "+
 		"If something you need isn't allowed, say what you'd do instead. "+
+		"For anything with more than two steps, keep your plan in your TodoWrite list and tick items off as you go: %[1]s follows it there. "+
 		"When you finish, say in two or three sentences what you changed and how you checked it.", r.owner, where, r.owner) +
 		r.knownNote()
 }
@@ -124,6 +127,8 @@ func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {
 		}
 	}()
 
+	// Where the round starts in its story, with what started it.
+	r.s.step(context.Background(), r.job.ID, WhoTinio, RoundStarted, cj.Brief)
 	sess, err := ad.Start(ctx, cj)
 	if err != nil {
 		r.end(Failed, "Claude Code didn't start: "+err.Error(), coding.Event{})
@@ -143,12 +148,18 @@ func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {
 			r.s.save(context.Background(), j)
 		case coding.Said:
 			r.now(firstLine(e.Text), false)
+			r.s.step(context.Background(), r.job.ID, WhoCLI, Said, r.inCopy(e.Text))
 		case coding.Step:
 			r.mu.Lock()
 			r.card.Steps++
 			r.mu.Unlock()
 			r.now(r.inCopy(doing(e.Tool, e.Input)), false)
-			if e.Tool != "TodoWrite" {
+			if e.Tool == "TodoWrite" {
+				// Its plan, as it stands now: the page shows the latest of the round.
+				if b, err := json.Marshal(e.Input["todos"]); err == nil {
+					r.s.step(context.Background(), r.job.ID, WhoCLI, Planned, r.inCopy(string(b)))
+				}
+			} else {
 				r.s.step(context.Background(), r.job.ID, WhoCLI, r.inCopy(doing(e.Tool, e.Input)), r.inCopy(detail(e.Tool, e.Input)))
 			}
 		case coding.Changed:
@@ -461,6 +472,14 @@ func contains(xs []string, x string) bool {
 	return false
 }
 
+// cutRunes is s, at most n runes of it, with … when cut.
+func cutRunes(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
+}
+
 func firstLine(s string) string {
 	s = strings.TrimSpace(s)
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
@@ -482,12 +501,36 @@ func doing(tool string, input map[string]any) string {
 		return "Changing " + filepath.Base(str("file_path"))
 	case "Bash":
 		return "Running " + firstLine(str("command"))
-	case "Grep", "Glob":
+	case "Grep":
+		if p := str("pattern"); p != "" {
+			return "Searching for " + strconv.Quote(cutRunes(p, 60))
+		}
 		return "Searching the code"
+	case "Glob":
+		if p := str("pattern"); p != "" {
+			return "Finding files like " + cutRunes(p, 60)
+		}
+		return "Finding files"
+	case "LS":
+		return "Looking in " + filepath.Base(str("path"))
+	case "WebFetch":
+		if u, err := url.Parse(str("url")); err == nil && u.Host != "" {
+			return "Reading a page on " + u.Host
+		}
+		return "Reading a web page"
+	case "WebSearch":
+		return "Searching the web for " + strconv.Quote(cutRunes(str("query"), 60))
+	case "Task":
+		if d := str("description"); d != "" {
+			return "Handing part to a helper: " + cutRunes(d, 60)
+		}
+		return "Handing part to a helper"
+	case "NotebookEdit":
+		return "Changing " + filepath.Base(str("notebook_path"))
 	case "TodoWrite":
 		return "Planning"
 	}
-	return "Working"
+	return "Using " + tool
 }
 
 func askVerb(tool string) string {

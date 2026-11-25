@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@tinio/ui";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Avatar, useFrame } from "@/components/app-frame";
 import { MessageText } from "@/components/message-text";
 import { ServiceLogo } from "@/components/service-logo";
@@ -39,8 +39,6 @@ const pill: Record<Job["status"], [string, string]> = {
   failed: ["Didn't work", "bg-bad-soft text-bad-text"],
   cancelled: ["Stopped", "bg-surface-2 text-muted"],
 };
-
-const dot: Record<Step["who"], string> = { agent: "bg-accent", cli: "bg-fg", owner: "bg-warn-text", tinio: "bg-muted" };
 
 // lines are a patch's lines with their numbers in the new file (or the old, for one taken out).
 function lines(patch: string) {
@@ -88,7 +86,21 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
   const [undoing, setUndoing] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [wholeTop, setWholeTop] = useState(false); // a long last word, read in full
+  // Two views: its changes, and how it went. Working, it opens on how it went (live);
+  // ready, on the changes. Your pick holds until it starts or stops working.
+  const [picked, setPicked] = useState<"" | "changes" | "story">("");
   const box = useRef<HTMLTextAreaElement>(null);
+  // The header stays at the top; what else sticks (the file list, each file's header)
+  // sticks under it, at its height (--head).
+  const head = useRef<HTMLDivElement>(null);
+  const [headH, setHeadH] = useState(0);
+  useEffect(() => {
+    const h = head.current;
+    if (!h) return;
+    const o = new ResizeObserver(() => setHeadH(h.offsetHeight));
+    o.observe(h);
+    return () => o.disconnect();
+  });
   // The message box grows with what's written, up to a point, as the chat's does.
   useEffect(() => {
     const b = box.current;
@@ -108,9 +120,10 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
     load();
   }, [load]);
   const going = page?.job.status === "working" || page?.job.status === "waiting";
+  useEffect(() => setPicked(""), [going]);
   useEffect(() => {
     if (!going) return;
-    const t = setInterval(load, 3000);
+    const t = setInterval(load, 1000); // what it does shows as it does it
     return () => clearInterval(t);
   }, [going, load]);
 
@@ -128,26 +141,33 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
   if (!page) return error ? <div role="alert" className="p-10 text-sm text-bad-text">{error}</div> : null;
   const j = page.job;
   const name = a?.name ?? "Your agent";
-  const who = (s: Step) => ({ agent: name, cli: "Claude Code", owner: "You", tinio: "Tinio" })[s.who];
   const added = page.changes.reduce((n, c) => n + c.added, 0);
   const removed = page.changes.reduce((n, c) => n + c.removed, 0);
   const finished = [...page.steps].reverse().find((s) => s.who === "cli" && (s.what === "Finished" || s.what === "Stopped"));
-  const latest = page.steps[page.steps.length - 1];
   const checked = [...page.steps].reverse().find((s) => s.who === "agent" && s.what.startsWith("Checked it"));
   const verdict = j.status === "ready" && checked && checked.what !== "Checked it and sent it back" ? checked.detail : "";
   const [label, tone] = pill[j.status] ?? pill.working;
   const canDecide = !going && !j.commit;
 
+  const tab = picked || (going ? "story" : "changes");
+  const story = roundsOf(page.steps, name);
+  const current = story[story.length - 1];
+  const live = going ? current : undefined;
+  const plan = live?.plan ?? [];
+  const planDone = plan.filter((t) => t.status === "completed").length;
+  // What it's doing now: its latest action or words, this round.
+  const nowStep = live && [...live.items].reverse().find((s) => s.what !== "Planned" && !s.what.startsWith("Asked to "));
+  const nowText = nowStep ? (nowStep.what === "Said" ? firstLine(nowStep.detail) : nowStep.what) : "Starting";
+
   // The top of the bar: the last word on the job, by who said it.
-  const step = [...page.steps].reverse().find((s) => s.who === "cli");
   const top: { agent: boolean; who: string; text: ReactNode } = going
     ? {
         agent: false,
-        who: `Claude Code${j.rounds > 1 ? ` · round ${j.rounds}` : ""}`,
+        who: `Claude Code${story.length > 1 ? ` · round ${story.length}` : ""}${plan.length ? ` · ${planDone} of ${plan.length}` : ""}`,
         text: (
           <span className="inline-flex items-center gap-2">
             <span aria-hidden="true" className="size-2 flex-none animate-pulse rounded-full bg-accent" />
-            {j.status === "waiting" ? (ask ? "Waiting on you: its question is just below" : "Waiting on you") : step?.what || "Working"}
+            {j.status === "waiting" ? (ask ? "Waiting on you: its question is just below" : "Waiting on you") : nowText}
           </span>
         ),
       }
@@ -183,8 +203,8 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
   }
 
   return (
-    <div className="page-in flex min-h-full flex-col bg-bg">
-      <div className="flex flex-col gap-2.5 border-b border-line px-8 pt-8 pb-4 max-[900px]:px-4">
+    <div className="page-in flex min-h-full flex-col bg-bg" style={{ "--head": `${headH}px` } as CSSProperties}>
+      <div ref={head} className="fs-top sticky top-0 z-20 flex flex-col gap-1.5 border-b border-line bg-bg px-8 pt-4 pb-3 max-[900px]:px-4">
         <Link
           href={`/agents/${agent}`}
           onClick={(e) => {
@@ -192,7 +212,7 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
             e.preventDefault();
             back();
           }}
-          className="-ml-2 inline-flex min-h-11 items-center gap-1 self-start px-2 text-sm font-semibold text-accent-text"
+          className="-ml-2 inline-flex min-h-9 items-center gap-1 self-start px-2 text-sm font-semibold text-accent-text"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M15 6l-6 6 6 6" />
@@ -200,8 +220,8 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
           Chat with {name}
         </Link>
         <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
-          <h1 className="font-display text-[28px] leading-tight font-medium tracking-[-0.02em]">{j.title}</h1>
-          <span className={`rounded-md px-2.5 py-0.5 text-[12.5px] font-semibold ${tone}`}>{j.commit && !j.pr ? "Committed" : j.pr ? "Pull request open" : label}</span>
+          <h1 className="font-display text-[24px] leading-tight font-medium tracking-[-0.02em]">{j.title}</h1>
+          <span className={`rounded-md px-2.5 py-0.5 text-[12.5px] font-semibold ${tone}`}>{going ? label : j.commit && !j.pr ? "Committed" : j.pr ? "Pull request open" : label}</span>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13.5px] text-fg/75">
           <span>{j.folder}</span>
@@ -214,63 +234,59 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
             <ServiceLogo service="claude" size={20} />
             Claude Code · {j.model}
           </span>
-          <span>{j.rounds === 1 ? "1 round" : `${j.rounds} rounds`}</span>
-          {j.cost_usd > 0 && <span>${j.cost_usd.toFixed(2)} of model time, on your plan</span>}
           {j.pr && (
             <a href={j.pr} target="_blank" rel="noreferrer" className="font-semibold text-accent-text">
               The pull request
             </a>
           )}
         </div>
+        <div role="tablist" aria-label="The job" className="-mb-3 flex gap-5 pt-1">
+          {(
+            [
+              ["changes", "Changes", `${page.changes.length} ${page.changes.length === 1 ? "file" : "files"}`],
+              ["story", "How it went", story.length === 1 ? "1 round" : `${story.length} rounds`],
+            ] as const
+          ).map(([id, label, count]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setPicked(id)}
+              className="inline-flex min-h-10 items-center gap-2 border-b-2 border-transparent text-sm font-semibold text-muted hover:text-fg aria-selected:border-fg aria-selected:text-fg"
+            >
+              {label}
+              <span className="rounded-full bg-surface-2 px-2 text-xs font-semibold text-fg/75">{count}</span>
+              {id === "changes" && (added > 0 || removed > 0) && (
+                <span className="text-xs">
+                  <b className="text-good-text">+{added}</b> <b className="text-bad-text">−{removed}</b>
+                </span>
+              )}
+              {id === "story" && going && tab !== "story" && <span aria-label="working" className="size-2 animate-pulse rounded-full bg-accent" />}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-1 flex-col">
-        <details className="group border-b border-line px-8 py-2.5 max-[900px]:px-4">
-          <summary className="flex min-h-9 cursor-pointer list-none items-center gap-3 text-sm">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-none text-muted transition-transform group-open:rotate-90">
-              <path d="M9 6l6 6-6 6" />
-            </svg>
-            <h2 id="happened" className="flex-none font-display text-[15px] font-semibold">
-              What happened
-            </h2>
-            <span className="min-w-0 truncate text-[13px] text-muted">
-              {page.steps.length} {page.steps.length === 1 ? "step" : "steps"}
-              {latest && ` · ${who(latest)}: ${latest.what}`}
-            </span>
-          </summary>
-          <ol className="m-0 mt-3 grid max-h-[50vh] list-none grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-x-8 overflow-y-auto p-0 pb-2">
-            {page.steps.map((s, i) => (
-              <li key={i} className="flex gap-3 pb-3.5">
-                <span aria-hidden="true" className={`mt-1.5 size-2.5 flex-none rounded-full ${dot[s.who]}`} />
+        {tab === "story" && (
+          <section aria-label="How it went" className="flex min-w-0 flex-col gap-3 px-8 pt-5 pb-8 max-[900px]:px-4">
+            {verdict && (
+              <div className="flex items-start gap-3 rounded-lg border border-line px-4 py-3">
+                {a && <Avatar agent={a} size={28} />}
                 <span className="flex min-w-0 flex-col">
-                  <span className="text-xs font-semibold text-muted">{who(s)}</span>
-                  <span className="text-sm [overflow-wrap:anywhere]">{s.what}</span>
-                  {s.detail && (s.what === "Wrote the brief" || s.what === "Finished") ? (
-                    <details className="text-[13px]">
-                      <summary className="cursor-pointer text-accent-text">Read it</summary>
-                      <div className="mt-1 text-fg/85">
-                        <MessageText text={s.detail} />
-                      </div>
-                    </details>
-                  ) : s.detail && s.what.startsWith("Ran ") ? (
-                    <details className="text-[13px]">
-                      <summary className="cursor-pointer text-accent-text">What it printed</summary>
-                      <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-surface-2 p-2 font-mono text-[11.5px] whitespace-pre-wrap">{s.detail}</pre>
-                    </details>
-                  ) : s.detail && (s.who === "agent" || s.who === "owner") && !s.what.startsWith("Kept what") ? (
-                    <span className="text-[13px] text-fg/80">{s.detail}</span>
-                  ) : (
-                    s.detail &&
-                    !s.what.startsWith("Kept what") &&
-                    !s.what.includes(s.detail.slice(0, 24)) && <span className="line-clamp-3 font-mono text-[12px] break-all text-muted">{s.detail}</span>
-                  )}
+                  <span className="text-[12.5px] font-semibold text-muted">{name} checked it</span>
+                  <span className="text-sm">
+                    <MessageText text={verdict} />
+                  </span>
                 </span>
-              </li>
-            ))}
-          </ol>
-        </details>
+              </div>
+            )}
+            {[...story].reverse().map((r, i) =>
+              r === live ? <LiveRound key={r.n} r={r} total={story.length} /> : <PastRound key={r.n} r={r} total={story.length} open={i === 0 || (!!live && i === 1)} />,
+            )}
         {page.notes.length > 0 && (
-          <details className="group border-b border-line px-8 py-2.5 max-[900px]:px-4">
+          <details className="group rounded-lg border border-line px-4 py-1">
             <summary className="flex min-h-9 cursor-pointer list-none items-center gap-3 text-sm">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-none text-muted transition-transform group-open:rotate-90">
                 <path d="M9 6l6 6-6 6" />
@@ -306,16 +322,10 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
           </details>
         )}
 
-        <section aria-labelledby="changes" className="flex min-w-0 flex-1 flex-col gap-3 px-8 pt-5 pb-8 max-[900px]:px-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="changes" className="font-display text-[17px] font-semibold">
-              The changes
-            </h2>
-            <span className="text-[13px] text-muted">
-              {page.changes.length} {page.changes.length === 1 ? "file" : "files"} · <b className="text-good-text">+{added}</b>{" "}
-              <b className="text-bad-text">−{removed}</b> · tap a line to say something about it
-            </span>
-          </div>
+          </section>
+        )}
+        <section aria-label="Changes" hidden={tab !== "changes"} className="flex min-w-0 flex-1 flex-col gap-3 px-8 pt-5 pb-8 max-[900px]:px-4">
+          <span className="text-[13px] text-muted">{going ? "Filling in as it works · " : ""}Tap a line to say something about it</span>
           {j.rounds > 1 && (
             <div role="group" aria-label="Which round" className="flex flex-wrap gap-1.5">
               {[0, ...Array.from({ length: j.rounds }, (_, i) => i + 1)].map((r) => (
@@ -337,7 +347,7 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
               <div
                 role="group"
                 aria-label="Files changed"
-                className="sticky top-3 flex max-h-[calc(100dvh-220px)] w-[300px] flex-none flex-col gap-0.5 overflow-y-auto rounded-lg border border-line p-1 max-[900px]:static max-[900px]:max-h-none max-[900px]:w-full"
+                className="sticky top-[calc(var(--head)+12px)] flex max-h-[calc(100dvh-var(--head)-200px)] w-[300px] flex-none flex-col gap-0.5 overflow-y-auto rounded-lg border border-line p-1 max-[900px]:static max-[900px]:max-h-none max-[900px]:w-full"
               >
                 {page.changes.map((c, i) => {
                   const slash = c.path.lastIndexOf("/");
@@ -362,7 +372,7 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-3 max-[900px]:w-full">
           {page.changes.map((change, ci) => (
-                <div role="group" aria-label={change.path} id={`file-${ci}`} className="scroll-mt-3 overflow-hidden rounded-lg border border-line">
+                <div role="group" aria-label={change.path} id={`file-${ci}`} className="scroll-mt-[calc(var(--head)+12px)] overflow-hidden rounded-lg border border-line">
                   <button
                     type="button"
                     aria-expanded={!shut.has(change.path)}
@@ -374,7 +384,7 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
                         return y;
                       })
                     }
-                    className="sticky top-0 z-10 flex w-full items-center gap-2 border-b border-line bg-surface-2 px-3 py-2 text-left font-mono text-[12.5px]"
+                    className="sticky top-[var(--head)] z-10 flex w-full items-center gap-2 border-b border-line bg-surface-2 px-3 py-2 text-left font-mono text-[12.5px]"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={`flex-none text-muted transition-transform ${shut.has(change.path) ? "" : "rotate-90"}`}>
                       <path d="M9 6l6 6-6 6" />
@@ -646,5 +656,224 @@ export function JobPage({ agent, job, back, ask }: { agent: string; job: string;
         )}
       </div>
     </div>
+  );
+}
+
+// A round of the job, from its steps: what started it, Claude Code's words, its plan (the
+// latest of its to-do list), what it did, and how it ended. Steps from before rounds
+// were marked make up the first.
+type Todo = { content: string; status: "pending" | "in_progress" | "completed"; activeForm?: string };
+type Round = { n: number; from: string; at: string; items: Step[]; said: string[]; plan: Todo[]; actions: Step[]; end?: Step };
+
+const endings = ["Finished", "Stopped", "Didn't work out", "Stopped by you"];
+
+function roundsOf(steps: Step[], name: string): Round[] {
+  const out: Round[] = [];
+  let before: Step | undefined;
+  for (const st of steps) {
+    if (st.who === "tinio" && st.what === "Round started") {
+      const n = out.length + 1;
+      const from =
+        n === 1
+          ? `${name}'s brief`
+          : before?.who === "owner"
+            ? `what you said: "${firstLine((before.detail || before.what).replace(/^The owner looked at your changes and sends them back:\s*/, ""))}"`
+            : before?.who === "agent"
+              ? `${name} sent it back`
+              : "carried on";
+      out.push({ n, from, at: st.at, items: [], said: [], plan: [], actions: [] });
+      continue;
+    }
+    before = st.who === "owner" || st.who === "agent" ? st : before;
+    if (!out.length) out.push({ n: 1, from: `${name}'s brief`, at: st.at, items: [], said: [], plan: [], actions: [] });
+    if (st.who !== "cli") continue;
+    // A job from before rounds were marked: a new one after each ending.
+    if (out[out.length - 1].end) {
+      const from = before?.who === "owner" ? `what you said: "${firstLine((before.detail || before.what).replace(/^The owner looked at your changes and sends them back:\s*/, ""))}"` : before?.who === "agent" ? `${name} sent it back` : "carried on";
+      out.push({ n: out.length + 1, from, at: st.at, items: [], said: [], plan: [], actions: [] });
+    }
+    const r = out[out.length - 1];
+    r.items.push(st);
+    if (st.what === "Said") r.said.push(st.detail);
+    else if (st.what === "Planned") {
+      try {
+        r.plan = JSON.parse(st.detail) ?? [];
+      } catch {
+        // an unreadable plan: the last one stands
+      }
+    } else if (endings.includes(st.what)) r.end = st;
+    else if (!st.what.startsWith("Asked to ")) r.actions.push(st); // its questions have their card
+  }
+  return out;
+}
+
+function firstLine(t: string) {
+  const l = t.trim().split("\n")[0];
+  return l.length > 120 ? l.slice(0, 119) + "…" : l;
+}
+
+// done is an action as done: "Reading a.go" is "Read a.go", once the round is over.
+function done(what: string) {
+  const [w, ...rest] = what.split(" ");
+  const past: Record<string, string> = { Reading: "Read", Changing: "Changed", Running: "Ran", Searching: "Searched", Finding: "Found", Looking: "Looked", Handing: "Handed", Using: "Used" };
+  return [past[w] ?? w, ...rest].join(" ");
+}
+
+const icons: [RegExp, ReactNode][] = [
+  [/^(Reading|Read |Looking|Looked)/, <path key="r" d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5" />],
+  [/^(Changing|Changed)/, <path key="c" d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z" />],
+  [/^(Running|Ran )/, <path key="x" d="M5 7l5 5-5 5M12 18h7" />],
+  [/^(Searching|Searched|Finding|Found)/, <path key="s" d="M11 4.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM16 16l4.5 4.5" />],
+];
+
+function Action({ s, now, past }: { s: Step; now?: boolean; past?: boolean }) {
+  const icon = icons.find(([re]) => re.test(s.what))?.[1] ?? <circle cx="12" cy="12" r="3" />;
+  return (
+    <li className={`flex min-h-7 items-center gap-2.5 text-[13.5px] ${now ? "font-semibold" : "text-fg/80"}`}>
+      <span aria-hidden="true" className={`size-1.5 flex-none rounded-full ${now ? "animate-pulse bg-accent" : "bg-transparent"}`} />
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={`flex-none ${now ? "text-accent" : "text-muted"}`}>
+        {icon}
+      </svg>
+      <span className="min-w-0 truncate" title={s.detail || s.what}>
+        {past ? done(s.what) : s.what}
+      </span>
+    </li>
+  );
+}
+
+function Plan({ plan }: { plan: Todo[] }) {
+  return (
+    <ol className="m-0 flex list-none flex-col gap-1 p-0">
+      {plan.map((t, i) => (
+        <li key={i} className="flex items-start gap-2.5 py-0.5 text-sm">
+          {t.status === "completed" ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="mt-0.5 flex-none">
+              <circle cx="12" cy="12" r="10" className="fill-good-text" />
+              <path d="M7.5 12.5l3 3 6-6.5" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : t.status === "in_progress" ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="mt-0.5 flex-none text-accent">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.2" />
+              <circle cx="12" cy="12" r="4.5" fill="currentColor" className="animate-pulse" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="mt-0.5 flex-none text-muted">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+            </svg>
+          )}
+          <span className={t.status === "completed" ? "text-muted line-through decoration-muted/60" : t.status === "in_progress" ? "font-semibold" : ""}>
+            {t.status === "in_progress" && t.activeForm ? t.activeForm : t.content}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+const small = "text-xs font-semibold text-muted";
+
+// LiveRound is the round under way, as it goes: its plan, its latest words, what it's doing.
+function LiveRound({ r, total }: { r: Round; total: number }) {
+  const [all, setAll] = useState(false);
+  const acts = [...r.actions].reverse();
+  const shown = all ? acts : acts.slice(0, 6);
+  const words = r.said[r.said.length - 1];
+  const done = r.plan.filter((t) => t.status === "completed").length;
+  return (
+    <section aria-label={`Round ${r.n}, working`} className="overflow-hidden rounded-xl border border-accent/30 bg-accent-soft/20">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-line bg-bg px-4 py-3">
+        <span aria-hidden="true" className="size-2.5 animate-pulse rounded-full bg-accent" />
+        <h2 className="font-display text-[15px] font-semibold">{total > 1 ? `Round ${r.n} · working` : "Working"}</h2>
+        <span className="min-w-0 truncate text-[13px] text-muted">from {r.from}</span>
+      </div>
+      <div className="grid grid-cols-2 max-[900px]:grid-cols-1">
+        <div className="flex flex-col gap-2 border-r border-line px-4 py-3.5 max-[900px]:border-r-0 max-[900px]:border-b">
+          <span className={small}>{r.plan.length ? `Its plan · ${done} of ${r.plan.length} done` : "Its plan"}</span>
+          {r.plan.length ? <Plan plan={r.plan} /> : <span className="text-sm text-muted">It hasn&apos;t written one: the job may be small enough not to need it.</span>}
+        </div>
+        <div className="flex min-w-0 flex-col gap-2.5 px-4 py-3.5">
+          <span className={small}>What it&apos;s saying</span>
+          {words ? (
+            <div className="rounded-lg border border-line bg-bg px-3 py-2.5 text-sm">
+              <MessageText text={words} />
+            </div>
+          ) : (
+            <span className="text-sm text-muted">Nothing yet.</span>
+          )}
+          <span className={`${small} mt-1`}>What it&apos;s doing</span>
+          {acts.length ? (
+            <ul className="m-0 flex list-none flex-col p-0">
+              {shown.map((s, i) => (
+                <Action key={acts.length - i} s={s} now={i === 0} past={i > 0} />
+              ))}
+            </ul>
+          ) : (
+            <span className="text-sm text-muted">Starting.</span>
+          )}
+          {acts.length > 6 && (
+            <button type="button" onClick={() => setAll(!all)} className="self-start text-[13px] font-semibold text-accent-text">
+              {all ? "Show less" : `+ ${acts.length - 6} earlier this round`}
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// PastRound is a round over: folded to a line, opened to its plan, words and actions.
+function PastRound({ r, total, open }: { r: Round; total: number; open: boolean }) {
+  const mins = r.end ? Math.max(1, Math.round((new Date(r.end.at).getTime() - new Date(r.at).getTime()) / 60000)) : 0;
+  return (
+    <details open={open} className="group rounded-lg border border-line px-4 py-1">
+      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2.5 text-sm">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-none text-muted transition-transform group-open:rotate-90">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+        <b className="flex-none font-semibold">{total > 1 ? `Round ${r.n}` : "The round"}</b>
+        <span className="min-w-0 truncate text-muted">
+          · from {r.from} · {r.actions.length === 1 ? "1 action" : `${r.actions.length} actions`}
+          {mins ? ` · ${mins} min` : ""}
+          {r.end && ` · ${r.end.what}`}
+        </span>
+      </summary>
+      <div className="grid grid-cols-2 gap-5 pt-1.5 pb-3 pl-6 max-[900px]:grid-cols-1">
+        <div className="flex flex-col gap-2">
+          <span className={small}>{r.plan.length ? `Its plan · ${r.plan.filter((t) => t.status === "completed").length} of ${r.plan.length} done` : "Its plan"}</span>
+          {r.plan.length ? <Plan plan={r.plan} /> : <span className="text-sm text-muted">It didn&apos;t write one.</span>}
+        </div>
+        <div className="flex min-w-0 flex-col gap-2.5">
+          <span className={small}>What it said</span>
+          {r.said.length ? (
+            r.said.map((t, i) => (
+              <div key={i} className="text-sm">
+                <MessageText text={t} />
+              </div>
+            ))
+          ) : r.end?.detail ? (
+            <div className="text-sm">
+              <MessageText text={r.end.detail} />
+            </div>
+          ) : (
+            <span className="text-sm text-muted">Nothing kept.</span>
+          )}
+          {r.actions.length > 0 && (
+            <details className="group/acts">
+              <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 text-[13px] text-fg/80">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-none transition-transform group-open/acts:rotate-90">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+                What it did · {r.actions.length === 1 ? "1 action" : `${r.actions.length} actions`}
+              </summary>
+              <ul className="m-0 flex list-none flex-col p-0">
+                {[...r.actions].reverse().map((s, i) => (
+                  <Action key={i} s={s} past />
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      </div>
+    </details>
   );
 }

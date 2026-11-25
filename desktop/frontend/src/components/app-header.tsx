@@ -14,7 +14,7 @@ export function AppHeader({ account, step, picked }: { account: Account | null; 
     if (account) call<{ agents: unknown[] }>("/agents").then((res) => res.ok && setHasAgents(res.data.agents.length > 0));
   }, [account]);
   return (
-    <header className="border-b border-line pt-6 [--wails-draggable:drag]">
+    <header className="fs-top border-b border-line pt-6 [--wails-draggable:drag]">
       <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-3 px-6 py-2.5 max-[560px]:px-4">
         <Link href="/agents" className="flex min-h-11 items-center gap-2.5 text-accent-text" aria-label="Tinio, your agents">
           <Mark size={28} title="" aria-hidden="true" />
