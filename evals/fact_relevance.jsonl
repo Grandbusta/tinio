@@ -1,23 +1,23 @@
 # Would knowing a fact help the agent reply to a message (fact_relevance's relevant)? One
 # fact a case; the mind asks up to 30 at once, as facts[0], facts[1] and so on. The message
-# names people as the mind gives it: Ada is the owner, Mei the agent.
-{"state": {"facts": ["Ada is allergic to peanuts."], "message": "What should Ada cook for dinner tonight?"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "true"}
-{"state": {"facts": ["Ada's passport expires in March."], "message": "What should Ada cook for dinner tonight?"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "false"}
-{"state": {"facts": ["Ada's husband Femi loves old jazz records."], "message": "Can Mei suggest a birthday gift for Ada's husband?"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "true"}
-{"state": {"facts": ["Ada works night shifts at the hospital."], "message": "Can Mei suggest a birthday gift for Ada's husband?"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "false"}
-{"state": {"facts": ["Ada works night shifts at the hospital."], "message": "Ada is so tired today."}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "true"}
-{"state": {"facts": ["Ada's favourite colour is green."], "message": "Ada is so tired today."}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "false"}
-{"state": {"facts": ["Mei is writing a poem about the night market."], "message": "How is Mei's poem going?"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "true"}
-{"state": {"facts": ["Ada lives in Ikeja."], "message": "How is Mei's poem going?"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "false"}
-{"state": {"facts": ["Ada is allergic to peanuts."], "message": "What's the capital of France?"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "false"}
-{"state": {"facts": ["Ada has been looking for a new job since she was laid off in May."], "message": "Ada has an interview on Friday!"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "true"}
-{"state": {"facts": ["Ada hates coriander."], "message": "Ada has an interview on Friday!"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "false"}
-{"state": {"facts": ["Ada can't swim."], "message": "Should Ada go to the beach this weekend?"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "true"}
-{"state": {"facts": ["Ada's laptop screen is cracked."], "message": "Should Ada go to the beach this weekend?"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "false"}
-{"state": {"facts": ["Ada's daughter Tolu turns seven today."], "message": "It's Ada's daughter's birthday today!"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "true"}
-{"state": {"facts": ["Ada hurt her back lifting boxes at the shop in October."], "message": "Ada's back is hurting again."}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "true"}
-{"state": {"facts": ["Ada's brother Tunde lives in London."], "message": "Ada's back is hurting again."}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "false"}
-{"state": {"facts": ["Ada runs a tea shop called Leaf & Kettle."], "message": "What should Ada post for the shop today?"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "true"}
-{"state": {"facts": ["Ada's brother Tunde lives in London."], "message": "What should Ada post for the shop today?"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "false"}
-{"state": {"facts": ["Ada's dog is called Biscuit."], "message": "Does Mei remember what Ada's dog is called?"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "true"}
-{"state": {"facts": ["Ada is allergic to peanuts."], "message": "Thanks Mei!"}, "fill": {"agent": "Mei", "fact": "`facts[0]`"}, "label": "false"}
+# names people as the mind gives it: Ada is the owner, Zara the agent.
+{"state": {"facts": ["Ada is allergic to peanuts."], "message": "What should Ada cook for dinner tonight?"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "true"}
+{"state": {"facts": ["Ada's passport expires in March."], "message": "What should Ada cook for dinner tonight?"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "false"}
+{"state": {"facts": ["Ada's husband Femi loves old jazz records."], "message": "Can Zara suggest a birthday gift for Ada's husband?"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "true"}
+{"state": {"facts": ["Ada works night shifts at the hospital."], "message": "Can Zara suggest a birthday gift for Ada's husband?"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "false"}
+{"state": {"facts": ["Ada works night shifts at the hospital."], "message": "Ada is so tired today."}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "true"}
+{"state": {"facts": ["Ada's favourite colour is green."], "message": "Ada is so tired today."}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "false"}
+{"state": {"facts": ["Zara is drafting the winter menu post for the shop."], "message": "How is Zara's menu post going?"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "true"}
+{"state": {"facts": ["Ada lives in Ikeja."], "message": "How is Zara's menu post going?"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "false"}
+{"state": {"facts": ["Ada is allergic to peanuts."], "message": "What's the capital of France?"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "false"}
+{"state": {"facts": ["Ada has been looking for a new job since she was laid off in May."], "message": "Ada has an interview on Friday!"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "true"}
+{"state": {"facts": ["Ada hates coriander."], "message": "Ada has an interview on Friday!"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "false"}
+{"state": {"facts": ["Ada can't swim."], "message": "Should Ada go to the beach this weekend?"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "true"}
+{"state": {"facts": ["Ada's laptop screen is cracked."], "message": "Should Ada go to the beach this weekend?"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "false"}
+{"state": {"facts": ["Ada's daughter Tolu turns seven today."], "message": "It's Ada's daughter's birthday today!"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "true"}
+{"state": {"facts": ["Ada hurt her back lifting boxes at the shop in October."], "message": "Ada's back is hurting again."}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "true"}
+{"state": {"facts": ["Ada's brother Tunde lives in London."], "message": "Ada's back is hurting again."}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "false"}
+{"state": {"facts": ["Ada runs a tea shop called Leaf & Kettle."], "message": "What should Ada post for the shop today?"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "true"}
+{"state": {"facts": ["Ada's brother Tunde lives in London."], "message": "What should Ada post for the shop today?"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "false"}
+{"state": {"facts": ["Ada's dog is called Biscuit."], "message": "Does Zara remember what Ada's dog is called?"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "true"}
+{"state": {"facts": ["Ada is allergic to peanuts."], "message": "Thanks Zara!"}, "fill": {"agent": "Zara", "fact": "`facts[0]`"}, "label": "false"}

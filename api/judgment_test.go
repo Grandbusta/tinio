@@ -33,7 +33,7 @@ func TestTheOwnerKeepsRemovesAndWritesPrinciples(t *testing.T) {
 		}
 	}
 	for i, owner := range []int{0, 1} {
-		c := memory.Call{ID: ulid.Make(), Type: memory.CallFocus, Mode: memory.CallAfter, Situation: "Gift guide first, or the oolong launch?",
+		c := memory.Call{ID: ulid.Make(), Type: "reach_out", Mode: memory.CallAfter, Situation: "Gift guide first, or the oolong launch?",
 			Options: []string{"Gift guide first", "The oolong launch"}, Status: memory.CallAsked, CreatedAt: now.Add(-48 * time.Hour)}
 		if err := st.SaveCall(ctx, c); err != nil {
 			t.Fatal(err)

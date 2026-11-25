@@ -2,14 +2,11 @@ package mind
 
 import (
 	"context"
-	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/Grandbusta/tinio/internal/action"
 	"github.com/Grandbusta/tinio/internal/decision"
 	"github.com/Grandbusta/tinio/internal/decision/questions"
 	"github.com/Grandbusta/tinio/internal/memory"
@@ -59,113 +56,41 @@ func reviewMind(review string) (*Mind, *fakeStore, *fakeSystem2, *fakeAsker) {
 	s2 := &fakeSystem2{formats: map[string]string{"weekly_review": review}}
 	m, s, asker := gatedMind(&fakeReplier{}, s2)
 	m.Zone = lagos
+	s.percepts = append(s.percepts, perception.Percept{Speaker: owner, Kind: perception.KindMessage, At: at(25, 10, 0)}) // they've been writing
 	m.Day = Day{ReviewDay: time.Sunday, ReviewAt: 20 * time.Hour, ReviewPrompt: Prompt{Ref: "review@test", Text: "You are {name}, reviewing."}}
 	return m, s, s2, asker
 }
 
+// The weekly look back keeps what it learned about how its owner likes things:
+// a new lesson for a skill it has, none for one it hasn't, and a retired one
+// gone; once a week, not before its time.
 func TestWeeklyReview(t *testing.T) {
-	dream := memory.Dream{ID: ulid.Make(), Text: "Tobi wants to be a producer", Status: memory.DreamActive}
-	done := memory.Goal{ID: ulid.Make(), DreamID: dream.ID, Text: "three beat ideas", Status: memory.GoalActive, Due: at(30, 0, 0)}
-	project := memory.Project{ID: ulid.Make(), Title: "Lagos Rain", Kind: "music", Status: memory.ProjectActive}
-	review := `{"title":"A busy week","text":"I finished three beat ideas.",
-		"goals":[{"goal_id":"` + done.ID.String() + `","progress":"all three done","status":"done"},{"goal_id":"nope","progress":"x","status":"done"}],
-		"new_goals":[{"dream_id":"` + dream.ID.String() + `","text":"Five beat ideas for an EP","done_when":"five in the EP project","due":"2026-11-30","project_ids":["` + project.ID.String() + `"]},
-			{"dream_id":"nope","text":"x","done_when":"x","due":"2026-11-30","project_ids":[]},
-			{"dream_id":"` + dream.ID.String() + `","text":"In the past","done_when":"x","due":"2026-01-01","project_ids":[]}],
-		"projects":[{"project_id":"` + project.ID.String() + `","goal_id":"not-a-goal"}],
-		"dreams":[{"action":"add","dream_id":"","text":"Tobi wants to write about Nigerian history","why":"reading Equiano moved me"}]}`
-	m, s, s2, asker := reviewMind(review)
-	s.dreams, s.goals, s.projects[project.ID] = []memory.Dream{dream}, []memory.Goal{done}, project
+	old := memory.Lesson{ID: ulid.Make(), Skill: "Music Production", Text: "Keep hooks long", Source: memory.LessonFromSelf}
+	review := `{"retire_lessons":["` + old.ID.String() + `","nope"],"principles":[],"outcomes":[],
+		"new_lessons":[{"skill":"music production","lesson":"Keep hooks to six words"},{"skill":"Knitting","lesson":"x"}]}`
+	m, s, s2, _ := reviewMind(review)
+	s.skills = []memory.Skill{{Name: "Music Production", Level: 4}}
+	s.lessons = []memory.Lesson{old}
 
-	m.tick(context.Background(), at(25, 19, 59)) // Sunday 25 October, before the review time
+	m.tick(context.Background(), at(25, 19, 59)) // Sunday 25 October, before its time
 	if len(s2.requests) != 0 {
-		t.Fatal("reviewed early")
+		t.Fatal("looked back early")
 	}
 	m.tick(context.Background(), at(25, 20, 0))
 	if len(s2.requests) != 1 {
 		t.Fatalf("requests = %d", len(s2.requests))
 	}
-	if g := s.goals[0]; g.Status != memory.GoalDone || g.Progress != "all three done" {
-		t.Errorf("done goal = %+v", g)
+	var active []string
+	for _, l := range s.lessons {
+		if l.RetiredAt.IsZero() {
+			active = append(active, l.Skill+": "+l.Text)
+		}
 	}
-	if len(s.goals) != 2 || s.goals[1].Text != "Five beat ideas for an EP" || s.goals[1].Status != memory.GoalActive {
-		t.Fatalf("goals = %+v; want only the valid new one added", s.goals)
+	if len(active) != 1 || active[0] != "Music Production: Keep hooks to six words" {
+		t.Errorf("active lessons %q; want only the new one, for the skill it has", active)
 	}
-	if len(s.dreams) != 1 || len(asker.asked) != 1 || !strings.Contains(asker.asked[0], "Can I add a dream: Tobi wants to write about Nigerian history. Why: reading Equiano moved me?") {
-		t.Errorf("dreams %+v; asked %q", s.dreams, asker.asked)
-	}
-	if p := s.projects[project.ID]; p.GoalID != s.goals[1].ID {
-		t.Errorf("project = %+v, want it linked to the new goal", p)
-	}
-
-	m.tick(context.Background(), at(25, 20, 1))
-	again, _, _, _ := reviewMind(review)
-	again.Store = s
-	again.tick(context.Background(), at(25, 21, 0))
+	m.tick(context.Background(), at(25, 21, 0))
 	if len(s2.requests) != 1 {
-		t.Errorf("reviewed twice: %d", len(s2.requests))
-	}
-
-	m.handle(context.Background(), tap(owner, asker.ids[0], true))
-	if len(s.dreams) != 2 || s.dreams[1].Text != "Tobi wants to write about Nigerian history" || s.dreams[1].Source != memory.DreamFromSelf {
-		t.Errorf("dreams = %+v", s.dreams)
-	}
-}
-
-// A request comes in parts for a card, and its owner can change its words
-// before saying yes: their version is the one kept. A request with nothing to
-// change (letting a dream go) keeps its own, whatever comes with the yes.
-func TestTheOwnersVersionOfARequestIsKept(t *testing.T) {
-	old := memory.Dream{ID: ulid.Make(), Text: "Tobi wants to be a DJ", Status: memory.DreamActive}
-	review := `{"title":"t","text":"x","goals":[],"new_goals":[],"projects":[],"dreams":[
-		{"action":"add","dream_id":"","text":"Tobi wants to write about Nigerian history","why":"reading Equiano moved me"},
-		{"action":"drop","dream_id":"` + old.ID.String() + `","text":"","why":"I prefer producing"}]}`
-	m, s, _, asker := reviewMind(review)
-	s.dreams = []memory.Dream{old}
-	if err := m.Review(context.Background(), at(25, 20, 0)); err != nil {
-		t.Fatal(err)
-	}
-	m.sendApprovals(context.Background())
-	if len(asker.requests) != 2 {
-		t.Fatalf("asked %d times, want 2", len(asker.requests))
-	}
-	add, drop := asker.requests[0], asker.requests[1]
-	if add.Title != "Add a dream?" || add.Quote != "Tobi wants to write about Nigerian history" || add.Why != "reading Equiano moved me" ||
-		!add.Editable || add.Expires.IsZero() {
-		t.Errorf("the request to add = %+v", add)
-	}
-	if drop.Quote != old.Text || drop.Editable {
-		t.Errorf("the request to let go = %+v", drop)
-	}
-
-	yours := func(id, text string) perception.Percept {
-		p := tap(owner, id, true)
-		p.Payload, _ = json.Marshal(perception.Answer{Approval: id, Approve: true, Text: text})
-		return p
-	}
-	m.handle(context.Background(), yours(asker.ids[0], "Tobi wants to write a history of Lagos music"))
-	m.handle(context.Background(), yours(asker.ids[1], "Tobi wants to be a DJ on Saturdays"))
-	var texts []string
-	for _, d := range s.dreams {
-		texts = append(texts, d.Status+": "+d.Text)
-	}
-	want := "dropped: Tobi wants to be a DJ|active: Tobi wants to write a history of Lagos music"
-	if strings.Join(texts, "|") != want {
-		t.Errorf("dreams = %q, want %q", texts, want)
-	}
-}
-
-func TestDreamsChangeOnTheirOwnWhenAllowed(t *testing.T) {
-	dream := memory.Dream{ID: ulid.Make(), Text: "Tobi wants to be a DJ", Status: memory.DreamActive}
-	review := `{"title":"t","text":"x","goals":[],"new_goals":[],"projects":[],
-		"dreams":[{"action":"drop","dream_id":"` + dream.ID.String() + `","text":"","why":"I prefer producing"}]}`
-	m, s, _, asker := reviewMind(review)
-	m.Autonomy.Classes[action.Dream] = action.Auto
-	s.dreams = []memory.Dream{dream}
-	if err := m.Review(context.Background(), at(25, 20, 0)); err != nil {
-		t.Fatal(err)
-	}
-	if s.dreams[0].Status != memory.DreamDropped || len(asker.asked) != 0 {
-		t.Errorf("dream %+v, asked %q", s.dreams[0], asker.asked)
+		t.Errorf("looked back twice: %d", len(s2.requests))
 	}
 }

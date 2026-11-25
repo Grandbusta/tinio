@@ -10,7 +10,6 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/internal/ability"
-	"github.com/Grandbusta/tinio/internal/ability/journal"
 	"github.com/Grandbusta/tinio/internal/action"
 	"github.com/Grandbusta/tinio/internal/character"
 	"github.com/Grandbusta/tinio/internal/decision"
@@ -19,51 +18,37 @@ import (
 	"github.com/Grandbusta/tinio/internal/providers/system2"
 )
 
-// A day of its own: it plans in the morning, does things for real through
-// the day, and writes a journal at night. Projects carry over between days.
+// Its working day, for its owner: the drafts it makes for their morning (each
+// an activity, an intention for its owner), what it watches, and once a week a
+// look back at what it learned about how they work.
 
 type Day struct {
-	PlanAt        time.Duration // when it plans its day, from midnight in its time zone
-	JournalAt     time.Duration
-	MaxActivities int     // things it plans a round (a day at pace 1), besides the journal
-	BudgetUSD     float64 // most its own day may cost; past it, the rest waits for tomorrow
-	// Pace is how much faster than a person it works: its waking day runs in
-	// this many rounds, each planned when it starts. 0 or 1: one plan a day.
-	Pace           int
-	PlanPrompt     Prompt // zero: no day of its own
+	BudgetUSD      float64 // most a day's work may cost; past it, the rest waits for tomorrow
 	ActivityPrompt Prompt
 	ReviewDay      time.Weekday
 	ReviewAt       time.Duration // from midnight in its time zone
-	ReviewPrompt   Prompt        // zero: no review
-	LearnPrompt    Prompt        // zero: no learning plans
+	ReviewPrompt   Prompt        // zero: no weekly look back
 	DataPrompt     Prompt        // zero: what was made before its kind carried data never gets it
 	ObservePrompt  Prompt        // zero: what it watches is only recorded
 }
 
 const (
-	journalText = "Write today's journal entry."
-	lifeSource  = "life"
+	lifeSource = "life"
 	// busyFor: a conversation this recent means activities wait.
 	busyFor    = 10 * time.Minute
 	postponeBy = 30 * time.Minute
 	// activityGiveUp: an activity this late is missed; the day moved on.
 	activityGiveUp = 6 * time.Hour
-	projectsInPlan = 8
 	factsInPlan    = 20
 	worksInContext = 3
-	// What it made before and its last journal are quoted up to this many
-	// characters each: enough to go on from, without paying for all of it on
-	// every plan and activity.
+	// What it made before is quoted up to this many characters: enough to go
+	// on from, without paying for all of it on every activity.
 	quotedChars = 1500
-	// roundsPerPlan: at a fast pace one plan covers this many rounds, so a day
-	// of ten rounds is planned in four calls, not ten.
-	roundsPerPlan = 3
 )
 
-// lifeActions are the decisions its own day is made of, for the budget:
+// lifeActions are the decisions its working day is made of, for the budget:
 // promises count, though they are kept even past it.
-var lifeActions = []string{"plan_day", "activity", "task", "weekly_review", "plan_learning", "score_skill", "check_stage",
-	"write_data", "observe"}
+var lifeActions = []string{"plan_morning", "activity", "task", "weekly_review", "score_skill", "write_data", "observe"}
 
 func (m *Mind) ownDay() system2.Reasoner {
 	if m.DaySystem2 != nil {
@@ -79,46 +64,43 @@ func (m *Mind) maker() system2.Reasoner {
 	return m.System2
 }
 
-func (m *Mind) dayOn() bool { return m.Day.PlanPrompt.Text != "" && m.Day.ActivityPrompt.Text != "" }
-
-// How long its owner can say nothing before its own day slows to one thing
-// a day, and before it stops: a day nobody reads costs with no one to gain.
-// It's back the moment they write.
+// How long its owner can say nothing before their morning comes without
+// drafts, and before it stops: a morning nobody reads costs with no one to
+// gain. It's back the moment they write.
 const (
 	quietSlowsAfter  = 3 * 24 * time.Hour
 	quietPausesAfter = 7 * 24 * time.Hour
 )
 
-// liveliness is how much of its own day it lives.
+// liveliness is how much it does on its own for its owner.
 type liveliness int
 
 const (
 	livelyDay liveliness = iota
-	slowDay              // one plan, one thing
-	pausedDay            // nothing of its own: no plan, review or old works' data
+	slowDay              // a morning, no drafts
+	pausedDay            // nothing on its own: no morning, look back or old works' data
 )
 
 // liveliness is by how long its owner has written nothing (what the agent
 // says first doesn't count): an owner who never wrote has written nothing for
-// ever. With no owner, or no day, there's no one to wait for.
-func (m *Mind) liveliness(ctx context.Context, now time.Time) (liveliness, time.Duration) {
+// ever. With no owner there's no one to wait for.
+func (m *Mind) liveliness(ctx context.Context, now time.Time) liveliness {
 	owner := m.policy().Owner
-	if owner == "" || !m.dayOn() {
-		return livelyDay, 0
+	if owner == "" {
+		return livelyDay
 	}
 	last, wrote, err := m.Store.LastPercept(ctx, owner, perception.KindMessage)
 	if err != nil {
 		m.Log.Warn("checking when its owner last wrote failed", "err", err)
-		return livelyDay, 0
+		return livelyDay
 	}
-	quiet := now.Sub(last)
-	switch {
+	switch quiet := now.Sub(last); {
 	case !wrote || quiet >= quietPausesAfter:
-		return pausedDay, quiet
+		return pausedDay
 	case quiet >= quietSlowsAfter:
-		return slowDay, quiet
+		return slowDay
 	}
-	return livelyDay, quiet
+	return livelyDay
 }
 
 func (m *Mind) startOfDay(t time.Time) time.Time {
@@ -126,334 +108,8 @@ func (m *Mind) startOfDay(t time.Time) time.Time {
 	return time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, m.Zone)
 }
 
-// planDay plans nothing past journal time, never a round already planned
-// (e.g. before a restart), and no new rounds while what it planned is still
-// to do (it was busy, or restarted): the plan still holds, so nothing is asked.
-func (m *Mind) planDay(ctx context.Context, now time.Time, day liveliness, quiet time.Duration) {
-	if !m.dayOn() || m.planTries.waiting(now) {
-		return
-	}
-	midnight := m.startOfDay(now)
-	today := midnight.Format("2006-01-02")
-	if now.Before(midnight.Add(m.Day.PlanAt)) {
-		return
-	}
-	if !now.Before(midnight.Add(m.Day.JournalAt)) {
-		m.planned = today
-		return
-	}
-	round := m.roundAt(now, midnight)
-	if m.planned == today && round <= m.round {
-		return
-	}
-	if day == pausedDay {
-		return // not marked planned: if its owner writes later today, it plans then
-	}
-	first := m.planned != today
-	if first { // the day's first plan: unless it planned today already (a restart)
-		existing, err := m.Store.IntentionsDue(ctx, midnight, midnight.AddDate(0, 0, 1))
-		if err != nil {
-			m.Log.Warn("checking today's plan failed", "err", err)
-			return
-		}
-		for _, i := range existing {
-			if m.ownActivity(i) {
-				m.planned, m.round = today, round
-				return
-			}
-		}
-	}
-	last := min(round+roundsPerPlan-1, m.pace()-1)
-	most := m.Day.MaxActivities * (last - round + 1)
-	if day == slowDay { // the rest of the day in this one plan, or none if it's planned already
-		if !first {
-			m.round = m.pace() - 1
-			return
-		}
-		last, most = m.pace()-1, 1
-	}
-	wasPlanned, wasRound := m.planned, m.round
-	if first {
-		m.round = 0 // yesterday's rounds aren't today's
-	}
-	m.planned, m.round = today, max(last, m.round)
-	if !first && m.stillToDo(ctx, midnight, m.roundEnd(last, midnight)) {
-		m.Log.Info("what it planned is still to do; no new plan", "round", round+1)
-		return
-	}
-	if m.overBudget(ctx, now) {
-		m.Log.Warn("over today's budget; no plan", "round", round)
-		return
-	}
-	if m.writePlan(ctx, now, midnight, round, last, most, first, quiet) {
-		m.planTries.succeeded()
-	} else if m.planTries.fail(now) {
-		m.planned, m.round = wasPlanned, wasRound // planned again later
-	}
-}
-
-// stillToDo reports whether any of its own activities due before until is
-// still pending.
-func (m *Mind) stillToDo(ctx context.Context, midnight, until time.Time) bool {
-	is, err := m.Store.IntentionsDue(ctx, midnight, until)
-	if err != nil {
-		return false
-	}
-	for _, i := range is {
-		if m.ownActivity(i) && i.Ability != journal.Name &&
-			i.Status == memory.IntentionPending {
-			return true
-		}
-	}
-	return false
-}
-
-func (m *Mind) roundAt(now, midnight time.Time) int {
-	if m.Day.Pace <= 1 {
-		return 0
-	}
-	length := (m.Day.JournalAt - m.Day.PlanAt) / time.Duration(m.Day.Pace)
-	return min(int(now.Sub(midnight.Add(m.Day.PlanAt))/length), m.Day.Pace-1)
-}
-
-func (m *Mind) roundEnd(round int, midnight time.Time) time.Time {
-	if m.Day.Pace <= 1 || round >= m.Day.Pace-1 {
-		return midnight.Add(m.Day.JournalAt)
-	}
-	length := (m.Day.JournalAt - m.Day.PlanAt) / time.Duration(m.Day.Pace)
-	return midnight.Add(m.Day.PlanAt + time.Duration(round+1)*length)
-}
-
-// planFormat is the plan's shape; ability is one of the abilities the planner
-// may choose, or "" for something it only writes.
-func planFormat(abilities []ability.Ability) *system2.Format {
-	names := []string{""}
-	for _, a := range abilities {
-		names = append(names, a.Name())
-	}
-	return &system2.Format{Name: "day_plan", Schema: map[string]any{
-		"type": "object", "additionalProperties": false, "required": []string{"activities", "calls"},
-		"properties": map[string]any{
-			"calls": callsSchema,
-			"activities": map[string]any{"type": "array", "items": map[string]any{
-				"type": "object", "additionalProperties": false,
-				"required": []string{"at", "what", "for", "project_id", "new_project_title", "project_kind", "ability", "query", "goal_id", "resource_id"},
-				"properties": map[string]any{
-					"for":               map[string]any{"type": "string", "enum": []string{"owner", "self"}, "description": "owner if it's done to help your owner, else self"},
-					"ability":           map[string]any{"type": "string", "enum": names},
-					"query":             map[string]any{"type": "string", "description": "what the ability is to look for; empty if none"},
-					"goal_id":           map[string]any{"type": "string", "description": "the goal this moves forward, or empty"},
-					"resource_id":       map[string]any{"type": "string", "description": "a learning plan's resource this studies, or empty"},
-					"at":                map[string]any{"type": "string", "description": "HH:MM, local time"},
-					"what":              map[string]any{"type": "string"},
-					"project_id":        map[string]any{"type": "string", "description": "an existing project's id, or empty"},
-					"new_project_title": map[string]any{"type": "string", "description": "a new project's title, or empty"},
-					"project_kind":      map[string]any{"type": "string", "description": "what kind of project, e.g. reading, learning, or one of the things you make; empty if no project"},
-				},
-			}},
-		},
-	}}
-}
-
-// writePlan plans rounds round to last. Only the day's first plan has the
-// journal and its calls for its owner.
-// most is the activities it may plan; quiet, how long its owner has said
-// nothing, which it's told when that's slowed its day. False if it failed.
-func (m *Mind) writePlan(ctx context.Context, now, midnight time.Time, round, last, most int, first bool, quiet time.Duration) bool {
-	until := m.roundEnd(last, midnight)
-	start := time.Now()
-	d := &decision.Decision{ID: ulid.Make(), At: start.UTC(), Tier: decision.TierSystem2, SetID: m.Day.PlanPrompt.Ref,
-		Action: "plan_day", Gate: decision.GateAuto}
-	projects, err := m.Store.ActiveProjects(ctx, projectsInPlan)
-	if err != nil {
-		m.Log.Warn("loading projects failed; planning without them", "err", err)
-	}
-	facts, err := m.Store.RecallCandidates(ctx, []string{memory.SubjectSelf}, nil, factsInPlan)
-	if err != nil {
-		m.Log.Warn("loading facts failed; planning without them", "err", err)
-	}
-
-	var note strings.Builder
-	note.WriteString(m.now(now))
-	fmt.Fprintf(&note, " You write your journal at %s.", midnight.Add(m.Day.JournalAt).Format("15:04"))
-	if quiet >= quietSlowsAfter {
-		fmt.Fprintf(&note, " %s hasn't written in %d days, so today you do just one thing of your own.",
-			m.ownerName(ctx), int(quiet/(24*time.Hour)))
-	}
-	if m.Day.Pace > 1 {
-		rounds := fmt.Sprintf("round %d", round+1)
-		if last > round {
-			rounds = fmt.Sprintf("rounds %d to %d", round+1, last+1)
-		}
-		fmt.Fprintf(&note, " You work fast, in rounds: these are %s of %d today. Plan what you'll do from now until %s, "+
-			"up to %d things in all; the next plan picks up from how these went.", rounds, m.Day.Pace, until.Format("15:04"), most)
-		if !first {
-			note.WriteString(" Leave calls empty: today's are made.")
-			if ws, err := m.Store.WorksBetween(ctx, midnight, now); err == nil && len(ws) > 0 {
-				note.WriteString("\n\nWhat you've made today so far:")
-				for _, w := range ws {
-					if w.Kind != "journal" {
-						fmt.Fprintf(&note, "\n- %s, %s: %s", w.CreatedAt.In(m.Zone).Format("15:04"), strings.ReplaceAll(w.Kind, "_", " "), w.Title)
-					}
-				}
-			}
-		}
-	}
-	if len(projects) == 0 {
-		note.WriteString("\n\nYou're not in the middle of anything yet.")
-	} else {
-		note.WriteString("\n\nWhat you're in the middle of:")
-		for _, p := range projects {
-			fmt.Fprintf(&note, "\n- id %s: %s (%s), last worked on %s.", p.ID, p.Title, p.Kind, p.UpdatedAt.In(m.Zone).Format("2 Jan"))
-			if !p.GoalID.IsZero() {
-				fmt.Fprintf(&note, " Serves goal %s.", p.GoalID)
-			}
-			if p.Source != nil {
-				fmt.Fprintf(&note, " Reading %q by %s, %d%% through.", p.Source.Title, orDefault(p.Source.Author, "an unknown author"),
-					p.PercentRead())
-			}
-			fmt.Fprintf(&note, " Where it stands: %s", orNone(p.Notes))
-		}
-	}
-	note.WriteString(m.ownerNote(ctx))
-	if len(facts) > 0 {
-		note.WriteString("\n\nWhat you remember about yourself lately:")
-		for i := len(facts) - 1; i >= 0; i-- {
-			fmt.Fprintf(&note, "\n- %s: %s", facts[i].At.In(m.Zone).Format("2 Jan"), facts[i].Text)
-		}
-	}
-	abilities := m.plannable()
-	if len(abilities) == 0 {
-		note.WriteString("\n\nToday you can only write; you can't read or look up anything new.")
-	} else {
-		note.WriteString("\n\nWhat you can do besides writing (give its name as ability):")
-		for _, a := range abilities {
-			fmt.Fprintf(&note, "\n- %s: %s", a.Name(), a.Describe())
-		}
-	}
-	note.WriteString(m.skillsList())
-	note.WriteString(m.growthNote(ctx, now))
-	note.WriteString(m.plansNote(ctx, false))
-	note.WriteString(m.foundNote(ctx))
-	note.WriteString(m.judgmentNote(ctx, planJudgment, m.dayAbout(ctx, projects)))
-	if j, ok, err := m.Store.LatestWork(ctx, "journal"); err == nil && ok {
-		fmt.Fprintf(&note, "\n\nYour last journal entry (%s):\n%s", j.CreatedAt.In(m.Zone).Format("Monday 2 Jan"), cutRunes(j.Text, quotedChars))
-	}
-
-	resp, err := m.ownDay().Reason(ctx, system2.Request{
-		Instructions: m.lifeInstructions(m.Day.PlanPrompt),
-		Note:         note.String(),
-		Format:       planFormat(abilities),
-	})
-	d.Provider, d.CostUSD = resp.Provider, resp.CostUSD
-	if err != nil {
-		m.Log.Error("planning the day failed", "err", err)
-		m.finishLife(ctx, d, start, decision.OutcomeFailed, err.Error())
-		return false
-	}
-	var plan struct {
-		Activities []struct {
-			At              string `json:"at"`
-			What            string `json:"what"`
-			For             string `json:"for"`
-			ProjectID       string `json:"project_id"`
-			NewProjectTitle string `json:"new_project_title"`
-			ProjectKind     string `json:"project_kind"`
-			Ability         string `json:"ability"`
-			Query           string `json:"query"`
-			GoalID          string `json:"goal_id"`
-			ResourceID      string `json:"resource_id"`
-		} `json:"activities"`
-		Calls []planCall `json:"calls"`
-	}
-	if err := json.Unmarshal([]byte(resp.Text), &plan); err != nil {
-		m.finishLife(ctx, d, start, decision.OutcomeFailed, "plan is not the requested JSON: "+err.Error())
-		return false
-	}
-
-	known := map[string]bool{}
-	for _, p := range projects {
-		known[p.ID.String()] = true
-	}
-	goals := map[string]bool{}
-	if gs, err := m.Store.Goals(ctx, true); err == nil {
-		for _, g := range gs {
-			goals[g.ID.String()] = true
-		}
-	}
-	journalAt := midnight.Add(m.Day.JournalAt)
-	var lines []string
-	for _, a := range plan.Activities {
-		if len(lines) >= most {
-			break
-		}
-		at, err := time.ParseInLocation("15:04", strings.TrimSpace(a.At), m.Zone)
-		what := strings.TrimSpace(a.What)
-		if err != nil || what == "" {
-			continue
-		}
-		due := midnight.Add(time.Duration(at.Hour())*time.Hour + time.Duration(at.Minute())*time.Minute)
-		if due.Before(now) || !due.Before(until) {
-			continue // in the past, or after this round (or the journal): not now
-		}
-		var project, goal ulid.ULID
-		if id := strings.TrimSpace(a.GoalID); goals[id] {
-			goal = ulid.MustParse(id)
-		}
-		switch id := strings.TrimSpace(a.ProjectID); {
-		case known[id]:
-			project = ulid.MustParse(id)
-			m.linkGoal(ctx, project, goal)
-		case strings.TrimSpace(a.NewProjectTitle) != "":
-			p := memory.Project{ID: ulid.Make(), Title: strings.TrimSpace(a.NewProjectTitle), Kind: orDefault(a.ProjectKind, "writing"),
-				Status: memory.ProjectActive, GoalID: goal, CreatedAt: now.UTC(), UpdatedAt: now.UTC()}
-			if err := m.Store.SaveProject(ctx, p); err != nil {
-				m.Log.Error("save project", "err", err)
-				continue
-			}
-			known[p.ID.String()], project = true, p.ID
-		}
-		i := memory.Intention{Text: what, ProjectID: project, DueAt: due}
-		if owner := m.policy().Owner; a.For == "owner" && owner != "" {
-			// Done for its owner, what it makes is theirs: shown as made for them, and
-			// never on its public page.
-			i.Subject = owner
-		}
-		if ab, ok := m.Abilities.Get(strings.TrimSpace(a.Ability)); ok && ab.Describe() != "" && m.allowed(ab) {
-			i.Ability = ab.Name()
-			if q := strings.TrimSpace(a.Query); q != "" {
-				i.Args = map[string]string{"query": q}
-			}
-		}
-		if r, ok := m.resourceFor(ctx, strings.TrimSpace(a.ResourceID)); ok {
-			i.Ability, i.Args = r.Ability, map[string]string{"query": r.Query, "resource": r.ID.String()}
-		}
-		if m.intend(ctx, i, now) {
-			line := due.Format("15:04") + " " + what
-			if i.Ability != "" {
-				line += fmt.Sprintf(" [%s: %s]", i.Ability, i.Args["query"])
-			}
-			lines = append(lines, line)
-		}
-	}
-	if first && m.intend(ctx, memory.Intention{Text: journalText, Ability: journal.Name, DueAt: journalAt}, now) {
-		lines = append(lines, journalAt.Format("15:04")+" "+journalText)
-	}
-	d.Reply = strings.Join(lines, "\n")
-	detail := fmt.Sprintf("planned %d things", len(lines))
-	if !first {
-		plan.Calls = nil // its calls are the first plan's
-	}
-	if n := m.logPlanCalls(ctx, plan.Calls, now); n > 0 {
-		detail += fmt.Sprintf("; %d calls for its owner", n)
-	}
-	m.finishLife(ctx, d, start, decision.OutcomeOK, detail)
-	m.Log.Info("planned the day", "rounds", fmt.Sprintf("%d-%d", round+1, last+1), "of", m.pace(), "things", len(lines), "cost_usd", resp.CostUSD)
-	return true
-}
-
-// ownerNote is what it knows of its owner, newest last, for the plan's and the review's
-// notes: both choose what to work on for them.
+// ownerNote is what it knows of its owner, newest last, for its morning's and its
+// look back's notes: both are about working for them.
 func (m *Mind) ownerNote(ctx context.Context) string {
 	var facts []memory.Fact
 	if owner := m.policy().Owner; owner != "" {
@@ -473,37 +129,6 @@ func (m *Mind) ownerNote(ctx context.Context) string {
 	return note.String()
 }
 
-// ownActivity is whether i is part of its own day: an activity, for itself or for its owner.
-func (m *Mind) ownActivity(i memory.Intention) bool {
-	return i.Kind == memory.IntentionActivity && (i.Subject == memory.SubjectSelf || (i.Subject != "" && i.Subject == m.policy().Owner))
-}
-
-func (m *Mind) linkGoal(ctx context.Context, project, goal ulid.ULID) {
-	if goal.IsZero() {
-		return
-	}
-	p, ok, err := m.Store.Project(ctx, project)
-	if err != nil || !ok || !p.GoalID.IsZero() {
-		return
-	}
-	p.GoalID = goal
-	if err := m.Store.SaveProject(ctx, p); err != nil {
-		m.Log.Error("save project", "err", err)
-	}
-}
-
-// intend plans i for its own day: for itself unless i.Subject says it's for its owner.
-func (m *Mind) intend(ctx context.Context, i memory.Intention, now time.Time) bool {
-	i.ID, i.Subject, i.Kind, i.Status = ulid.Make(), orDefault(i.Subject, memory.SubjectSelf), memory.IntentionActivity, memory.IntentionPending
-	i.DueAt, i.CreatedAt = i.DueAt.UTC(), now.UTC()
-	err := m.Store.SaveIntention(ctx, i)
-	if err != nil {
-		m.Log.Error("save intention", "err", err)
-		return false
-	}
-	return true
-}
-
 // activityFormat is what an activity makes: kind is one of the things it
 // makes (its crafts); an ability may file the work under a kind of its own.
 // It asks too for each kind of data its works carry (data), by its name.
@@ -515,20 +140,15 @@ func activityFormat(crafts []character.Craft, data map[string]map[string]any, ac
 	}
 	f := &system2.Format{Name: "activity", Schema: map[string]any{
 		"type": "object", "additionalProperties": false,
-		"required": []string{"title", "kind", "text", "project_notes", "project_done", "remember", "lessons", "ask_for_review", "review_question",
-			"stage_done"},
+		"required": []string{"title", "kind", "text", "project_notes", "project_done", "remember", "lessons"},
 		"properties": map[string]any{
-			"title":           map[string]any{"type": "string"},
-			"kind":            map[string]any{"type": "string", "enum": kinds},
-			"text":            map[string]any{"type": "string"},
-			"project_notes":   map[string]any{"type": "string"},
-			"project_done":    map[string]any{"type": "boolean"},
-			"remember":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			"lessons":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			"ask_for_review":  map[string]any{"type": "boolean"},
-			"review_question": map[string]any{"type": "string"},
-			"stage_done": map[string]any{"type": "string",
-				"description": "the id of the learning plan whose current stage what you made meets the done when of; empty if none"},
+			"title":         map[string]any{"type": "string"},
+			"kind":          map[string]any{"type": "string", "enum": kinds},
+			"text":          map[string]any{"type": "string"},
+			"project_notes": map[string]any{"type": "string"},
+			"project_done":  map[string]any{"type": "boolean"},
+			"remember":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"lessons":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 		},
 	}}
 	for name, schema := range data {
@@ -542,24 +162,20 @@ func activityFormat(crafts []character.Craft, data map[string]map[string]any, ac
 	return f
 }
 
-// doActivity does one thing of its own day, unless it is busy talking with
-// someone (it waits), too late (missed), or over today's budget (missed). A
-// journal on a day when nothing happened isn't written: there's nothing to say.
+// doActivity makes a draft for its owner, unless it is busy talking with
+// someone (it waits, except for a morning's draft), too late (missed), or over
+// today's budget (missed).
 func (m *Mind) doActivity(ctx context.Context, i memory.Intention, now time.Time) {
 	log := m.Log.With("intention", i.ID.String())
 	if now.Sub(i.DueAt) > activityGiveUp {
 		m.finish(ctx, i, memory.IntentionMissed, "too late", now)
 		return
 	}
-	if m.busy(ctx, now) {
+	if i.Args["for"] != morningDraft && m.busy(ctx, now) { // a morning's draft can't wait: the note is waiting for it
 		if err := m.Store.PostponeIntention(ctx, i.ID, now.Add(postponeBy).UTC()); err != nil {
 			log.Error("postpone intention", "err", err)
 		}
 		log.Info("busy talking; activity postponed", "until", now.Add(postponeBy).In(m.Zone).Format("15:04"))
-		return
-	}
-	if i.Ability == journal.Name && m.quietDay(ctx, now) {
-		m.finish(ctx, i, memory.IntentionCancelled, "a quiet day: nothing to write", now)
 		return
 	}
 	if m.overBudget(ctx, now) {
@@ -594,15 +210,10 @@ func (m *Mind) makeWork(ctx context.Context, i memory.Intention, action, what st
 	note += m.dataHelp()
 	skill, skillCost := m.skillNote(ctx, i.Text)
 	note += skill
-	// it may act for its owner in its own day, or in what it makes for them
-	acts := len(m.doers()) > 0 && (i.Subject == memory.SubjectSelf || i.Subject == m.policy().Owner)
+	// it may propose acting for its owner in what it makes for them
+	acts := len(m.doers()) > 0 && i.Subject == m.policy().Owner
 	if acts {
 		note += "\n\n" + m.actionsHelp(orDefault(m.person(ctx, m.policy().Owner).Name, "your owner"))
-	}
-	plans := ""
-	if action == "activity" { // its own practice, not what it makes for someone
-		plans = m.stagesNote(ctx)
-		note += plans
 	}
 	if !ok {
 		m.finish(ctx, i, memory.IntentionCancelled, "project not found", now)
@@ -654,17 +265,14 @@ func (m *Mind) makeWork(ctx context.Context, i memory.Intention, action, what st
 		return memory.Work{}, false
 	}
 	var out struct {
-		Title          string   `json:"title"`
-		Kind           string   `json:"kind"`
-		Text           string   `json:"text"`
-		ProjectNotes   string   `json:"project_notes"`
-		ProjectDone    bool     `json:"project_done"`
-		Remember       []string `json:"remember"`
-		Lessons        []string `json:"lessons"`
-		AskForReview   bool     `json:"ask_for_review"`
-		ReviewQuestion string   `json:"review_question"`
-		StageDone      string   `json:"stage_done"`
-		Act            []struct {
+		Title        string   `json:"title"`
+		Kind         string   `json:"kind"`
+		Text         string   `json:"text"`
+		ProjectNotes string   `json:"project_notes"`
+		ProjectDone  bool     `json:"project_done"`
+		Remember     []string `json:"remember"`
+		Lessons      []string `json:"lessons"`
+		Act          []struct {
 			Tool string `json:"tool"`
 			Args string `json:"args"`
 			Why  string `json:"why"`
@@ -700,9 +308,13 @@ func (m *Mind) makeWork(ctx context.Context, i memory.Intention, action, what st
 	}
 	n := names{agent: m.Life.Name, speaker: fallbackName}
 	var fs []memory.Fact
+	about := memory.SubjectSelf
+	if i.Subject != "" && i.Subject != memory.SubjectSelf { // made for its owner: what it learned is about their work
+		about = i.Subject
+	}
 	for _, f := range out.Remember {
 		if f = strings.TrimSpace(f); f != "" {
-			fs = append(fs, memory.Fact{Subject: memory.SubjectSelf, Text: f})
+			fs = append(fs, memory.Fact{Subject: about, Text: f})
 		}
 	}
 	_, cost := m.saveFacts(ctx, p, fs, n)
@@ -716,23 +328,12 @@ func (m *Mind) makeWork(ctx context.Context, i memory.Intention, action, what st
 		}
 		m.propose(ctx, p, proposed, now, false) // its day may have read anything
 	}
-	if plans != "" {
-		m.stageDone(ctx, strings.TrimSpace(out.StageDone), w, p.ID, &d.ID, now)
-	}
 	m.scoreWork(ctx, w, p.ID, &d.ID)
 	source := memory.LessonFromSelf
 	if ab != nil && ab.Risk() != ability.Private { // what it read was someone else's
 		source = memory.LessonFromOthers
 	}
-	var skills []string
-	if sk := m.workingOn(ctx, i, project); sk != "" {
-		skills = []string{sk}
-	}
-	m.learnFromWork(ctx, w, out.Lessons, source, skills)
-	m.studied(ctx, i, w, now)
-	if out.AskForReview && action == "activity" {
-		m.askForReview(ctx, w, strings.TrimSpace(out.ReviewQuestion), now)
-	}
+	m.learnFromWork(ctx, w, out.Lessons, source, nil)
 	log.Info("made something", "action", action, "ability", i.Ability, "kind", w.Kind, "title", title, "cost_usd", d.CostUSD)
 	return w, true
 }
@@ -762,24 +363,6 @@ func (m *Mind) activityNote(ctx context.Context, i memory.Intention, what string
 		}
 	}
 	return b.String(), &p, true
-}
-
-// quietDay: it made nothing today and talked with no one.
-func (m *Mind) quietDay(ctx context.Context, now time.Time) bool {
-	midnight := m.startOfDay(now)
-	if ws, err := m.Store.WorksBetween(ctx, midnight, now); err != nil || len(ws) > 0 {
-		return false
-	}
-	convs, err := m.Store.Conversations(ctx)
-	if err != nil {
-		return false
-	}
-	for _, c := range convs {
-		if c.LastActivity.After(midnight) {
-			return false
-		}
-	}
-	return true
 }
 
 func (m *Mind) busy(ctx context.Context, now time.Time) bool {
@@ -859,11 +442,9 @@ func (m *Mind) lifeInstructions(p Prompt) string {
 		}
 		return "- " + strings.Join(lines, "\n- ")
 	}
-	return strings.NewReplacer("{name}", m.Life.Name, "{life_story}", list(m.Life.Story, "- (none)"),
-		"{personality}", list(m.Life.Personality, "- Be yourself."),
-		"{routine}", list(m.Life.Routine, "- No fixed routine: plan as you like."),
-		"{max}", fmt.Sprint(m.Day.MaxActivities), "{owner}", m.ownerName(context.Background()),
-		"{goal_due}", m.goalDue(), "{practice_time}", m.practiceTime(), "{makes}", m.makesList(), "{kinds}", strings.Join(kinds, ", ")).Replace(p.Text)
+	return strings.NewReplacer("{name}", m.Life.Name, "{background}", list(m.Life.Story, "- (none)"),
+		"{personality}", list(m.Life.Personality, "- Be yourself."), "{owner}", m.ownerName(context.Background()),
+		"{makes}", m.makesList(), "{kinds}", strings.Join(kinds, ", ")).Replace(p.Text)
 }
 
 func (m *Mind) finishLife(ctx context.Context, d *decision.Decision, start time.Time, status decision.OutcomeStatus, detail string) {
@@ -888,23 +469,4 @@ func orDefault(s, def string) string {
 		return s
 	}
 	return def
-}
-
-func (m *Mind) pace() int { return max(1, m.Day.Pace) }
-
-func (m *Mind) paced(d time.Duration) time.Duration { return d / time.Duration(m.pace()) }
-
-func (m *Mind) goalDue() string {
-	if m.pace() == 1 {
-		return "within weeks"
-	}
-	return fmt.Sprintf("within days: you work about %d times faster than a person, so what takes a person four weeks takes you "+
-		"about %d days", m.pace(), max(1, int(m.paced(28*24*time.Hour).Hours()/24+0.5)))
-}
-
-func (m *Mind) practiceTime() string {
-	if m.pace() == 1 {
-		return "a day or two"
-	}
-	return "a round or two of your day"
 }

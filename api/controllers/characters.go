@@ -24,7 +24,6 @@ type CharacterInfo struct {
 	Name        string   `json:"name"`
 	About       string   `json:"about"`
 	Personality []string `json:"personality"`
-	Toward      string   `json:"toward"`    // their first dream
 	BornWith    []string `json:"born_with"` // their skills' names
 	Relations   []string `json:"relations"` // who their owner can be to them
 }
@@ -107,9 +106,6 @@ func (ch *Characters) parse(x models.Character) (parsedCharacter, error) {
 		return parsedCharacter{}, fmt.Errorf("character %s: %w", id, err)
 	}
 	info := CharacterInfo{Key: t.Key, Name: t.Name, About: t.About, Personality: life.Personality, BornWith: []string{}, Relations: t.Relations}
-	if len(life.Dreams) > 0 {
-		info.Toward = life.Dreams[0]
-	}
 	for _, s := range life.Skills {
 		info.BornWith = append(info.BornWith, s.Name)
 	}

@@ -291,8 +291,8 @@ func TestJudgmentReview(t *testing.T) {
 
 func TestGradeCalls(t *testing.T) {
 	srv, st := newServer(t, "")
-	logged := memory.Call{ID: ulid.Make(), Type: memory.CallFocus, Options: []string{"a", "b"}, Pick: 0, Status: memory.CallLogged}
-	asked := memory.Call{ID: ulid.Make(), Type: memory.CallFocus, Options: []string{"a", "b"}, Status: memory.CallAsked}
+	logged := memory.Call{ID: ulid.Make(), Type: "reach_out", Options: []string{"a", "b"}, Pick: 0, Status: memory.CallLogged}
+	asked := memory.Call{ID: ulid.Make(), Type: "reach_out", Options: []string{"a", "b"}, Status: memory.CallAsked}
 	st.calls = []memory.Call{logged, asked}
 	for _, step := range []struct {
 		name, body string
@@ -314,9 +314,9 @@ func TestGradeCalls(t *testing.T) {
 
 func TestJudgeOutcome(t *testing.T) {
 	srv, st := newServer(t, "")
-	done := memory.Call{ID: ulid.Make(), Type: memory.CallFocus, Options: []string{"a", "b"}, Status: memory.CallAnswered,
+	done := memory.Call{ID: ulid.Make(), Type: "reach_out", Options: []string{"a", "b"}, Status: memory.CallAnswered,
 		Outcome: memory.OutcomeWell, Verdict: memory.VerdictGood, OutcomeBy: memory.OutcomeBySelf}
-	asked := memory.Call{ID: ulid.Make(), Type: memory.CallFocus, Options: []string{"a", "b"}, Status: memory.CallAsked}
+	asked := memory.Call{ID: ulid.Make(), Type: "reach_out", Options: []string{"a", "b"}, Status: memory.CallAsked}
 	st.calls = []memory.Call{done, asked}
 	url := srv.URL + "/api/judgment/outcomes"
 	if code := post(t, url, `{"id":"`+done.ID.String()+`","outcome":"went_well","verdict":"meh"}`); code != http.StatusBadRequest {

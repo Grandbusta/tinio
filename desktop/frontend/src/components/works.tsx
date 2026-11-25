@@ -9,8 +9,7 @@ import { Back, useFrame, when } from "@/components/app-frame";
 import { FileIcon } from "@/components/file-icon";
 import { call, type Work } from "@/lib/api";
 
-// Step 9: what an agent has made, newest first, and each piece to read and download. Their
-// journal stays theirs and isn't here.
+// Step 9: what an agent has made for you, newest first, and each piece to read and download.
 
 // What each format is called on its button.
 const formatNames: Record<string, string> = {
@@ -115,8 +114,7 @@ export function WorksPage({ id }: { id: string }) {
       <div className="flex flex-col gap-1.5">
         <h1 className="font-display text-[34px] leading-[1.12] font-medium tracking-[-0.02em]">Works</h1>
         <p className="m-0 max-w-[62ch] text-muted">
-          Everything {name} has made, newest first. Read any of it, download it as a file, or have {name} send it to you. {name}&apos;s
-          journal stays theirs and isn&apos;t listed.
+          Everything {name} has made, newest first. Read any of it, download it as a file, or have {name} send it to you.
         </p>
       </div>
       {error && <p role="alert" className="text-sm text-bad-text">{error}</p>}

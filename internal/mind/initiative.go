@@ -105,21 +105,15 @@ func (m *Mind) tick(ctx context.Context, now time.Time) {
 	if own && !hush && m.checkInTime(now) {
 		m.checkIn(ctx, now)
 	}
-	day, quiet := m.liveliness(ctx, now)
-	if !own {
-		day = pausedDay
-	}
-	m.planDay(ctx, now, day, quiet)
+	day := m.liveliness(ctx, now)
+	m.morning(ctx, now, day, own) // in light mode it still comes, without drafts
 	if own {
 		m.doDueIntentions(ctx, now, true)
 	}
 	m.preparePromises(ctx, now)
-	if day != pausedDay {
+	if own && day != pausedDay {
 		m.weeklyReview(ctx, now)
 		m.fillOldData(ctx)
-	}
-	if m.toPlan.Swap(false) { // a goal taken on in a chat: its learning plan, now the reply is sent
-		m.EnsurePlans(ctx, now)
 	}
 	m.lastTick = now
 }
@@ -132,7 +126,7 @@ func (m *Mind) dayAllowed(ctx context.Context, now time.Time) bool {
 		m.Log.Warn("reading the account's usage failed; its day goes on", "err", err)
 		return true
 	}
-	return st.OwnDay(now)
+	return st.Drafts(now)
 }
 
 func (m *Mind) doDueIntentions(ctx context.Context, now time.Time, ownDay bool) {
@@ -464,9 +458,13 @@ func (m *Mind) hello(ctx context.Context, p perception.Percept) {
 		p.SpeakerName = person.Name
 	}
 	n := m.namesFor(p)
-	note := fmt.Sprintf("%s has just opened your chat for the first time: you're meeting. Say hello and introduce yourself "+
-		"the way you would to someone new, in a few short sentences: who you are, and something you're doing or thinking about "+
-		"today. Say plainly that you're an AI. Then ask %s one question, about them or what they'd like from you.", n.speaker, n.speaker)
+	note := fmt.Sprintf("%s has just opened your chat for the first time: you're meeting, and you work for them. Say hello and "+
+		"introduce yourself the way you would to someone new, in a few short sentences: who you are and what you can take off "+
+		"their hands.", n.speaker)
+	if m.morningOn() {
+		note += " Say too that each morning you'll send them their few things for the day, with what you can get ready first."
+	}
+	note += fmt.Sprintf(" Say plainly that you're an AI. Then ask %s one question: what they'd most like help with.", n.speaker)
 	if m.speakFirst(ctx, p, person, nil, speech{action: "hello", note: note, approved: true}) != sent {
 		// It's said once, and the owner is waiting for it: a plain one beats none.
 		plain := fmt.Sprintf("Hi %s, I'm %s. I'm an AI, and I'll always say so. Tell me a little about yourself?", n.speaker, m.Life.Name)
@@ -527,7 +525,7 @@ func (m *Mind) speakFirst(ctx context.Context, p perception.Percept, person memo
 	resp, err := m.System2.Reason(ctx, system2.Request{
 		Instructions: m.instructions(ctx, person, n),
 		History:      turns(recent),
-		Note:         m.now(p.At) + m.peopleNote(ctx) + m.goalsNote(ctx, person) + "\n\n" + s.note + nameNote(recent, n.speaker),
+		Note:         m.now(p.At) + m.peopleNote(ctx) + m.skillsFor(ctx, person) + "\n\n" + s.note + nameNote(recent, n.speaker),
 		CollectFacts: true, // the format the reply prompt describes; nothing new was said, so nothing is kept
 
 	})

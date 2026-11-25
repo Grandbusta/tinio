@@ -46,8 +46,8 @@ export function PickCharacter() {
             Who would you like to raise?
           </h1>
           <p className="m-0 max-w-[62ch] text-muted">
-            Each one comes with a story, a personality and something they&apos;re working toward. You can change any of it later, and teach them skills once
-            you&apos;ve met.
+            Each one comes with a background, a personality and work they&apos;re good at, and works for you from the first day. You can change any of it later,
+            and teach them skills once you&apos;ve met.
           </p>
         </div>
 
@@ -95,12 +95,6 @@ export function PickCharacter() {
                 </div>
               </div>
               {rest(current.about) && <p className="m-0 text-sm">{rest(current.about)}</p>}
-              {current.toward && (
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold tracking-[0.04em] text-muted uppercase">Working toward</span>
-                  <span className="text-sm">{current.toward}</span>
-                </div>
-              )}
               {current.born_with.length > 0 && (
                 <div className="flex flex-col gap-1.5">
                   <span className="text-xs font-semibold tracking-[0.04em] text-muted uppercase">Born with</span>

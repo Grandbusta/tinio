@@ -64,29 +64,26 @@ func (i Initiative) CheckInTimes() ([]time.Duration, error) {
 
 type DailyLife struct {
 	Enabled bool
-	// Abilities nil: DefaultAbilities. Empty: none besides the journal.
-	Abilities  []string
-	PlanAt     string
-	JournalAt  string
-	ReviewAt   string
-	Activities int
-	// Pace is the rounds in its waking day; BudgetUSD and Web are per pace-1
-	// day and are multiplied by it.
-	Pace      int
+	// Abilities nil: DefaultAbilities. Empty: none.
+	Abilities []string
+	ReviewAt  string // the weekly look back: a day and HH:MM, in its owner's time zone
 	BudgetUSD float64
-	// Model is System 2's model for its own day; "": reasoning's. ServiceTier
-	// is asked for its own day only: "" or "flex". WorkModel makes works, for
-	// itself or someone; "": reasoning's.
+	// Model is System 2's model for its work on the clock (the morning, the
+	// look back, what it watches); "": reasoning's. ServiceTier is asked for
+	// that only: "" or "flex". WorkModel makes works, the morning's drafts and
+	// promises; "": reasoning's.
 	Model          string
 	ServiceTier    string
 	WorkModel      string
-	PlanPrompt     string
 	ActivityPrompt string
-	ReviewPrompt   string
-	LearnPrompt    string
-	DataPrompt     string
-	ObservePrompt  string
-	Web            Web
+	// MorningPrompt is the owner's morning ("": none); Drafts, what it may
+	// draft for it ahead, at most.
+	MorningPrompt string
+	Drafts        int
+	ReviewPrompt  string
+	DataPrompt    string
+	ObservePrompt string
+	Web           Web
 }
 
 type Web struct {
@@ -207,7 +204,7 @@ func (d DailyLife) AbilityNames() []string {
 
 type Judgment struct {
 	Calls       bool
-	AsksPerDay  int // day-plan calls only; goal calls are always asked
+	AsksPerDay  int
 	ReplyWindow time.Duration
 }
 
@@ -233,16 +230,6 @@ func (c *Config) Policy() (action.Policy, error) {
 		return action.Policy{}, errors.New("config: autonomy.ask_expires must be positive, e.g. 24h")
 	}
 	return action.Policy{Classes: classes, AskExpires: c.Autonomy.AskExpires}, nil
-}
-
-func (d DailyLife) Times() (plan, journal time.Duration, err error) {
-	if plan, err = timeOfDay(d.PlanAt); err != nil {
-		return 0, 0, fmt.Errorf("config: daily_life.plan_at must be HH:MM, have %q", d.PlanAt)
-	}
-	if journal, err = timeOfDay(d.JournalAt); err != nil || journal <= plan {
-		return 0, 0, fmt.Errorf("config: daily_life.journal_at must be HH:MM after plan_at, have %q", d.JournalAt)
-	}
-	return plan, journal, nil
 }
 
 func timeOfDay(s string) (time.Duration, error) {
@@ -292,12 +279,14 @@ func Load() *Config {
 		WorkingMemory: WorkingMemory{Turns: 8, Window: 30 * time.Minute},
 		Memory:        Memory{RecallCandidates: 30},
 		Initiative:    Initiative{Quiet: 4 * time.Hour},
-		DailyLife: DailyLife{Enabled: true, Pace: 1, PlanAt: "08:00", JournalAt: "22:00", Activities: 3, BudgetUSD: 0.05,
-			Model:      cmp.Or(os.Getenv("OPENAI_DAY_MODEL"), "gpt-6-luna"),
-			WorkModel:  os.Getenv("OPENAI_WORK_MODEL"),
-			Abilities:  []string{"read_book", "read_article", "web_search", "read_page"},
-			PlanPrompt: "prompts/plan.md", ActivityPrompt: "prompts/activity.md",
-			ReviewAt: "Sun 20:00", ReviewPrompt: "prompts/review.md", LearnPrompt: "prompts/learn.md",
+		DailyLife: DailyLife{Enabled: true, BudgetUSD: 0.05,
+			Model:     cmp.Or(os.Getenv("OPENAI_DAY_MODEL"), "gpt-6-luna"),
+			WorkModel: os.Getenv("OPENAI_WORK_MODEL"),
+			Abilities: []string{"read_book", "read_article", "web_search", "read_page"},
+			// The agent works for its owner: no day or learning of its own, but
+			// their morning and a weekly look back at its work for them.
+			ActivityPrompt: "prompts/activity.md", MorningPrompt: "prompts/morning.md", Drafts: 2,
+			ReviewAt: "Sun 20:00", ReviewPrompt: "prompts/review.md",
 			DataPrompt: "prompts/data.md", ObservePrompt: "prompts/observe.md",
 			Web: Web{Searches: 10, Pages: 15}},
 		Search:    Search{Provider: "openai"},

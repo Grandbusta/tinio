@@ -73,16 +73,11 @@ type Store interface {
 	MarkApprovalSent(ctx context.Context, id ulid.ULID, message []byte, at time.Time) error
 	DecideApproval(ctx context.Context, id ulid.ULID, status, text string, at time.Time) (bool, error)
 	StaleApprovals(ctx context.Context, before time.Time, limit int) ([]memory.Approval, error)
-	SetWorkPublic(ctx context.Context, id ulid.ULID, public bool, by string) (bool, error)
 	SaveAutonomyRule(ctx context.Context, class, verdict, by string, percept ulid.ULID, at time.Time) error
 	AutonomyRules(ctx context.Context) (map[string]string, error)
 	DeleteFact(ctx context.Context, id ulid.ULID) (bool, error)
 	SaveLabel(ctx context.Context, l memory.Label) error
 	LastRead(ctx context.Context, setID, source, thread string, before time.Time) (ulid.ULID, bool, error)
-	SaveDream(ctx context.Context, d memory.Dream) error
-	Dreams(ctx context.Context, activeOnly bool) ([]memory.Dream, error)
-	SaveGoal(ctx context.Context, g memory.Goal) error
-	Goals(ctx context.Context, activeOnly bool) ([]memory.Goal, error)
 	AddSkill(ctx context.Context, sk memory.Skill) error
 	Skills(ctx context.Context) ([]memory.Skill, error)
 	SetSkillLevel(ctx context.Context, name string, level float64, at time.Time) error
@@ -91,15 +86,6 @@ type Store interface {
 	SaveLesson(ctx context.Context, l memory.Lesson) error
 	Lessons(ctx context.Context, skill string, limit int) ([]memory.Lesson, error)
 	RetireLesson(ctx context.Context, id ulid.ULID, at time.Time) error
-	MarkReviewAsked(ctx context.Context, work ulid.ULID, at time.Time) error
-	AskedForReview(ctx context.Context, since time.Time) (memory.Work, bool, error)
-	SavePlan(ctx context.Context, p memory.LearningPlan) error
-	Plans(ctx context.Context, activeOnly bool) ([]memory.LearningPlan, error)
-	AdvancePlan(ctx context.Context, plan ulid.ULID, at time.Time) error
-	EndPlan(ctx context.Context, plan ulid.ULID, status string, at time.Time) error
-	SaveResource(ctx context.Context, r memory.Resource) error
-	Resources(ctx context.Context, plan ulid.ULID) ([]memory.Resource, error)
-	FinishResource(ctx context.Context, id, work ulid.ULID, title string, at time.Time) error
 	RecentFound(ctx context.Context, limit int) ([]search.Result, error)
 	SeedJudgment(ctx context.Context, cases []memory.JudgmentCase, principles []memory.Principle) (int, int, error)
 	Principles(ctx context.Context, status string) ([]memory.Principle, error)
@@ -161,6 +147,10 @@ type Store interface {
 	SumTopic(ctx context.Context, t memory.Topic) error
 	QuietTopics(ctx context.Context, before time.Time) error
 	PerceptTopic(ctx context.Context, id ulid.ULID) (string, error)
+	RecentApprovals(ctx context.Context, limit int) ([]memory.Approval, error)
+	Morning(ctx context.Context, day string) (memory.Morning, bool, error)
+	SaveMorning(ctx context.Context, mo memory.Morning) error
+	MorningSent(ctx context.Context, day string, at time.Time) error
 }
 
 // WorkingMemory bounds how much of the current conversation the mind keeps
@@ -238,12 +228,10 @@ type Config struct {
 	CheckIns  CheckIns
 	Quiet     QuietHours
 	Day       Day
+	Morning   Morning
 	Abilities *ability.Set
 	// SkillLevel zero value: works aren't scored, and skills only move with feedback.
 	SkillLevel questions.Set
-	// StageCheck checks that a piece of work meets a learning stage before
-	// the stage moves on (one predicate); zero value: its own word is enough.
-	StageCheck questions.Set
 	// Autonomy is what it may do on its own; the zero value allows everything.
 	Autonomy action.Policy
 	// Asker nil: requests to the owner wait unsent and expire.
@@ -283,7 +271,6 @@ type Mind struct {
 	// whichever loop needs them first.
 	skillMu   sync.Mutex
 	skillVecs map[string][]float32
-	toPlan    atomic.Bool // a goal was taken on in a chat: draft its learning plan on the next tick
 	changed   atomic.Bool // they heard something since the last tick that did its work (due)
 	reload    atomic.Bool // their character changed: rest at the next tick and wake at once (Reload)
 	// held is when messages left unheard while their account rested are to be
@@ -300,17 +287,16 @@ type Mind struct {
 	lastHeard time.Time
 
 	// Only the life loop touches these.
-	lastTick    time.Time
-	planned     string // the local date ("2006-01-02") its day was last planned for
-	round       int    // the last round of that day it planned (0: the morning plan)
-	reviewed    time.Time
-	planTries   tries                // the day's plan failing in a row
-	reviewTries tries                // the weekly review failing in a row
-	looked      map[string]time.Time // when each watcher last looked
-	unfillable  map[ulid.ULID]bool   // works whose data it failed to write; not tried again until a restart
-	dataLeft    bool                 // the last tick filled in an old work's data, so there may be more
-	nextDue     time.Time            // what nextWake said after the last full tick; zero: work it out
-	sumLater    map[string]time.Time // topics that failed to be summed up, and when to try again
+	lastTick     time.Time
+	reviewed     time.Time
+	reviewTries  tries                // the weekly review failing in a row
+	morningDone  string               // the local date of the last morning it sent, or had none to send
+	morningTries tries                // preparing the morning failing in a row
+	looked       map[string]time.Time // when each watcher last looked
+	unfillable   map[ulid.ULID]bool   // works whose data it failed to write; not tried again until a restart
+	dataLeft     bool                 // the last tick filled in an old work's data, so there may be more
+	nextDue      time.Time            // what nextWake said after the last full tick; zero: work it out
+	sumLater     map[string]time.Time // topics that failed to be summed up, and when to try again
 }
 
 func New(c Config) *Mind {
@@ -318,7 +304,7 @@ func New(c Config) *Mind {
 		c.Zone = time.UTC
 	}
 	k := c.Kept
-	return &Mind{Config: c, lastTick: k.LastTick, planned: k.Planned, round: k.Round, reviewed: k.Reviewed}
+	return &Mind{Config: c, lastTick: k.LastTick, reviewed: k.Reviewed}
 }
 
 // Run runs two loops until ctx is done, the percepts end, or they go to rest
@@ -348,13 +334,13 @@ func (m *Mind) Run(ctx context.Context) error {
 	return nil
 }
 
-// Seed copies what they were born with into memory: their family, dreams and
-// skills, and their owner's judgment for review. Each part adds only what's
+// Seed copies what they were born with into memory: who their owner is to
+// them, their skills, and their owner's judgment for review. Each part adds only what's
 // missing, so running it again is safe but costly: dozens of writes. False if
 // anything wasn't saved, so it's run again next time.
 func (m *Mind) Seed(ctx context.Context) bool {
-	known, wanting, judged := m.bornKnowing(ctx), m.bornWanting(ctx), m.seedJudgment(ctx)
-	return known && wanting && judged
+	known, skilled, judged := m.bornKnowing(ctx), m.bornWith(ctx), m.seedJudgment(ctx)
+	return known && skilled && judged
 }
 
 func (m *Mind) talk(ctx context.Context) {
@@ -974,7 +960,7 @@ func (m *Mind) reason(ctx context.Context, writer system2.Reasoner, p perception
 	req := system2.Request{
 		Instructions: m.instructions(ctx, person, n),
 		History:      turns(recent),
-		Note: m.now(p.At) + m.peopleNote(ctx) + m.goalsNote(ctx, person) + "\n\n" + note + m.topicNote(p, about, n) + rel.works +
+		Note: m.now(p.At) + m.peopleNote(ctx) + m.skillsFor(ctx, person) + "\n\n" + note + m.topicNote(p, about, n) + rel.works +
 			rel.skill + promises + m.permissionsNote(p) + nameNote(recent, n.speaker),
 		Message:      p.Text,
 		CollectFacts: true,
@@ -1050,7 +1036,6 @@ func (m *Mind) reason(ctx context.Context, writer system2.Reasoner, p perception
 		more = append(more, m.takeFeedback(ctx, p, d, resp.Feedback)...)
 		more = append(more, m.takeLessons(ctx, p, d, resp.Lessons)...)
 		more = append(more, m.takeTastes(ctx, p, d, resp.Tastes)...)
-		more = append(more, m.takeGoals(ctx, p, d, resp.Goals)...)
 		return more
 	}
 }
@@ -1255,12 +1240,12 @@ func (m *Mind) instructions(ctx context.Context, person memory.Person, n names) 
 	if len(m.Life.Personality) > 0 {
 		personality = "- " + strings.Join(m.Life.Personality, "\n- ")
 	}
-	return strings.NewReplacer("{name}", n.agent, "{speaker}", n.speaker, "{life_story}", story,
+	return strings.NewReplacer("{name}", n.agent, "{speaker}", n.speaker, "{owner}", m.ownerName(ctx), "{background}", story,
 		"{personality}", personality, "{who_they_are}", m.whoTheyAre(person, n),
 		"{makes}", m.makesList(), "{abilities}", m.abilitiesList(), "{files}", m.filesHelp(n), "{actions}", m.actionsFor(person, n), "{looks}", m.looksHelp(person, n), "{intents}", strings.Join(m.intents(), ", "),
 		"{correct_self}", m.correctSelf(person), "{permissions_help}", m.permissionsHelp(person, n),
 		"{fact_areas}", m.factAreasHelp(), "{formatting}", m.formatting(), "{answers_help}", m.answersHelp(n),
-		"{feedback_help}", m.feedbackHelp(ctx, person)+m.goalsHelp(person)).Replace(m.ReplyPrompt.Text)
+		"{feedback_help}", m.feedbackHelp(ctx, person)).Replace(m.ReplyPrompt.Text)
 }
 
 // talkAbout is what a reply to message is about: it and the exchanges just

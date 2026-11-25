@@ -19,7 +19,7 @@ type agentUse struct {
 	ID   string  `json:"id"`
 	Name string  `json:"name"`
 	Chat float64 `json:"chat"`
-	Day  float64 `json:"day"`
+	Work float64 `json:"work"` // its work on its own: mornings, drafts, what it watches
 }
 
 type usageView struct {
@@ -66,7 +66,7 @@ func (a *Agents) Usage(c *gin.Context) error {
 			return err
 		}
 		chat, replies = chat+ch, replies+n
-		out.Agents = append(out.Agents, agentUse{ID: ag.ID, Name: ag.Name, Chat: pct(ch), Day: pct(day)})
+		out.Agents = append(out.Agents, agentUse{ID: ag.ID, Name: ag.Name, Chat: pct(ch), Work: pct(day)})
 	}
 	reply := usage.ReplyUSD
 	if replies >= 10 { // enough to go on its own rate

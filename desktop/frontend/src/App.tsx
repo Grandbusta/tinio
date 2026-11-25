@@ -50,10 +50,11 @@ export function App() {
           <Route path="/you" element={<Titled title="You"><YouPage /></Titled>} />
           <Route path="/settings" element={<Titled title="Settings"><AppSettings /></Titled>} />
           <Route path="/settings/folders/add" element={<Titled title="Add a folder"><AddFolderPage /></Titled>} />
+          <Route path="/today" element={<Titled title="Your day"><TodayPage /></Titled>} />
           <Route path="/connections" element={<Connections />} />
           <Route path="/connections/:connector" element={<Connect />} />
           <Route path="/agents/:id" element={<Agent title="Chat" page={(id) => <Chat id={id} />} />} />
-          <Route path="/agents/:id/today" element={<Agent title="Today" page={(id) => <TodayPage id={id} />} />} />
+          <Route path="/agents/:id/today" element={<Agent title="Your day" page={(id) => <TodayPage id={id} />} />} />
           <Route path="/agents/:id/works" element={<Agent title="Works" page={(id) => <WorksPage id={id} />} />} />
           <Route path="/agents/:id/works/:work" element={<Work />} />
           <Route path="/agents/:id/skills" element={<Agent title="Skills" page={(id) => <SkillsPage id={id} />} />} />
@@ -63,7 +64,7 @@ export function App() {
           <Route path="/agents/:id/judgment" element={<Agent title="How you decide" page={(id) => <JudgmentPage id={id} />} />} />
           <Route path="/agents/:id/memory" element={<Agent title="Memory" page={(id) => <MemoryPage id={id} />} />} />
           <Route path="/agents/:id/mind" element={<Agent title="Mind" page={(id) => <MindPage id={id} />} />} />
-          <Route path="/agents/:id/growth" element={<Agent title="Growth" page={(id) => <GrowthPage id={id} />} />} />
+          <Route path="/agents/:id/growth" element={<Agent title="Helping you" page={(id) => <GrowthPage id={id} />} />} />
           <Route path="/agents/:id/tools" element={<Agent title="Tools" page={(id) => <AgentToolsPage id={id} />} />} />
           <Route path="/agents/:id/settings" element={<Agent title="Settings" page={(id) => <SettingsPage id={id} />} />} />
         </Route>

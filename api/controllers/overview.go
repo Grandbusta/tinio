@@ -92,9 +92,7 @@ func (a *Agents) Overview(c *gin.Context) error {
 			return err
 		}
 		for _, w := range ws {
-			if w.Kind != "journal" && w.Kind != "review" {
-				feed = append(feed, lately{Agent: ag.ID, Kind: "made", Text: w.Title, At: w.CreatedAt.UTC()})
-			}
+			feed = append(feed, lately{Agent: ag.ID, Kind: "made", Text: w.Title, At: w.CreatedAt.UTC()})
 		}
 		agents = append(agents, sum)
 	}

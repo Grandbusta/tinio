@@ -7,34 +7,24 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/api/middlewares"
+	"github.com/Grandbusta/tinio/api/models"
 	"github.com/Grandbusta/tinio/api/utils"
 	"github.com/Grandbusta/tinio/internal/agent"
-	"github.com/Grandbusta/tinio/internal/config"
 	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/store"
 )
 
-// Today is an agent's own day as their owner sees it, in the agent's time:
-// what they planned and how each thing went, what they made, a line from
-// their journal, and how many of their requests wait for an answer. Behind
-// middlewares.OwnAgent.
+// Today is the owner's day as their agents see it: each agent's morning,
+// once it's sent, with the things it chose, what it drafted for them and
+// which they've ticked done, and how many of its requests wait for an answer.
 type Today struct {
 	DB  *db.DB
 	Now func() time.Time // nil: the clock
-}
-
-// Plan states: done; now (due, being done); later; waiting (for their owner's
-// approval); missed (not done in time).
-type planned struct {
-	At     string `json:"at"` // HH:MM
-	What   string `json:"what"`
-	Detail string `json:"detail,omitempty"` // what came of it
-	State  string `json:"state"`
 }
 
 type made struct {
@@ -43,9 +33,6 @@ type made struct {
 	Kind  string `json:"kind"`
 	At    string `json:"at"` // HH:MM
 }
-
-// journalLine is at most this long, from the start of their newest entry.
-const journalLine = 240
 
 // theirTime is now and the start of today, in the agent's time zone.
 func theirTime(ctx context.Context, st *store.Store, now time.Time) (agent.Agent, time.Time, time.Time, error) {
@@ -96,82 +83,119 @@ func nowAndNext(is []memory.Intention, now time.Time) (string, string) {
 	return doing, next
 }
 
-func (t *Today) Get(c *gin.Context) error {
-	st := store.New(t.DB).For(middlewares.Owned(c).ID)
-	now := time.Now()
-	if t.Now != nil {
-		now = t.Now()
-	}
-	ag, now, is, err := ownDay(c, st, "account:"+middlewares.Owned(c).AccountID, now)
-	if err != nil {
-		return err
-	}
-	zone := now.Location()
-	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, zone)
-	plan := []planned{}
-	var plannedAt time.Time
-	for _, i := range is {
-		if plannedAt.IsZero() || i.CreatedAt.Before(plannedAt) {
-			plannedAt = i.CreatedAt
-		}
-		p := planned{At: i.DueAt.In(zone).Format("15:04"), What: i.Text, Detail: i.Result, State: "later"}
-		switch {
-		case i.Status == memory.IntentionDone:
-			p.State = "done"
-		case i.Status == memory.IntentionMissed:
-			p.State = "missed"
-		case i.Status == memory.IntentionAwaiting:
-			p.State = "waiting"
-		case !i.DueAt.After(now):
-			p.State = "now"
-		}
-		plan = append(plan, p)
-	}
+type morningItemView struct {
+	ID     string `json:"id"`
+	What   string `json:"what"`
+	How    string `json:"how"`
+	Source string `json:"source"`
+	Work   *made  `json:"work,omitempty"` // what it drafted for it
+	Done   bool   `json:"done"`
+}
 
-	ws, err := st.WorksBetween(c, midnight, now.Add(time.Second))
-	if err != nil {
-		return err
+// ownerDay is one agent's part of their owner's day. Sent is "" until the
+// morning is sent, and then its items show; Next is when it comes ("" if
+// mornings are off).
+type ownerDay struct {
+	Agent    string            `json:"agent"`
+	Name     string            `json:"name"`
+	Date     string            `json:"date"`
+	Sent     string            `json:"sent"` // HH:MM
+	Next     string            `json:"next"`
+	Opening  string            `json:"opening"`
+	Question string            `json:"question"`
+	Items    []morningItemView `json:"items"`
+	Waiting  int               `json:"waiting"`
+}
+
+func (t *Today) now() time.Time {
+	if t.Now != nil {
+		return t.Now()
 	}
-	works := []made{}
-	for _, w := range ws {
-		if !slices.Contains([]string{"journal", "review"}, w.Kind) {
-			works = append(works, made{ID: w.ID.String(), Title: w.Title, Kind: strings.ReplaceAll(w.Kind, "_", " "), At: w.CreatedAt.In(zone).Format("15:04")})
+	return time.Now()
+}
+
+// dayOf is ag's part of today, in their (their owner's) time zone.
+func dayOf(c *gin.Context, d *db.DB, ag models.Agent, now time.Time) (ownerDay, error) {
+	st := store.New(d).For(ag.ID)
+	_, now, midnight, err := theirTime(c, st, now)
+	if err != nil {
+		return ownerDay{}, err
+	}
+	v := ownerDay{Agent: ag.ID, Name: ag.Name, Date: now.Format("Monday 2 January"), Items: []morningItemView{}}
+	if ag.MorningOn {
+		v.Next = ag.MorningAt
+	}
+	if v.Waiting, err = st.Waiting(c); err != nil {
+		return v, err
+	}
+	mo, ok, err := st.Morning(c, midnight.Format(time.DateOnly))
+	if err != nil || !ok || mo.SentAt.IsZero() {
+		return v, err
+	}
+	v.Sent, v.Opening, v.Question = mo.SentAt.In(now.Location()).Format("15:04"), mo.Opening, mo.Question
+	for _, it := range mo.Items {
+		iv := morningItemView{ID: it.ID, What: it.What, How: it.How, Source: it.Source, Done: it.Done}
+		if id, err := ulid.Parse(it.Work); err == nil {
+			if w, ok, err := st.Work(c, id); err != nil {
+				return v, err
+			} else if ok {
+				iv.Work = &made{ID: w.ID.String(), Title: w.Title, Kind: strings.ReplaceAll(w.Kind, "_", " "), At: w.CreatedAt.In(now.Location()).Format("15:04")}
+			}
 		}
+		v.Items = append(v.Items, iv)
 	}
-	var line string
-	if j, ok, err := st.LatestWork(c, "journal"); err != nil {
-		return err
-	} else if ok {
-		line = firstLine(j.Text)
-	}
-	waiting, err := st.Waiting(c)
+	return v, nil
+}
+
+// Get is one agent's part of their owner's day. Behind middlewares.OwnAgent.
+func (t *Today) Get(c *gin.Context) error {
+	v, err := dayOf(c, t.DB, middlewares.Owned(c), t.now())
 	if err != nil {
 		return err
 	}
-	plansAt := ag.Life.Day.PlanAt
-	if plansAt == "" {
-		plansAt = config.Load().DailyLife.PlanAt
-	}
-	out := gin.H{"date": now.Format("Monday 2 January"), "plans_at": plansAt, "plan": plan, "made": works,
-		"journal": line, "waiting": waiting}
-	if !plannedAt.IsZero() {
-		out["planned_at"] = plannedAt.In(zone).Format("15:04")
-	}
-	utils.SuccessWithData(c, http.StatusOK, gin.H{"today": out})
+	utils.SuccessWithData(c, http.StatusOK, gin.H{"today": v})
 	return nil
 }
 
-// firstLine is the start of text: its first sentence, or as much as fits.
-func firstLine(text string) string {
-	text, _, _ = strings.Cut(strings.TrimSpace(text), "\n")
-	for i, r := range text {
-		if (r == '.' || r == '!' || r == '?') && (i+1 == len(text) || text[i+1] == ' ') {
-			text = text[:i+1]
-			break
+// Yours is the signed-in owner's day: every agent's part, in the order they
+// were raised.
+func (t *Today) Yours(c *gin.Context) error {
+	ags, err := models.AgentsOf(c, t.DB, middlewares.Account(c).ID)
+	if err != nil {
+		return err
+	}
+	days := []ownerDay{}
+	for _, ag := range ags {
+		v, err := dayOf(c, t.DB, ag, t.now())
+		if err != nil {
+			return err
 		}
+		days = append(days, v)
 	}
-	if utf8.RuneCountInString(text) > journalLine {
-		text = string([]rune(text)[:journalLine-1]) + "…"
+	utils.SuccessWithData(c, http.StatusOK, gin.H{"days": days})
+	return nil
+}
+
+// Tick marks one of today's things done, or not.
+func (t *Today) Tick(c *gin.Context) error {
+	var in struct {
+		Done bool `json:"done"`
 	}
-	return text
+	if err := c.ShouldBindJSON(&in); err != nil {
+		return utils.ErrBadRequest
+	}
+	ag := middlewares.Owned(c)
+	st := store.New(t.DB).For(ag.ID)
+	_, _, midnight, err := theirTime(c, st, t.now())
+	if err != nil {
+		return err
+	}
+	ok, err := st.TickMorningItem(c, midnight.Format(time.DateOnly), c.Param("item"), in.Done)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return utils.ErrNoSuchItem
+	}
+	return t.Get(c)
 }

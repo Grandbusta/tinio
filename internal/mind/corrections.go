@@ -172,7 +172,7 @@ func (m *Mind) permissionsHelp(person memory.Person, n names) string {
 	}
 	return "\nWhat you may do on your own:\n" +
 		"- " + n.speaker + " decides what you may do without asking them first: reach_out (messaging someone first: reminders, check-ins, " +
-		"sending what you promised), commit (promising to make something for someone), publish (putting a work on your public page), " +
+		"sending what you promised), commit (promising to make something for someone), publish (posting something publicly with a tool), " +
 		"read_web (reading books and articles). Each is auto (on your own), ask (you ask " + n.speaker + " first) or forbid; read_web " +
 		"can't be ask. The note says what they are now.\n" +
 		"- If " + n.speaker + " clearly tells you to change one (\"you can send reminders without asking\", \"ask me before you publish anything\"), " +

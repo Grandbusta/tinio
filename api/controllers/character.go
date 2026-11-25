@@ -20,11 +20,10 @@ import (
 )
 
 // Character is who an agent is, for their owner to read and change: their
-// story, personality, routine and day, each change a new version they can go
-// back from. A change reaches them within a minute (host.Changed). Their
-// dreams, skills and family were copied into their memory when they were
-// born, and live there now: they're shown, not changed, here. Behind
-// middlewares.OwnAgent.
+// background and personality, each change a new version they can go back
+// from. A change reaches them within a minute (host.Changed). Their skills and
+// who they know were copied into their memory when they were raised, and live
+// there now: they're shown, not changed, here. Behind middlewares.OwnAgent.
 type Character struct {
 	DB *db.DB
 }
@@ -34,13 +33,6 @@ const (
 	linesAtMost   = 40
 	lineRunes     = 400
 )
-
-type dayView struct {
-	PlanAt    string   `json:"plan_at"` // HH:MM, "" for Tinio's default
-	JournalAt string   `json:"journal_at"`
-	ReviewAt  string   `json:"review_at"` // "Sun 20:00"
-	CheckIns  []string `json:"check_ins"`
-}
 
 type versionView struct {
 	ID     string    `json:"id"`
@@ -86,22 +78,13 @@ func (ch *Character) Get(c *gin.Context) error {
 	for i, v := range vs {
 		versions[i] = versionView{ID: v.ID.String(), Source: v.Source, At: v.At.UTC()}
 	}
-	ds, err := st.Dreams(c, true)
-	if err != nil {
-		return err
-	}
-	dreams := make([]string, len(ds))
-	for i, d := range ds {
-		dreams[i] = d.Text
-	}
 	makes := make([]gin.H, len(l.Makes))
 	for i, m := range l.Makes {
 		makes[i] = gin.H{"kind": strings.ReplaceAll(m.Kind, "_", " "), "about": m.About}
 	}
 	utils.SuccessWithData(c, http.StatusOK, gin.H{
-		"name": l.Name, "story": nonNilLines(l.Story), "personality": nonNilLines(l.Personality), "routine": nonNilLines(l.Routine),
-		"timezone": l.Timezone, "day": dayView{PlanAt: l.Day.PlanAt, JournalAt: l.Day.JournalAt, ReviewAt: l.Day.ReviewAt, CheckIns: nonNilLines(l.Day.CheckIns)},
-		"makes": makes, "dreams": dreams, "versions": versions,
+		"name": l.Name, "story": nonNilLines(l.Story), "personality": nonNilLines(l.Personality),
+		"timezone": l.Timezone, "makes": makes, "versions": versions,
 	})
 	return nil
 }
@@ -121,14 +104,12 @@ func lines(ls []string) ([]string, bool) {
 	return out, len(out) <= linesAtMost
 }
 
-// Save is their owner's version of their story, personality, routine and
-// day, kept as a new version and given to them within a minute.
+// Save is their owner's version of their background and personality, kept
+// as a new version and given to them within a minute.
 func (ch *Character) Save(c *gin.Context) error {
 	var in struct {
 		Story       []string `json:"story"`
 		Personality []string `json:"personality"`
-		Routine     []string `json:"routine"`
-		Day         dayView  `json:"day"`
 	}
 	if err := c.ShouldBindJSON(&in); err != nil {
 		return utils.ErrBadRequest
@@ -138,19 +119,15 @@ func (ch *Character) Save(c *gin.Context) error {
 	if err != nil {
 		return err
 	}
-	var ok [3]bool
+	var ok [2]bool
 	l.Story, ok[0] = lines(in.Story)
 	l.Personality, ok[1] = lines(in.Personality)
-	l.Routine, ok[2] = lines(in.Routine)
-	if ok != [3]bool{true, true, true} {
+	if ok != [2]bool{true, true} {
 		return utils.Invalid("story", "Up to 40 lines each, of up to 400 characters.")
 	}
 	if len(l.Story) == 0 {
-		return utils.Invalid("story", "Their story needs at least one line.")
+		return utils.Invalid("story", "Their background needs at least one line.")
 	}
-	checkIns, _ := lines(in.Day.CheckIns)
-	l.Day = character.Day{PlanAt: strings.TrimSpace(in.Day.PlanAt), JournalAt: strings.TrimSpace(in.Day.JournalAt),
-		ReviewAt: strings.TrimSpace(in.Day.ReviewAt), CheckIns: checkIns}
 	return ch.keep(c, st, l, memory.SelfEdited)
 }
 
@@ -162,7 +139,7 @@ func (ch *Character) keep(c *gin.Context, st *store.Store, l character.Character
 		return err
 	}
 	if _, err := character.Parse(doc); err != nil {
-		return utils.Invalid("day", strings.TrimPrefix(err.Error(), "character: "))
+		return utils.Invalid("story", strings.TrimPrefix(err.Error(), "character: "))
 	}
 	if err := st.SaveSelf(c, "", memory.SelfVersion{ID: ulid.Make(), Section: memory.SectionCharacter, Doc: string(doc), Source: source,
 		At: time.Now().UTC()}); err != nil {

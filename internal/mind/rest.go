@@ -23,8 +23,6 @@ const (
 // given back when they wake (Config.Kept).
 type Kept struct {
 	LastTick time.Time `json:"last_tick"`
-	Planned  string    `json:"planned"` // the local date their day was last planned for
-	Round    int       `json:"round"`
 	Reviewed time.Time `json:"reviewed"`
 }
 
@@ -65,7 +63,7 @@ func (m *Mind) Reload() { m.reload.Store(true) }
 // Reload. nil if they stay awake.
 func (m *Mind) restIfIdle(ctx context.Context, now time.Time) *Resting {
 	reload := m.reload.Load()
-	if (m.RestAfter <= 0 && !reload) || m.toPlan.Load() || len(m.Percepts) > 0 {
+	if (m.RestAfter <= 0 && !reload) || len(m.Percepts) > 0 {
 		return nil
 	}
 	if !m.stepMu.TryLock() { // a message being handled
@@ -82,7 +80,7 @@ func (m *Mind) restIfIdle(ctx context.Context, now time.Time) *Resting {
 		}
 	}
 	m.resting = true
-	return &Resting{Until: until, Kept: Kept{LastTick: m.lastTick, Planned: m.planned, Round: m.round, Reviewed: m.reviewed}}
+	return &Resting{Until: until, Kept: Kept{LastTick: m.lastTick, Reviewed: m.reviewed}}
 }
 
 // nextWake is the soonest they have something to do after now: what's due in
@@ -101,7 +99,7 @@ func (m *Mind) nextWake(ctx context.Context, now time.Time) (time.Time, error) {
 	if h := m.held.Load(); h != 0 && time.Unix(0, h).Before(next) { // messages waiting for the reset
 		next = time.Unix(0, h)
 	}
-	for _, t := range []time.Time{m.planTries.next, m.reviewTries.next} { // a plan or review tried again
+	for _, t := range []time.Time{m.morningTries.next, m.reviewTries.next} { // a morning or look back tried again
 		if t.After(now) && t.Before(next) {
 			next = t
 		}
@@ -143,8 +141,8 @@ func (m *Mind) planNext(ctx context.Context, now time.Time) {
 }
 
 // nextOnClock is the next time on their clock after now, within a day: a
-// check-in, and with a day of their own its plan rounds, journal and weekly
-// review. Zero if there's none.
+// check-in, their owner's morning (when it starts, and when it's sent) and the
+// weekly look back. Zero if there's none.
 func (m *Mind) nextOnClock(now time.Time) time.Time {
 	var next time.Time
 	consider := func(t time.Time) {
@@ -157,10 +155,10 @@ func (m *Mind) nextOnClock(now time.Time) time.Time {
 		for _, at := range m.CheckIns.Times {
 			consider(midnight.Add(at))
 		}
-		if m.dayOn() {
-			consider(midnight.Add(m.Day.PlanAt))
-			for r := range max(m.Day.Pace, 1) {
-				consider(m.roundEnd(r, midnight)) // the next round's start, and at the last, the journal
+		if m.morningOn() {
+			if _, start, send, ok := m.morningTimes(midnight.Add(12 * time.Hour)); ok {
+				consider(start)
+				consider(send)
 			}
 		}
 	}

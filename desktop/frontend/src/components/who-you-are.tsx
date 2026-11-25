@@ -9,7 +9,8 @@ import { call, type Agent, type ApiError, type Character } from "@/lib/api";
 import { AppHeader } from "./app-header";
 
 // Step 4: who are you to them? What they call you, who you are to them (the relations
-// their character allows). Meeting them raises the agent.
+// their character allows), and when their morning for you comes. Meeting them raises the
+// agent.
 
 const chip =
   "min-h-11 rounded-full border px-[18px] font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
@@ -23,6 +24,7 @@ export function WhoYouAre({ characterKey }: { characterKey: string }) {
   const [missing, setMissing] = useState(false);
   const [name, setName] = useState("");
   const [relation, setRelation] = useState("");
+  const [morning, setMorning] = useState({ on: true, at: "07:30", days: [1, 2, 3, 4, 5] });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -42,9 +44,9 @@ export function WhoYouAre({ characterKey }: { characterKey: string }) {
     if (!c) return;
     setBusy(true);
     setError(null);
-    // They work in the owner's time zone: their days, reminders and check-ins are in it.
+    // They work in the owner's time zone: their mornings, reminders and check-ins are in it.
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const res = await call<{ agent: Agent }>("/agents", { character: c.key, owner_name: name, relation, timezone });
+    const res = await call<{ agent: Agent }>("/agents", { character: c.key, owner_name: name, relation, timezone, morning });
     setBusy(false);
     if (!res.ok) return setError(res.error);
     router.push(`/agents/${res.data.agent.id}`);
@@ -75,7 +77,7 @@ export function WhoYouAre({ characterKey }: { characterKey: string }) {
                 Who are you to {c.name}?
               </h1>
               <p className="max-w-[54ch] text-[17px] text-muted">
-                {c.name} will talk to you the way people do with someone they know well. This shapes how they speak to you, and who they plan their day around: mostly, work that helps you.
+                {c.name} works for you, and talks to you the way people do with someone they know well. This shapes how they speak to you.
               </p>
             </div>
 
@@ -106,6 +108,34 @@ export function WhoYouAre({ characterKey }: { characterKey: string }) {
               {field("relation") && <span role="alert" className="text-[13px] text-bad-text">{field("relation")}</span>}
             </fieldset>
 
+            <fieldset className="flex flex-col gap-3">
+              <legend className="mb-1 font-semibold">When should {c.name} bring you your morning?</legend>
+              <span className="text-sm text-muted">Each morning, your few things for the day, with what {c.name} has got ready. The first one is a question: they won&apos;t guess at your day.</span>
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="flex flex-col gap-1 text-[13px] font-semibold">
+                  At
+                  <input type="time" value={morning.at} onChange={(e) => e.target.value && setMorning({ ...morning, at: e.target.value })} className="min-h-12 rounded-lg border border-line-strong bg-surface px-3 text-base font-normal" />
+                </label>
+                <div role="group" aria-label="Days" className="flex flex-wrap gap-1.5">
+                  {([[1, "Mon"], [2, "Tue"], [3, "Wed"], [4, "Thu"], [5, "Fri"], [6, "Sat"], [0, "Sun"]] as const).map(([d, short]) => {
+                    const on = morning.days.includes(d);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setMorning({ ...morning, days: on ? morning.days.filter((x) => x !== d) : [...morning.days, d] })}
+                        className={`min-h-12 w-12 rounded-[10px] text-sm font-semibold ${on ? "bg-fg text-bg" : "bg-surface shadow-[inset_0_0_0_1px_var(--color-line-strong)]"}`}
+                      >
+                        {short}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {field("morning") && <span role="alert" className="text-[13px] text-bad-text">{field("morning")}</span>}
+            </fieldset>
+
             <div className="rounded-lg border border-warn-text/20 bg-warn-soft px-4 py-3.5 text-sm text-warn-text">
               You&apos;ll talk with {c.name} right here, on this computer. They think with your OpenAI key, within the week&apos;s cap you set on You.
             </div>
@@ -128,12 +158,6 @@ export function WhoYouAre({ characterKey }: { characterKey: string }) {
               <h2 className="font-display text-2xl font-semibold">{c.name}</h2>
               <span className="text-sm text-muted">{c.about}</span>
               {c.personality.length > 0 && <p className="text-sm">{c.personality.slice(0, 2).join(" ")}</p>}
-              {c.toward && (
-                <div className="flex flex-col gap-1.5 border-t border-line pt-3">
-                  <span className="text-xs font-semibold tracking-[0.04em] text-muted uppercase">Working toward</span>
-                  <span className="text-sm">{c.toward}</span>
-                </div>
-              )}
               <div className="flex flex-col gap-1.5 border-t border-line pt-3">
                 <span className="text-xs font-semibold tracking-[0.04em] text-muted uppercase">To you they&apos;ll be</span>
                 <span className="text-sm">

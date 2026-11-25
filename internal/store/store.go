@@ -249,7 +249,7 @@ func (s *Store) exchanges(ctx context.Context, where string, exclude ulid.ULID, 
 		ORDER BY p.at DESC, p.id DESC
 		LIMIT $%d`, n, n+2, n+3, n+4, n+5, n+1),
 		append(args, exclude.String(), limit, perception.KindReminder, perception.KindCheckIn,
-			perception.KindDelivery, perception.KindReviewRequest)...)
+			perception.KindDelivery, perception.KindMorning)...)
 	if err != nil {
 		return nil, fmt.Errorf("query exchanges: %w", err)
 	}
@@ -305,52 +305,6 @@ func (s *Store) UnlabelledFacts(ctx context.Context, limit int) ([]memory.Fact, 
 func (s *Store) SetFactAreas(ctx context.Context, id ulid.ULID, areas []string) error {
 	if _, err := s.exec(ctx, `UPDATE facts SET areas = $3 WHERE agent_id = $1 AND id = $2`, id.String(), nonNil(areas)); err != nil {
 		return fmt.Errorf("set fact areas: %w", err)
-	}
-	return nil
-}
-
-// UndecidedPublicFacts are about the agent itself, oldest first.
-func (s *Store) UndecidedPublicFacts(ctx context.Context, limit int) ([]memory.Fact, error) {
-	return s.queryFacts(ctx, `SELECT `+factColumns+` FROM facts
-		WHERE agent_id = $1 AND subject = $2 AND public IS NULL ORDER BY at, id LIMIT $3`, memory.SubjectSelf, limit)
-}
-
-func (s *Store) SetFactPublic(ctx context.Context, id ulid.ULID, public bool) error {
-	if _, err := s.exec(ctx, `UPDATE facts SET public = $3 WHERE agent_id = $1 AND id = $2`, id.String(), public); err != nil {
-		return fmt.Errorf("set fact public: %w", err)
-	}
-	return nil
-}
-
-// PublicFacts returns the newest public facts, oldest first. Facts about
-// people are never among them.
-func (s *Store) PublicFacts(ctx context.Context, limit int) ([]memory.Fact, error) {
-	facts, err := s.queryFacts(ctx, `SELECT `+factColumns+` FROM facts
-		WHERE agent_id = $1 AND subject = $2 AND public ORDER BY at DESC, id DESC LIMIT $3`, memory.SubjectSelf, limit)
-	slices.Reverse(facts)
-	return facts, err
-}
-
-// Profile returns the page as JSON and a hash of what it was written from; ok
-// is false if it never has been.
-func (s *Store) Profile(ctx context.Context) (page []byte, inputs string, at time.Time, ok bool, err error) {
-	err = s.queryRow(ctx, `SELECT page, inputs, written_at FROM profile WHERE agent_id = $1`).Scan(&page, &inputs, &at)
-	if errors.Is(err, db.ErrNoRows) {
-		return nil, "", time.Time{}, false, nil
-	}
-	if err != nil {
-		return nil, "", time.Time{}, false, fmt.Errorf("load profile: %w", err)
-	}
-	return page, inputs, at, true, nil
-}
-
-func (s *Store) SaveProfile(ctx context.Context, page []byte, inputs string, at time.Time) error {
-	_, err := s.exec(ctx, `
-		INSERT INTO profile (agent_id, page, inputs, written_at) VALUES ($1, $2, $3, $4)
-		ON CONFLICT (agent_id) DO UPDATE SET page = EXCLUDED.page, inputs = EXCLUDED.inputs, written_at = EXCLUDED.written_at`,
-		string(page), inputs, at)
-	if err != nil {
-		return fmt.Errorf("save profile: %w", err)
 	}
 	return nil
 }
@@ -530,18 +484,17 @@ func (s *Store) queryIntentions(ctx context.Context, sql string, args ...any) ([
 	return out, rows.Err()
 }
 
-const projectSelect = `SELECT p.id, p.title, p.kind, p.status, p.notes, p.source_id, p.position, p.created_at, p.updated_at, p.goal_id,
+const projectSelect = `SELECT p.id, p.title, p.kind, p.status, p.notes, p.source_id, p.position, p.created_at, p.updated_at,
 	s.kind, s.title, s.author, s.chars FROM projects p LEFT JOIN sources s ON s.id = p.source_id
 	WHERE p.agent_id = $1`
 
 func (s *Store) SaveProject(ctx context.Context, p memory.Project) error {
 	_, err := s.exec(ctx, `
-		INSERT INTO projects (agent_id, id, title, kind, status, notes, source_id, position, created_at, updated_at, goal_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO projects (agent_id, id, title, kind, status, notes, source_id, position, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (agent_id, id) DO UPDATE SET title = EXCLUDED.title, kind = EXCLUDED.kind, status = EXCLUDED.status,
-			notes = EXCLUDED.notes, source_id = EXCLUDED.source_id, position = EXCLUDED.position, updated_at = EXCLUDED.updated_at,
-			goal_id = EXCLUDED.goal_id`,
-		p.ID.String(), p.Title, p.Kind, p.Status, p.Notes, nullULID(p.SourceID), p.Position, p.CreatedAt, p.UpdatedAt, nullULID(p.GoalID))
+			notes = EXCLUDED.notes, source_id = EXCLUDED.source_id, position = EXCLUDED.position, updated_at = EXCLUDED.updated_at`,
+		p.ID.String(), p.Title, p.Kind, p.Status, p.Notes, nullULID(p.SourceID), p.Position, p.CreatedAt, p.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("save project: %w", err)
 	}
@@ -573,11 +526,11 @@ func (s *Store) queryProjects(ctx context.Context, sql string, args ...any) ([]m
 		var (
 			p                      memory.Project
 			id                     string
-			sourceID, goalID       *string
+			sourceID               *string
 			sKind, sTitle, sAuthor *string
 			sChars                 *int
 		)
-		if err := rows.Scan(&id, &p.Title, &p.Kind, &p.Status, &p.Notes, &sourceID, &p.Position, &p.CreatedAt, &p.UpdatedAt, &goalID,
+		if err := rows.Scan(&id, &p.Title, &p.Kind, &p.Status, &p.Notes, &sourceID, &p.Position, &p.CreatedAt, &p.UpdatedAt,
 			&sKind, &sTitle, &sAuthor, &sChars); err != nil {
 			return nil, err
 		}
@@ -585,9 +538,6 @@ func (s *Store) queryProjects(ctx context.Context, sql string, args ...any) ([]m
 			return nil, err
 		}
 		if p.SourceID, err = parseNullULID(sourceID); err != nil {
-			return nil, err
-		}
-		if p.GoalID, err = parseNullULID(goalID); err != nil {
 			return nil, err
 		}
 		if sTitle != nil {
@@ -620,13 +570,7 @@ func (s *Store) SourceText(ctx context.Context, id ulid.ULID) (string, error) {
 	return text, nil
 }
 
-const workColumns = `id, intention_id, project_id, kind, title, text, created_at, public, coalesce(public_by, ''),
-	coalesce(data, ''), data_kind`
-
-// shareableWork is the condition for a work (aliased w) that may ever be
-// public: not its journal, and made for itself, not for someone (a promise).
-const shareableWork = `w.kind NOT IN ('journal', 'review') AND (w.intention_id IS NULL OR EXISTS (
-	SELECT 1 FROM intentions i WHERE i.agent_id = w.agent_id AND i.id = w.intention_id AND i.subject = '` + memory.SubjectSelf + `'))`
+const workColumns = `id, intention_id, project_id, kind, title, text, created_at, coalesce(data, ''), data_kind`
 
 func (s *Store) SaveWork(ctx context.Context, w memory.Work) error {
 	_, err := s.exec(ctx, `
@@ -653,51 +597,6 @@ func (s *Store) ProjectWorks(ctx context.Context, project ulid.ULID, limit int) 
 	return ws, err
 }
 
-// UndecidedPublicWorks returns works that may be public but haven't been
-// decided on yet, oldest first.
-func (s *Store) UndecidedPublicWorks(ctx context.Context, limit int) ([]memory.Work, error) {
-	return s.queryWorks(ctx, `SELECT `+workColumns+` FROM works w
-		WHERE w.agent_id = $1 AND w.public IS NULL AND w.public_by IS NULL AND `+shareableWork+` ORDER BY w.created_at, w.id LIMIT $2`, limit)
-}
-
-// AwaitWorkPublic marks an undecided work as judged public but waiting for
-// the owner's approval, so the daily check doesn't ask about it again.
-func (s *Store) AwaitWorkPublic(ctx context.Context, id ulid.ULID) error {
-	if _, err := s.exec(ctx, `UPDATE works SET public_by = $3 WHERE agent_id = $1 AND id = $2 AND public IS NULL`,
-		id.String(), memory.PublicAwaiting); err != nil {
-		return fmt.Errorf("await work public: %w", err)
-	}
-	return nil
-}
-
-// SetWorkPublic reports whether the work was changed. The daily check
-// (PublicBySystem1) never overrides its owner, and a work that may never be
-// public can't be made public.
-func (s *Store) SetWorkPublic(ctx context.Context, id ulid.ULID, public bool, by string) (bool, error) {
-	tag, err := s.exec(ctx, `UPDATE works AS w SET public = $3, public_by = $4
-		WHERE w.agent_id = $1 AND w.id = $2 AND (NOT $3 OR `+shareableWork+`)
-		  AND ($4 = '`+memory.PublicByOwner+`' OR w.public_by IS NOT '`+memory.PublicByOwner+`')`,
-		id.String(), public, by)
-	if err != nil {
-		return false, fmt.Errorf("set work public: %w", err)
-	}
-	return tag.RowsAffected() == 1, nil
-}
-
-func (s *Store) PublicWorks(ctx context.Context, limit int) ([]memory.Work, error) {
-	return s.queryWorks(ctx, `SELECT `+workColumns+` FROM works w
-		WHERE w.agent_id = $1 AND w.public AND `+shareableWork+` ORDER BY w.created_at DESC, w.id DESC LIMIT $2`, limit)
-}
-
-func (s *Store) PublicWork(ctx context.Context, id ulid.ULID) (memory.Work, bool, error) {
-	ws, err := s.queryWorks(ctx, `SELECT `+workColumns+` FROM works w
-		WHERE w.agent_id = $1 AND w.id = $2 AND w.public AND `+shareableWork, id.String())
-	if err != nil || len(ws) == 0 {
-		return memory.Work{}, false, err
-	}
-	return ws[0], true, nil
-}
-
 func (s *Store) IntentionWork(ctx context.Context, intention ulid.ULID) (memory.Work, bool, error) {
 	ws, err := s.queryWorks(ctx, `SELECT `+workColumns+` FROM works
 		WHERE agent_id = $1 AND intention_id = $2 ORDER BY created_at DESC, id DESC LIMIT 1`, intention.String())
@@ -717,10 +616,10 @@ func (s *Store) LatestWork(ctx context.Context, kind string) (memory.Work, bool,
 }
 
 // worksFor selects the works it may bring up with person ($3): those made for
-// itself or for them, not its journal or reviews.
+// its owner or for them.
 const worksFor = `SELECT ` + workColumns + `, embedding, embedded_with,
 	coalesce((SELECT i.subject FROM intentions i WHERE i.agent_id = w.agent_id AND i.id = w.intention_id), '') FROM works w
-	WHERE w.agent_id = $1 AND w.kind NOT IN ('journal', 'review') AND (w.intention_id IS NULL OR EXISTS (
+	WHERE w.agent_id = $1 AND (w.intention_id IS NULL OR EXISTS (
 		SELECT 1 FROM intentions i WHERE i.agent_id = w.agent_id AND i.id = w.intention_id AND i.subject IN ($2, $3)))`
 
 // WorksFor returns, newest first, the works it may bring up with person.
@@ -785,7 +684,7 @@ func (s *Store) queryWorksWith(ctx context.Context, embedded bool, sql string, a
 			intentionID, projectID *string
 		)
 		var data string
-		dest := []any{&id, &intentionID, &projectID, &w.Kind, &w.Title, &w.Text, &w.CreatedAt, &w.Public, &w.PublicBy, &data, &w.DataKind}
+		dest := []any{&id, &intentionID, &projectID, &w.Kind, &w.Title, &w.Text, &w.CreatedAt, &data, &w.DataKind}
 		if embedded {
 			dest = append(dest, &w.Embedding, &w.EmbeddedWith, &w.MadeFor)
 		}
@@ -1222,85 +1121,6 @@ func (s *Store) LabelledExamples(ctx context.Context, setID, question string, li
 	return out, rows.Err()
 }
 
-func (s *Store) SaveDream(ctx context.Context, d memory.Dream) error {
-	_, err := s.exec(ctx, `INSERT INTO dreams (agent_id, id, text, status, source, since, ended_at) VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (agent_id, id) DO UPDATE SET text = EXCLUDED.text, status = EXCLUDED.status, ended_at = EXCLUDED.ended_at`,
-		d.ID.String(), d.Text, d.Status, d.Source, d.Since, nullTime(d.EndedAt))
-	if err != nil {
-		return fmt.Errorf("save dream: %w", err)
-	}
-	return nil
-}
-
-// Dreams returns its dreams, oldest first.
-func (s *Store) Dreams(ctx context.Context, activeOnly bool) ([]memory.Dream, error) {
-	rows, err := s.query(ctx, `SELECT id, text, status, source, since, ended_at FROM dreams
-		WHERE agent_id = $1 AND (NOT $2 OR status = $3) ORDER BY since, id`, activeOnly, memory.DreamActive)
-	if err != nil {
-		return nil, fmt.Errorf("query dreams: %w", err)
-	}
-	defer rows.Close()
-	var out []memory.Dream
-	for rows.Next() {
-		var (
-			d     memory.Dream
-			id    string
-			ended *time.Time
-		)
-		if err := rows.Scan(&id, &d.Text, &d.Status, &d.Source, &d.Since, &ended); err != nil {
-			return nil, err
-		}
-		if d.ID, err = ulid.Parse(id); err != nil {
-			return nil, err
-		}
-		if ended != nil {
-			d.EndedAt = *ended
-		}
-		out = append(out, d)
-	}
-	return out, rows.Err()
-}
-
-func (s *Store) SaveGoal(ctx context.Context, g memory.Goal) error {
-	_, err := s.exec(ctx, `INSERT INTO goals (agent_id, id, dream_id, text, done_when, due, status, progress, created_at, updated_at, skill)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		ON CONFLICT (agent_id, id) DO UPDATE SET text = EXCLUDED.text, done_when = EXCLUDED.done_when, due = EXCLUDED.due,
-			status = EXCLUDED.status, progress = EXCLUDED.progress, updated_at = EXCLUDED.updated_at, skill = EXCLUDED.skill`,
-		g.ID.String(), g.DreamID.String(), g.Text, g.DoneWhen, g.Due, g.Status, g.Progress, g.CreatedAt, g.UpdatedAt, g.Skill)
-	if err != nil {
-		return fmt.Errorf("save goal: %w", err)
-	}
-	return nil
-}
-
-// Goals returns its goals, oldest first.
-func (s *Store) Goals(ctx context.Context, activeOnly bool) ([]memory.Goal, error) {
-	rows, err := s.query(ctx, `SELECT id, dream_id, text, done_when, due, status, progress, created_at, updated_at, skill FROM goals
-		WHERE agent_id = $1 AND (NOT $2 OR status = $3) ORDER BY created_at, id`, activeOnly, memory.GoalActive)
-	if err != nil {
-		return nil, fmt.Errorf("query goals: %w", err)
-	}
-	defer rows.Close()
-	var out []memory.Goal
-	for rows.Next() {
-		var (
-			g           memory.Goal
-			id, dreamID string
-		)
-		if err := rows.Scan(&id, &dreamID, &g.Text, &g.DoneWhen, &g.Due, &g.Status, &g.Progress, &g.CreatedAt, &g.UpdatedAt, &g.Skill); err != nil {
-			return nil, err
-		}
-		if g.ID, err = ulid.Parse(id); err != nil {
-			return nil, err
-		}
-		if g.DreamID, err = ulid.Parse(dreamID); err != nil {
-			return nil, err
-		}
-		out = append(out, g)
-	}
-	return out, rows.Err()
-}
-
 // AddSkill does nothing if it already has the skill.
 func (s *Store) AddSkill(ctx context.Context, sk memory.Skill) error {
 	if _, err := s.exec(ctx, `INSERT INTO skills (agent_id, name, level, shown_by, updated_at) VALUES ($1, $2, $3, $4, $5)
@@ -1412,171 +1232,6 @@ func (s *Store) Lessons(ctx context.Context, skill string, limit int) ([]memory.
 func (s *Store) RetireLesson(ctx context.Context, id ulid.ULID, at time.Time) error {
 	if _, err := s.exec(ctx, `UPDATE lessons SET retired_at = $3 WHERE agent_id = $1 AND id = $2 AND retired_at IS NULL`, id.String(), at); err != nil {
 		return fmt.Errorf("retire lesson: %w", err)
-	}
-	return nil
-}
-
-func (s *Store) MarkReviewAsked(ctx context.Context, work ulid.ULID, at time.Time) error {
-	if _, err := s.exec(ctx, `UPDATE works SET review_asked_at = $3 WHERE agent_id = $1 AND id = $2`, work.String(), at); err != nil {
-		return fmt.Errorf("mark review asked: %w", err)
-	}
-	return nil
-}
-
-func (s *Store) AskedForReview(ctx context.Context, since time.Time) (memory.Work, bool, error) {
-	ws, err := s.queryWorks(ctx, `SELECT `+workColumns+` FROM works WHERE agent_id = $1 AND review_asked_at >= $2
-		ORDER BY review_asked_at DESC, id DESC LIMIT 1`, since)
-	if err != nil || len(ws) == 0 {
-		return memory.Work{}, false, err
-	}
-	return ws[0], true, nil
-}
-
-func (s *Store) SavePlan(ctx context.Context, p memory.LearningPlan) error {
-	tx, err := s.begin(ctx)
-	if err != nil {
-		return fmt.Errorf("save plan: %w", err)
-	}
-	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `INSERT INTO learning_plans (agent_id, id, goal_id, skill, stage, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, s.agent, p.ID.String(), p.GoalID.String(), p.Skill, p.Stage, p.Status, p.CreatedAt, p.UpdatedAt); err != nil {
-		return fmt.Errorf("save plan: %w", err)
-	}
-	for _, st := range p.Stages {
-		if _, err := tx.Exec(ctx, `INSERT INTO plan_stages (agent_id, plan_id, n, learn, practice, done_when) VALUES ($1, $2, $3, $4, $5, $6)`, s.agent,
-			p.ID.String(), st.N, st.Learn, st.Practice, st.DoneWhen); err != nil {
-			return fmt.Errorf("save plan stage: %w", err)
-		}
-	}
-	return tx.Commit(ctx)
-}
-
-// Plans returns its learning plans with their stages, oldest first.
-func (s *Store) Plans(ctx context.Context, activeOnly bool) ([]memory.LearningPlan, error) {
-	rows, err := s.query(ctx, `SELECT id, goal_id, skill, stage, status, created_at, updated_at FROM learning_plans
-		WHERE agent_id = $1 AND (NOT $2 OR status = $3) ORDER BY created_at, id`, activeOnly, memory.PlanActive)
-	if err != nil {
-		return nil, fmt.Errorf("query plans: %w", err)
-	}
-	var out []memory.LearningPlan
-	for rows.Next() {
-		var (
-			p          memory.LearningPlan
-			id, goalID string
-		)
-		if err := rows.Scan(&id, &goalID, &p.Skill, &p.Stage, &p.Status, &p.CreatedAt, &p.UpdatedAt); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		if p.ID, err = ulid.Parse(id); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		if p.GoalID, err = ulid.Parse(goalID); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	for i := range out {
-		srows, err := s.query(ctx, `SELECT n, learn, practice, done_when, done_at FROM plan_stages WHERE agent_id = $1 AND plan_id = $2 ORDER BY n`,
-			out[i].ID.String())
-		if err != nil {
-			return nil, fmt.Errorf("query plan stages: %w", err)
-		}
-		for srows.Next() {
-			var (
-				st   memory.Stage
-				done *time.Time
-			)
-			if err := srows.Scan(&st.N, &st.Learn, &st.Practice, &st.DoneWhen, &done); err != nil {
-				srows.Close()
-				return nil, err
-			}
-			if done != nil {
-				st.DoneAt = *done
-			}
-			out[i].Stages = append(out[i].Stages, st)
-		}
-		srows.Close()
-	}
-	return out, nil
-}
-
-// AdvancePlan finishes a plan's current stage and moves to the next, or
-// marks the plan done after its last.
-func (s *Store) AdvancePlan(ctx context.Context, plan ulid.ULID, at time.Time) error {
-	if _, err := s.exec(ctx, `UPDATE plan_stages SET done_at = $3
-		WHERE agent_id = $1 AND plan_id = $2 AND n = (SELECT stage FROM learning_plans WHERE agent_id = $1 AND id = $2)`, plan.String(), at); err != nil {
-		return fmt.Errorf("advance plan: %w", err)
-	}
-	if _, err := s.exec(ctx, `UPDATE learning_plans AS p SET stage = p.stage + 1, updated_at = $3,
-			status = CASE WHEN p.stage + 1 >= (SELECT count(*) FROM plan_stages WHERE agent_id = p.agent_id AND plan_id = p.id) THEN $4 ELSE p.status END
-		WHERE p.agent_id = $1 AND p.id = $2`, plan.String(), at, memory.PlanDone); err != nil {
-		return fmt.Errorf("advance plan: %w", err)
-	}
-	return nil
-}
-
-func (s *Store) EndPlan(ctx context.Context, plan ulid.ULID, status string, at time.Time) error {
-	if _, err := s.exec(ctx, `UPDATE learning_plans SET status = $3, updated_at = $4 WHERE agent_id = $1 AND id = $2`, plan.String(), status, at); err != nil {
-		return fmt.Errorf("end plan: %w", err)
-	}
-	return nil
-}
-
-func (s *Store) SaveResource(ctx context.Context, r memory.Resource) error {
-	if _, err := s.exec(ctx, `INSERT INTO resources (agent_id, id, plan_id, stage, ability, query, why, status, added_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, r.ID.String(), r.PlanID.String(), r.Stage, r.Ability, r.Query, r.Why, r.Status, r.AddedAt); err != nil {
-		return fmt.Errorf("save resource: %w", err)
-	}
-	return nil
-}
-
-// Resources returns a plan's resources, by stage and when they were added.
-func (s *Store) Resources(ctx context.Context, plan ulid.ULID) ([]memory.Resource, error) {
-	rows, err := s.query(ctx, `SELECT id, plan_id, stage, ability, query, why, status, title, work_id, added_at, done_at FROM resources
-		WHERE agent_id = $1 AND plan_id = $2 ORDER BY stage, added_at, id`, plan.String())
-	if err != nil {
-		return nil, fmt.Errorf("query resources: %w", err)
-	}
-	defer rows.Close()
-	var out []memory.Resource
-	for rows.Next() {
-		var (
-			r          memory.Resource
-			id, planID string
-			workID     *string
-			done       *time.Time
-		)
-		if err := rows.Scan(&id, &planID, &r.Stage, &r.Ability, &r.Query, &r.Why, &r.Status, &r.Title, &workID, &r.AddedAt, &done); err != nil {
-			return nil, err
-		}
-		if r.ID, err = ulid.Parse(id); err != nil {
-			return nil, err
-		}
-		if r.PlanID, err = ulid.Parse(planID); err != nil {
-			return nil, err
-		}
-		if r.WorkID, err = parseNullULID(workID); err != nil {
-			return nil, err
-		}
-		if done != nil {
-			r.DoneAt = *done
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
-}
-
-func (s *Store) FinishResource(ctx context.Context, id, work ulid.ULID, title string, at time.Time) error {
-	if _, err := s.exec(ctx, `UPDATE resources SET status = $3, title = $4, work_id = $5, done_at = $6 WHERE agent_id = $1 AND id = $2`,
-		id.String(), memory.ResourceDone, title, nullULID(work), at); err != nil {
-		return fmt.Errorf("finish resource: %w", err)
 	}
 	return nil
 }
@@ -2302,23 +1957,27 @@ func (s *Store) Whose(ctx context.Context) (string, time.Time, bool, error) {
 
 // Week is what an agent did since a time, counted.
 type Week struct {
-	Made     int `json:"made"`     // works, not counting the journal or reviews
+	Made     int `json:"made"`     // works
 	Decided  int `json:"decided"`  // requests their owner answered
 	Approved int `json:"approved"` // of those, the ones they approved
 	Answered int `json:"answered"` // calls on their judgment their owner answered
 	Guessed  int `json:"guessed"`  // of those, the ones where they'd picked as their owner did
+	Things   int `json:"things"`   // things for their owner in the mornings it sent
+	Done     int `json:"done"`     // of those, the ones their owner ticked done
 }
 
 // WeekSince counts what the agent did since since.
 func (s *Store) WeekSince(ctx context.Context, since time.Time) (Week, error) {
 	var w Week
 	err := s.queryRow(ctx, `SELECT
-		(SELECT count(*) FROM works WHERE agent_id = $1 AND created_at >= $2 AND kind NOT IN ('journal', 'review')),
+		(SELECT count(*) FROM works WHERE agent_id = $1 AND created_at >= $2),
 		(SELECT count(*) FROM approvals WHERE agent_id = $1 AND decided_at >= $2 AND status IN ($3, $4)),
 		(SELECT count(*) FROM approvals WHERE agent_id = $1 AND decided_at >= $2 AND status = $3),
 		(SELECT count(*) FROM judgment_calls WHERE agent_id = $1 AND answered_at >= $2 AND agreed IS NOT NULL),
-		(SELECT count(*) FROM judgment_calls WHERE agent_id = $1 AND answered_at >= $2 AND agreed)`,
-		since, memory.ApprovalApproved, memory.ApprovalDenied).Scan(&w.Made, &w.Decided, &w.Approved, &w.Answered, &w.Guessed)
+		(SELECT count(*) FROM judgment_calls WHERE agent_id = $1 AND answered_at >= $2 AND agreed),
+		(SELECT count(*) FROM mornings m, json_each(m.items) i WHERE m.agent_id = $1 AND m.sent_at >= $2),
+		(SELECT count(*) FROM mornings m, json_each(m.items) i WHERE m.agent_id = $1 AND m.sent_at >= $2 AND json_extract(i.value, '$.done'))`,
+		since, memory.ApprovalApproved, memory.ApprovalDenied).Scan(&w.Made, &w.Decided, &w.Approved, &w.Answered, &w.Guessed, &w.Things, &w.Done)
 	if err != nil {
 		return w, fmt.Errorf("week since: %w", err)
 	}

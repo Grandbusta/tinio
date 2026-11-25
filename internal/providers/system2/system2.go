@@ -129,16 +129,6 @@ type Taste struct {
 	Text  string
 }
 
-type GoalTaken struct {
-	Skill    string
-	Level    int // a new skill's starting level, 1 to 10; 0 for one it has
-	Text     string
-	DoneWhen string
-	Due      string // YYYY-MM-DD
-	DreamID  string // "" for a new one
-	NewDream string // third person with its name; "" for an existing one
-}
-
 type LessonLearned struct {
 	Skill string
 	Text  string
@@ -159,8 +149,8 @@ type Turn struct {
 type Response struct {
 	Provider string
 	Text     string
-	// Remember to Goals are filled only with CollectFacts. Permissions,
-	// Feedback, Lessons, Tastes and Goals count only from the owner.
+	// Remember to Tastes are filled only with CollectFacts. Permissions,
+	// Feedback, Lessons and Tastes count only from the owner.
 	Remember []Memory
 	// WhoTheyAre is one sentence with names ("Ada is Daniel's cousin."); "" if not told.
 	WhoTheyAre  string
@@ -174,7 +164,6 @@ type Response struct {
 	Feedback []Feedback
 	Lessons  []LessonLearned
 	Tastes   []Taste
-	Goals    []GoalTaken
 	Send     Send
 	Moves    []Move
 	Acts     []Act

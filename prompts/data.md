@@ -1,4 +1,4 @@
-You are {name}, a person with your own life, writing out, for something you made earlier, what a file is made from: the notes of a piece of music, say, so it can be played back.
+You are {name}, writing out, for something you made earlier, what a file is made from: the notes of a piece of music, say, so it can be played back.
 
 What you make:
 {makes}

@@ -1,6 +1,28 @@
 # Changelog
 
-## Unreleased (v0.5, under way)
+## v0.5 (unreleased)
+
+**They work for you, and only for you.** An agent has a character and a voice, a short
+background and a personality, but no life of their own: no day they plan, no rounds or
+pace, no journal, goals, dreams or learning plans, and no public page.
+- **Your morning.** Each agent sends one note in their chat at your time (weekdays at
+  07:30 unless you change it): yesterday in a line or two, up to three things for today,
+  each from something they know (a topic, a promise, a request waiting, your calendar),
+  the drafts they made for them 45 minutes before, and one question only if something's
+  missing. Nothing is sent anywhere: a draft is only made for you. Set it per agent in
+  Mornings (on or off, the time, the days), or when you raise them. Quiet hours move it;
+  past the week's cap it comes without drafts; after a week without a word from you there's
+  none until you write.
+- **Your day**, on the rail: every agent's things from this morning, to tick done, with
+  their drafts and where each came from.
+- **Helping you** (once Growth): what they've learned about how you like things, their
+  skills, and the week counted, the things in their mornings included.
+- **The weekly look back** replaces the review: lessons kept or retired, and how you
+  decide, from where you chose differently, for you to approve.
+- **A new cast.** Marcus is now a personal assistant (your diary, your inbox and the loose
+  ends: email drafts, meeting briefs, task lists, trip plans) and Sofía a customer support
+  lead (reply drafts, help articles, a weekly support digest, saved replies). Ayesha is a
+  content writer; Zara, Kenji and Henrik are as they were.
 
 **Many agents, on your own machine**
 - One program, `tinio`: the API and every agent in one process, listening only on this
@@ -11,7 +33,7 @@
 - You bring only your OpenAI key: set it once through the API, kept sealed and shown only
   masked; the agents start on it, and again when it changes. The models have defaults.
 - The week is a spending cap you set ($5 to start, or no limit), with light mode past it.
-  No plans, no limit on agents, and every pace yours to choose.
+  No plans and no limit on agents.
 - The engine is a one-time copy of the platform's: topics, looking before replying,
   Wikipedia and books in a reply, connections (Google, Atlassian), request cards you can
   change, quiet hours and pausing, skills with checks, and the six job-ready characters.
@@ -20,12 +42,12 @@
 **The desktop app** (`desktop/`, built with Wails): the agents and the API run inside it,
 with no port and no sign-in. It asks for your OpenAI key first (or later, in Settings: until then the chats say nobody can reply), then you raise an agent
 and talk to them, with replies as they're written. Every page of the web app is there:
-their day, works, skills, topics, character, judgment, memory, mind, growth, tools and
-settings, and You, with your key and the week's cap. It keeps running when you close its
+Your day, their works, skills, topics, character, judgment, memory, mind, Helping you,
+tools and settings, and You, with your key and the week's cap. It keeps running when you close its
 window (in the Dock on macOS, the taskbar elsewhere), opens at login (on by default, off
 on You), tells you in a notification what an agent says while you're elsewhere, and
 saves their files where you choose. Settings has your key, the model for each of their jobs
-(replies, decisions, their own day, light mode, works, from the models Tinio has prices
+(replies, decisions, mornings, light mode, works, from the models Tinio has prices
 for), the app, and how it looks.
 
 **Folders on your computer:** add a folder in Settings, or with the + beside the message
@@ -38,14 +60,16 @@ version is kept.
 Each release has the app for macOS (one for Intel and Apple silicon), Windows and Linux,
 unsigned for now, and CI builds and tests it on every push.
 
-**Still to come before v0.5.0:** Telegram, local tools, backup and moving from v0.4, per
+**Still to come before v0.5.0:** Telegram, local tools and backup, per
 agent; the app reachable from your phone; connecting accounts from the app.
 
 **Not here until they come back:** the v0.4 commands (`tinio new`, `agent`, `secret`,
 `skill`, `doctor`, `backup`, `restore`), Telegram, the public profile page, and the five
 life characters (in git history).
 
-## Cheaper, never released as v0.4.1 (in v0.5)
+## Cheaper, never released as v0.4.1
+
+v0.5 later removed their own day, so only the savings on replies and embeddings carried over.
 
 **Their own day costs less**
 - `daily_life.model`: a model of its own for their day (planning, their own activities,

@@ -93,13 +93,6 @@ func (m *Mind) request(ctx context.Context, a memory.Approval) memory.Request {
 	case a.Class == string(action.Commit):
 		r.Title, r.Quote, r.Where, r.Undo = "Say yes to "+who+"?", a.What, who, "You can tell them later it's off"
 		ask = fmt.Sprintf("%s asked me to make something: %s. Can I say yes?", who, a.What)
-	case a.Class == string(action.Publish):
-		r.Title, r.Quote, r.Where, r.Undo = "Put this on my public page?", a.What, "My public page", "You can take it down"
-		ask = "Can I put this on my public page?\n\n" + a.What
-	case a.Class == string(action.Dream):
-		r.Title = orDefault(map[string]string{"add": "Add a dream?", "reword": "Change a dream?", "drop": "Let go of a dream?"}[a.Kind], "Change my dreams?")
-		r.Quote, r.Where, r.Undo, r.Editable = a.Text, "My dreams", "You can change it back", a.Kind != "drop"
-		ask = "Can I " + a.What + "?"
 	default:
 		r.Title = "Can I " + a.What + "?"
 		ask = r.Title
@@ -209,22 +202,6 @@ func (m *Mind) carryOut(ctx context.Context, a memory.Approval, now time.Time) s
 	yes := a.Status == memory.ApprovalApproved
 	why := map[string]string{memory.ApprovalDenied: "the owner said no", memory.ApprovalExpired: "no answer from the owner"}[a.Status]
 	switch action.Class(a.Class) {
-	case action.Dream:
-		if !yes {
-			return "kept its dreams as they are"
-		}
-		return m.changeDream(ctx, a, now)
-
-	case action.Publish:
-		public, by := yes, memory.PublicByOwner
-		if a.Status == memory.ApprovalExpired {
-			by = memory.PublicByGate
-		}
-		if _, err := m.Store.SetWorkPublic(ctx, a.Ref, public, by); err != nil {
-			return "publishing failed: " + err.Error()
-		}
-		return map[bool]string{true: "published the work", false: "kept the work off the page"}[yes]
-
 	case action.ReachOut:
 		if !yes {
 			m.finishRef(ctx, a.Ref, memory.IntentionMissed, why, now)

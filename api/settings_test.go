@@ -6,8 +6,7 @@ import (
 )
 
 // An agent's settings: what they may do on their own, over the config's
-// defaults, with money and messages outside the chat fixed; a pace their plan
-// allows; quiet hours; pausing them; and deleting them once their owner types
+// defaults, with money and messages outside the chat fixed; quiet hours; pausing them; and deleting them once their owner types
 // their name.
 func TestAnAgentsSettings(t *testing.T) {
 	ta := newTestAPI(t)
@@ -29,28 +28,21 @@ func TestAnAgentsSettings(t *testing.T) {
 	}
 
 	got := verdicts()
-	if got["dream"]["verdict"] != "ask" || got["read_web"]["verdict"] != "auto" || got["spend"]["verdict"] != "forbid" ||
+	if got["commit"]["verdict"] != "ask" || got["dream"] != nil || got["read_web"]["verdict"] != "auto" || got["spend"]["verdict"] != "forbid" ||
 		got["external_message"]["verdict"] != "forbid" || len(got["spend"]["choices"].([]any)) != 0 {
 		t.Errorf("the defaults: %v", got)
 	}
 
-	if rec, out := ta.do(t, "POST", path+"/settings", map[string]any{"classes": map[string]string{"dream": "forbid"}}, ada, site); rec.Code != http.StatusOK {
+	if rec, out := ta.do(t, "POST", path+"/settings", map[string]any{"classes": map[string]string{"commit": "forbid"}}, ada, site); rec.Code != http.StatusOK {
 		t.Fatalf("saving: %d %v", rec.Code, out)
 	}
-	if got := verdicts(); got["dream"]["verdict"] != "forbid" {
-		t.Errorf("dream after saving: %v", got["dream"])
+	if got := verdicts(); got["commit"]["verdict"] != "forbid" {
+		t.Errorf("commit after saving: %v", got["commit"])
 	}
 	for _, bad := range []map[string]string{{"spend": "auto"}, {"external_message": "auto"}, {"read_web": "ask"}, {"reply": "forbid"}} {
 		if rec, _ := ta.do(t, "POST", path+"/settings", map[string]any{"classes": bad}, ada, site); rec.Code != http.StatusBadRequest {
 			t.Errorf("%v: %d, want refused", bad, rec.Code)
 		}
-	}
-
-	if rec, _ := ta.do(t, "POST", path+"/settings", map[string]any{"pace": 4}, ada, site); rec.Code != http.StatusBadRequest {
-		t.Errorf("pace 4, not offered: %d, want refused", rec.Code)
-	}
-	if rec, out := ta.do(t, "POST", path+"/settings", map[string]any{"pace": 3}, ada, site); rec.Code != http.StatusOK || data(out)["pace"] != 3.0 {
-		t.Errorf("pace 3: %d %v", rec.Code, out)
 	}
 
 	if rec, out := ta.do(t, "POST", path+"/settings", map[string]any{"quiet": map[string]string{"from": "22:00", "until": "07:00"}}, ada, site); rec.Code != http.StatusOK ||

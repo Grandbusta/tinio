@@ -5,14 +5,14 @@ import { Back, useFrame, when } from "@/components/app-frame";
 import { call, type Judgment, type Principle } from "@/lib/api";
 
 // Step 12: what an agent has learnt about how you make calls. They use only the principles
-// you've kept here; ones their weekly review draws from your calls wait for you. Below,
+// you've kept here; ones their weekly look back draws from your calls wait for you. Below,
 // the calls you answered and what they'd guessed.
 
 const button = "inline-flex min-h-9 items-center justify-center rounded-full px-3.5 text-[13px] font-semibold disabled:opacity-60";
 
 function origin(p: Principle, name: string) {
   const from =
-    p.source === "owner" ? "you wrote it" : p.source === "seed" ? `${name} was raised with it` : `from your calls${p.calls ? ` (${p.calls})` : ""}, in ${name}'s weekly review`;
+    p.source === "owner" ? "you wrote it" : p.source === "seed" ? `${name} was raised with it` : `from your calls${p.calls ? ` (${p.calls})` : ""}, in ${name}'s weekly look back`;
   return `${p.status === "approved" ? "Kept" : "Proposed"} ${when(p.at)} · ${from}`;
 }
 

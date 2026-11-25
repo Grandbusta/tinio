@@ -67,7 +67,7 @@ func TestOnlyTheOwnerReachesTheirAgentsChat(t *testing.T) {
 		{"GET", "/skills", nil},
 		{"POST", "/skills/brand-voice/remove", nil},
 		{"GET", "/settings", nil},
-		{"POST", "/settings", map[string]any{"classes": map[string]string{"dream": "auto"}}},
+		{"POST", "/settings", map[string]any{"classes": map[string]string{"commit": "auto"}}},
 		{"POST", "/delete", map[string]string{"name": "Zara"}},
 		{"POST", "/principles", map[string]string{"text": "Be kind"}},
 		{"POST", "/principles/" + ulid.Make().String(), map[string]any{"keep": true}},
@@ -198,7 +198,7 @@ func TestAnswersOnlyWhatsWaiting(t *testing.T) {
 	st := store.New(ta.db).For(zara)
 	request := func(on string, sent bool) string {
 		t.Helper()
-		a := memory.Approval{ID: ulid.Make(), Class: "dream", What: "add a dream", Text: "x", Status: memory.ApprovalPending, AskedAt: time.Now().UTC()}
+		a := memory.Approval{ID: ulid.Make(), Class: "reach_out", What: "message Sam", Text: "x", Status: memory.ApprovalPending, AskedAt: time.Now().UTC()}
 		s := store.New(ta.db).For(on)
 		if err := s.SaveApproval(ctx, a); err != nil {
 			t.Fatal(err)
@@ -236,7 +236,7 @@ func TestAnswersOnlyWhatsWaiting(t *testing.T) {
 		t.Errorf("the tap says %+v", got)
 	}
 
-	call := memory.Call{ID: ulid.Make(), Type: memory.CallFocus, Situation: "today", Options: []string{"write", "read"},
+	call := memory.Call{ID: ulid.Make(), Type: "reach_out", Situation: "today", Options: []string{"write", "read"},
 		Mode: memory.CallBefore, Status: memory.CallAsked, AskedAt: time.Now().UTC(), CreatedAt: time.Now().UTC()}
 	if err := st.SaveCall(ctx, call); err != nil {
 		t.Fatal(err)

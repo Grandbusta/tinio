@@ -52,7 +52,7 @@ const maxAnswers = 4
 // it saves comes before the reply. Reply first was tried (20 Nov): its first
 // words showed 0.4s sooner, but replies were blander and a fact went unsaved.
 var replyWithFacts = map[string]any{
-	"type": "object", "additionalProperties": false, "required": []string{"reply", "remember", "who_they_are", "reminders", "promises", "permissions", "corrections", "misread", "feedback", "lessons", "tastes", "goals", "send", "moves", "act", "look", "topic", "answers", "many"},
+	"type": "object", "additionalProperties": false, "required": []string{"reply", "remember", "who_they_are", "reminders", "promises", "permissions", "corrections", "misread", "feedback", "lessons", "tastes", "send", "moves", "act", "look", "topic", "answers", "many"},
 	"properties": map[string]any{
 		"reply":        map[string]any{"type": "string"},
 		"look":         map[string]any{"type": "array", "items": system2.LookSchema},
@@ -103,19 +103,6 @@ var replyWithFacts = map[string]any{
 			"properties": map[string]any{
 				"skill":  map[string]any{"type": "string"},
 				"lesson": map[string]any{"type": "string"},
-			},
-		}},
-		"goals": map[string]any{"type": "array", "items": map[string]any{
-			"type": "object", "additionalProperties": false,
-			"required": []string{"skill", "level", "goal", "done_when", "due", "dream_id", "new_dream"},
-			"properties": map[string]any{
-				"skill":     map[string]any{"type": "string"},
-				"level":     map[string]any{"type": "integer", "description": "a new skill's starting level, 1 to 10; 0 for one you have"},
-				"goal":      map[string]any{"type": "string"},
-				"done_when": map[string]any{"type": "string"},
-				"due":       map[string]any{"type": "string", "description": "YYYY-MM-DD"},
-				"dream_id":  map[string]any{"type": "string", "description": "the dream it serves, or empty for a new one"},
-				"new_dream": map[string]any{"type": "string", "description": "a new dream it serves, or empty"},
 			},
 		}},
 		"tastes": map[string]any{"type": "array", "items": map[string]any{
@@ -278,7 +265,6 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 		feedback   []system2.Feedback
 		lessons    []system2.LessonLearned
 		tastes     []system2.Taste
-		goals      []system2.GoalTaken
 	)
 	switch {
 	case refusal.Len() > 0:
@@ -349,15 +335,6 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 				Likes bool   `json:"likes"`
 				Taste string `json:"taste"`
 			} `json:"tastes"`
-			Goals []struct {
-				Skill    string `json:"skill"`
-				Level    int    `json:"level"`
-				Goal     string `json:"goal"`
-				DoneWhen string `json:"done_when"`
-				Due      string `json:"due"`
-				DreamID  string `json:"dream_id"`
-				NewDream string `json:"new_dream"`
-			} `json:"goals"`
 		}
 		if err := json.Unmarshal([]byte(reply), &out); err != nil {
 			return spent, fmt.Errorf("openai responses: reply is not the requested JSON: %w", err)
@@ -423,12 +400,6 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 				lessons = append(lessons, system2.LessonLearned{Skill: skill, Text: text})
 			}
 		}
-		for _, g := range out.Goals {
-			if skill, text := strings.TrimSpace(g.Skill), strings.TrimSpace(g.Goal); skill != "" && text != "" {
-				goals = append(goals, system2.GoalTaken{Skill: skill, Level: g.Level, Text: text, DoneWhen: strings.TrimSpace(g.DoneWhen),
-					Due: strings.TrimSpace(g.Due), DreamID: strings.TrimSpace(g.DreamID), NewDream: strings.TrimSpace(g.NewDream)})
-			}
-		}
 		for _, t := range out.Tastes {
 			if text := strings.TrimSpace(t.Taste); text != "" {
 				tastes = append(tastes, system2.Taste{Kind: strings.TrimSpace(t.Kind), Likes: t.Likes, Text: text})
@@ -474,7 +445,6 @@ func (c *Client) Reason(ctx context.Context, req system2.Request) (system2.Respo
 		Feedback:    feedback,
 		Lessons:     lessons,
 		Tastes:      tastes,
-		Goals:       goals,
 		Send:        send,
 		Moves:       moves,
 		Acts:        acts,

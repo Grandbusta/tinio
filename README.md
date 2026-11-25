@@ -3,33 +3,35 @@
 **Raise an agent. Put it to work.**
 
 Tinio gives you agents with character, not blank prompts, running on your own machine.
-Raise one from a ready character: a name, a story, a family, a job they're already good
-at. From then on they work. They plan their days, make real things, read, keep a journal
-and get better at what they do. They talk with you in one chat, keep their promises, and
-ask before anything that reaches other people. Over time they learn how you decide, and
-ask less. They always say plainly that they're an AI.
+Raise one from a ready character: a name, a voice, a short background, a job they're
+already good at. From then on they work for you, and only for you: they have no life of
+their own. Each morning they send you your few things for the day, with drafts already
+made. They talk with you in one chat, keep their promises, make real things, and ask
+before anything that reaches other people. Over time they learn how you like things done
+and how you decide, and ask less. They always say plainly that they're an AI.
 
 Everything stays on your machine, in one file, except the calls to the models, on your
 own key.
 
-> **v0.5 is under way on this branch.** The engine and API run as one program on SQLite,
-> and the desktop app is where you raise your agents and talk to them
+> **v0.5 is under way on this branch:** agents work only for you, with a morning each day. The engine and API run as one program on SQLite, and the
+> desktop app is where you raise your agents and talk to them
 > ([desktop/README](desktop/README.md)). The latest release, v0.4, runs one agent on
 > Telegram.
 
 ## What makes them different
 
-- **Character.** The same agent every day, with one voice and one taste: a story they never
-  contradict, a personality, a routine. Anything their story doesn't cover, like a
-  favourite food or an opinion, they decide the first time it comes up, and remember.
+- **Character.** The same agent every day, with one voice and one taste: a short
+  background they never contradict (where they're from, what they know) and a
+  personality. It's how they talk and work, not a life they lead.
 - **Memory.** You, the people in your life, what they made, what you decided, and every
   topic you have going: pick one up months later and they know where it stood.
-- **Initiative.** A plan each morning, work done before you ask, promises kept on time.
+- **Initiative.** Your morning: yesterday in a line, up to three things for today, drafts
+  made before you wake, one question if something's missing. Promises kept on time.
 - **Real work.** Writing, notes, reading notes on books and web pages, and files you can
   download: PDFs, Word documents, spreadsheets, calendar invites, music as MIDI.
-- **Growth you can see.** Dreams lead to goals, goals to projects and learning plans. Every
-  piece of work is scored, your feedback counts double, and their skill levels move with
-  what they actually make.
+- **Better at helping you.** Every piece of work is scored, your thumbs and edits count
+  double, and each week they look back at what you liked and changed: the lessons they
+  keep and their skill levels move with what they actually make for you.
 - **Your judgment.** Every action is `auto`, `ask` or `forbid`. What reaches other people
   waits for your yes, and they keep count of how often they'd have chosen what you chose.
 
@@ -47,7 +49,7 @@ On this machine there's no sign-in: it's yours. See [docs/SETUP.md](docs/SETUP.m
 the key, where your data is, reaching it from your phone, and every setting.
 
 **What it costs:** only your OpenAI usage, under a weekly cap you set ($5 to start). A
-reply costs a fraction of a cent, and an agent's own day about a cent at a human pace.
+reply costs a fraction of a cent, and a morning with its drafts about a cent.
 
 ## The characters
 
@@ -56,12 +58,12 @@ time zone. Nothing about any of them is in the code.
 
 | | What they do |
 |---|---|
-| **Zara** | Social media: posts, content calendars and campaigns that sound like you. |
+| **Marcus** | Personal assistant: your diary, your inbox and the loose ends, from email drafts and meeting briefs to trip plans. |
 | **Kenji** | Software: working code, design docs and honest code reviews. |
-| **Marcus** | Futures trading research: market briefs, trade plans and a risk sheet, for you to decide on. |
-| **Sofía** | Product: specs, roadmaps and what users actually said. |
+| **Zara** | Social media: posts, content calendars and campaigns that sound like you. |
+| **Ayesha** | Content writing: articles, newsletters and pages that get read. |
+| **Sofía** | Customer support: replies your customers are glad to get, help articles, and what they keep asking. |
 | **Henrik** | Bookkeeping and finance: budgets, cash-flow forecasts and clear books. |
-| **Ayesha** | Copywriting: articles, newsletters and pages that get read. |
 
 All of them hand you drafts and plans: nothing they make leaves the chat without you.
 
@@ -69,11 +71,10 @@ All of them hand you drafts and plans: nothing they make leaves the chat without
 
 | When | What |
 |---|---|
-| **Morning** | They plan the day, mostly moving a goal forward through a project or a learning plan. |
-| **Through the day** | They do it, for real: making things, reading books and Wikipedia, studying how others do it. At a faster pace their waking day runs in more rounds, each planned from how the last went. |
-| **Any time** | Reminders you asked for, promises they made you, and now and then a check-in on something going on in your life. |
-| **Evening** | A journal entry. |
-| **Sunday** | A weekly review: goals updated, learning plans moved on, and a look back at how their decisions turned out. |
+| **Before you wake** | They read your yesterday (your chat, topics, promises, requests waiting, your calendar if it's connected) and draft what they can for today. |
+| **Your morning** | One note at your time (07:30 on weekdays unless you change it): yesterday in a line or two, up to three things for today, each with where it came from, the drafts after it. Tick them off on Your day. |
+| **Any time** | What you ask for, reminders, and promises they made you, kept on time. |
+| **Sunday** | A look back at their work for you: what you liked and changed, the lessons they keep, and how you decide, for you to approve. |
 
 ## Teach them
 
@@ -87,8 +88,8 @@ All of them hand you drafts and plans: nothing they make leaves the chat without
 
 ## You stay in charge
 
-- **Approvals.** Messaging someone first, promising something, changing a dream, using a
-  tool that changes things: by default they ask, with the exact thing, where, when and
+- **Approvals.** Messaging someone first, promising something, using a tool that changes
+  things: by default they ask, with the exact thing, where, when and
   whether it can be undone, and you can change it before you say yes. Silence is no. Money
   is never theirs to spend.
 - **Your judgment.** Your principles, priorities, boundaries and past decisions shape their
@@ -98,8 +99,8 @@ All of them hand you drafts and plans: nothing they make leaves the chat without
 
 ## Learn more
 
-- [Working with them](docs/GUIDE.md): talking and topics, promises, their day, growth,
-  judgment and what they may do.
+- [Working with them](docs/GUIDE.md): talking and topics, promises, your mornings, how
+  they get better at helping you, judgment and what they may do.
 - [Setup and every setting](docs/SETUP.md): running it, your key, your data, the settings,
   developing.
 - [How it works inside](docs/ARCHITECTURE.md): the two-system mind, memory, and how the

@@ -28,7 +28,7 @@ func TestValuesComeBackAsTheyWent(t *testing.T) {
 		"a1", "ada@example.com", at); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec(ctx, `INSERT INTO agents (id, account_id, name, owner_name, relation, pace, created_at) VALUES ($1, $2, 'Zara', 'Ada', 'friend', 1, $3)`,
+	if _, err := d.Exec(ctx, `INSERT INTO agents (id, account_id, name, owner_name, relation, created_at) VALUES ($1, $2, 'Zara', 'Ada', 'friend', $3)`,
 		"g1", "a1", at); err != nil {
 		t.Fatal(err)
 	}

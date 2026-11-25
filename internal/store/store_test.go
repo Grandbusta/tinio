@@ -37,8 +37,8 @@ func newAgent(t *testing.T, pool *db.DB) string {
 		id, strings.ToLower(id)+"@example.com", now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO agents (id, account_id, name, owner_name, relation, pace, created_at)
-		VALUES ($1, $1, 'Tobi', 'Ada', 'friend', 1, $2)`, id, now); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO agents (id, account_id, name, owner_name, relation, created_at)
+		VALUES ($1, $1, 'Tobi', 'Ada', 'friend', $2)`, id, now); err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -232,70 +232,6 @@ func TestRecentExchanges(t *testing.T) {
 	}
 }
 
-func TestPublicFacts(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	base := time.Now().UTC().Add(2 * time.Hour).Truncate(time.Microsecond)
-
-	p := perception.Percept{ID: ulid.Make(), Source: "test", ExternalID: ulid.Make().String(), Kind: "message", At: base}
-	if _, err := s.SavePercept(ctx, p); err != nil {
-		t.Fatal(err)
-	}
-	mine := map[ulid.ULID]string{}
-	var colour, pin memory.Fact
-	for i, f := range []memory.Fact{
-		{Subject: memory.SubjectSelf, Text: "Tobi's favourite colour is green"},
-		{Subject: memory.SubjectSelf, Text: "Tobi's PIN is 4821"},
-		{Subject: "test:someone", Text: "Sam likes jollof"},
-	} {
-		f.ID, f.PerceptID, f.At = ulid.Make(), p.ID, base.Add(time.Duration(i)*time.Minute)
-		if err := s.SaveFact(ctx, f); err != nil {
-			t.Fatal(err)
-		}
-		mine[f.ID] = f.Text
-		switch i {
-		case 0:
-			colour = f
-		case 1:
-			pin = f
-		}
-	}
-	ours := func(fs []memory.Fact) []string {
-		var out []string
-		for _, f := range fs {
-			if _, ok := mine[f.ID]; ok {
-				out = append(out, f.Text)
-			}
-		}
-		return out
-	}
-
-	undecided, err := s.UndecidedPublicFacts(ctx, 1000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := ours(undecided); !slices.Equal(got, []string{colour.Text, pin.Text}) {
-		t.Errorf("undecided = %v, want the agent's two facts, oldest first", got)
-	}
-	if err := s.SetFactPublic(ctx, colour.ID, true); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SetFactPublic(ctx, pin.ID, false); err != nil {
-		t.Fatal(err)
-	}
-	undecided, _ = s.UndecidedPublicFacts(ctx, 1000)
-	public, err := s.PublicFacts(ctx, 1000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := ours(undecided); len(got) != 0 {
-		t.Errorf("still undecided: %v", got)
-	}
-	if got := ours(public); !slices.Equal(got, []string{colour.Text}) {
-		t.Errorf("public = %v, want only the colour", got)
-	}
-}
-
 func TestDueIntentionsAndUnaskedFacts(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
@@ -466,91 +402,6 @@ func TestSourcesAndReadingProjects(t *testing.T) {
 	}
 	if _, ok, _ := s.ReadingProject(ctx, ulid.Make()); ok {
 		t.Error("found a project for a source nobody reads")
-	}
-}
-
-func TestPublicWorks(t *testing.T) {
-	s := openTestStore(t)
-	ctx := context.Background()
-	base := time.Now().UTC().Truncate(time.Microsecond).AddDate(0, 0, -400)
-
-	own := memory.Intention{ID: ulid.Make(), Subject: memory.SubjectSelf, Kind: memory.IntentionActivity, Text: "write",
-		DueAt: base, Status: memory.IntentionDone, CreatedAt: base}
-	promise := memory.Intention{ID: ulid.Make(), Subject: "test:" + ulid.Make().String(), Kind: memory.IntentionTask, Text: "a poem for them",
-		DueAt: base, Status: memory.IntentionDone, CreatedAt: base}
-	for _, i := range []memory.Intention{own, promise} {
-		if err := s.SaveIntention(ctx, i); err != nil {
-			t.Fatal(err)
-		}
-	}
-	work := func(kind, title string, intention ulid.ULID, n int) memory.Work {
-		w := memory.Work{ID: ulid.Make(), IntentionID: intention, Kind: kind, Title: title, Text: "...", CreatedAt: base.Add(time.Duration(n) * time.Minute)}
-		if err := s.SaveWork(ctx, w); err != nil {
-			t.Fatal(err)
-		}
-		return w
-	}
-	lyrics := work("lyrics", "Lagos Rain", own.ID, 0)
-	waiting := work("lyrics", "Waiting", own.ID, 4)
-	if err := s.AwaitWorkPublic(ctx, waiting.ID); err != nil {
-		t.Fatal(err)
-	}
-	notes := work("notes", "On rhythm", ulid.ULID{}, 1)
-	journal := work("journal", "29 Oct", own.ID, 2)
-	forThem := work("writing", "NEPA Took the Light", promise.ID, 3)
-
-	undecided, err := s.UndecidedPublicWorks(ctx, 1000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids := map[ulid.ULID]bool{}
-	for _, w := range undecided {
-		ids[w.ID] = true
-	}
-	if !ids[lyrics.ID] || !ids[notes.ID] || ids[journal.ID] || ids[forThem.ID] || ids[waiting.ID] {
-		t.Errorf("undecided = %v; want only its own works, not the journal or the promise", ids)
-	}
-
-	set := func(id ulid.ULID, public bool, by string) bool {
-		ok, err := s.SetWorkPublic(ctx, id, public, by)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return ok
-	}
-	if !set(lyrics.ID, true, memory.PublicBySystem1) || !set(notes.ID, true, memory.PublicBySystem1) {
-		t.Fatal("couldn't make its own works public")
-	}
-	if set(journal.ID, true, memory.PublicByOwner) || set(forThem.ID, true, memory.PublicByOwner) {
-		t.Error("made the journal or a promise public")
-	}
-	if !set(notes.ID, false, memory.PublicByOwner) || set(notes.ID, true, memory.PublicBySystem1) {
-		t.Error("the owner's choice was overridden")
-	}
-
-	ws, err := s.PublicWorks(ctx, 1000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var mine []memory.Work
-	for _, w := range ws {
-		if w.ID == lyrics.ID || w.ID == notes.ID || w.ID == journal.ID || w.ID == forThem.ID {
-			mine = append(mine, w)
-		}
-	}
-	if len(mine) != 1 || mine[0].ID != lyrics.ID || mine[0].Public == nil || !*mine[0].Public || mine[0].PublicBy != memory.PublicBySystem1 {
-		t.Errorf("public works = %+v", mine)
-	}
-	if _, ok, err := s.PublicWork(ctx, lyrics.ID); err != nil || !ok {
-		t.Errorf("public work: %v, %v", ok, err)
-	}
-	for _, id := range []ulid.ULID{notes.ID, journal.ID, forThem.ID, ulid.Make()} {
-		if _, ok, err := s.PublicWork(ctx, id); err != nil || ok {
-			t.Errorf("%s is public: %v, %v", id, ok, err)
-		}
-	}
-	if w, ok, _ := s.Work(ctx, notes.ID); !ok || w.Public == nil || *w.Public || w.PublicBy != memory.PublicByOwner {
-		t.Errorf("hidden work = %+v", w)
 	}
 }
 
@@ -902,7 +753,6 @@ func TestWorksFor(t *testing.T) {
 	work("beat", "beat_idea", memory.SubjectSelf, 1)
 	work("for sam", "writing", sam, 2)
 	work("for ada", "writing", ada, 3)
-	work("diary", "journal", "", 4)
 	work("notes", "notes", "", 5)
 	ws, err := s.WorksFor(ctx, sam, 3)
 	if err != nil {

@@ -22,9 +22,9 @@ import (
 // owner gives becomes one of their decisions, approved, and how often they
 // agree, by type, is how it will earn a type of decision.
 //
-// After-calls (the day plan) it acts on, asking at most AsksPerDay a day.
-// Before-calls (goals) wait for the answer; unanswered in time, it goes with
-// its pick, and that isn't counted. Approvals it asked count too.
+// Every request the owner answers is a call: a yes or no that teaches it how
+// they decide. A call asked before (none are made now) waits for the answer;
+// unanswered in time, it goes with its pick, and that isn't counted.
 
 type Calls struct {
 	On         bool
@@ -44,35 +44,6 @@ const (
 	maxOptions   = 4
 )
 
-var planCallTypes = []string{memory.CallFocus, memory.CallStart}
-
-type planCall struct {
-	Type       string   `json:"type"`
-	Situation  string   `json:"situation"`
-	Options    []string `json:"options"`
-	Pick       int      `json:"pick"`
-	Why        string   `json:"why"`
-	Confidence float64  `json:"confidence"`
-	Stakes     string   `json:"stakes"`
-	Reversible bool     `json:"reversible"`
-}
-
-var callsSchema = map[string]any{"type": "array", "items": map[string]any{
-	"type": "object", "additionalProperties": false,
-	"required": []string{"type", "situation", "options", "pick", "why", "confidence", "stakes", "reversible"},
-	"properties": map[string]any{
-		"type":       map[string]any{"type": "string", "enum": planCallTypes},
-		"situation":  map[string]any{"type": "string", "description": "what you're deciding, in a sentence"},
-		"options":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "two to four real options"},
-		"pick":       map[string]any{"type": "integer", "description": "the option you chose, by its index from 0"},
-		"why":        map[string]any{"type": "string"},
-		"confidence": map[string]any{"type": "number", "description": "how sure you are your owner would choose the same, 0 to 1"},
-		"stakes": map[string]any{"type": "string", "enum": memory.StakesLevels,
-			"description": "what's lost if it's the wrong choice: low (an afternoon, a draft), medium (days of work, a goal, someone's expectations), high (money, reputation, a relationship, something public)"},
-		"reversible": map[string]any{"type": "boolean", "description": "whether you could easily undo it if it's wrong"},
-	},
-}}
-
 func newCall(typ, mode, situation string, options []string, pick int, why string, confidence float64, now time.Time) (memory.Call, bool) {
 	var opts []string
 	for _, o := range options {
@@ -90,40 +61,6 @@ func newCall(typ, mode, situation string, options []string, pick int, why string
 	return memory.Call{ID: ulid.Make(), Type: typ, Mode: mode, Situation: situation, Options: opts, Pick: pick,
 		Why: strings.TrimSpace(why), Confidence: math.Max(0, math.Min(1, confidence)), Reversible: true, Status: memory.CallLogged,
 		CreatedAt: now.UTC()}, true
-}
-
-func (m *Mind) logPlanCalls(ctx context.Context, calls []planCall, now time.Time) int {
-	if !m.Calls.On {
-		return 0
-	}
-	n := 0
-	var seen []string
-	for _, pc := range calls {
-		// One of each type a plan: a second start call is the same choice put
-		// another way, and asking both reads as the same message twice.
-		if !slices.Contains(planCallTypes, pc.Type) || slices.Contains(seen, pc.Type) {
-			continue
-		}
-		c, ok := newCall(pc.Type, memory.CallAfter, pc.Situation, pc.Options, pc.Pick, pc.Why, pc.Confidence, now)
-		if !ok {
-			m.Log.Warn("dropped a call that isn't one", "type", pc.Type, "situation", pc.Situation, "options", len(pc.Options))
-			continue
-		}
-		seen = append(seen, pc.Type)
-		if slices.Contains(memory.StakesLevels, pc.Stakes) {
-			c.Stakes = pc.Stakes
-		}
-		c.Reversible = pc.Reversible
-		if err := m.Store.SaveCall(ctx, c); err != nil {
-			m.Log.Error("save call", "err", err)
-			continue
-		}
-		n++
-	}
-	if n > 0 {
-		m.changed.Store(true) // the next tick asks the owner, if they're to be asked
-	}
-	return n
 }
 
 // sendCalls asks every before-call, and up to AsksPerDay after-calls: most at
@@ -338,8 +275,7 @@ func (m *Mind) expireCalls(ctx context.Context, now time.Time) {
 		ending := "⌛ No answer."
 		if c.Mode == memory.CallBefore {
 			ending = "⌛ No answer, so I went with mine."
-			detail := m.carryOutCall(ctx, c, c.Pick, now)
-			m.Log.Info("a call went unanswered; went with its pick", "call", c.ID.String(), "type", c.Type, "detail", detail)
+			m.Log.Info("a call went unanswered; went with its pick", "call", c.ID.String(), "type", c.Type)
 		}
 		m.settleCall(ctx, c, ending)
 	}
@@ -347,9 +283,6 @@ func (m *Mind) expireCalls(ctx context.Context, now time.Time) {
 
 func (m *Mind) callDecided(ctx context.Context, c memory.Call, percept ulid.ULID, now time.Time) {
 	detail := "graded"
-	if c.Mode == memory.CallBefore {
-		detail = m.carryOutCall(ctx, c, c.OwnerPick, now)
-	}
 	action := "disagreed"
 	if c.OwnerPick == c.Pick {
 		action = "agreed"
@@ -360,58 +293,6 @@ func (m *Mind) callDecided(ctx context.Context, c memory.Call, percept ulid.ULID
 		m.Log.Error("save decision", "err", err)
 	}
 	m.Log.Info("the owner answered a call", "call", c.ID.String(), "type", c.Type, "agreed", c.OwnerPick == c.Pick, "detail", detail)
-}
-
-// carryOutCall: option 0 is always doing what it wanted; anything else is not.
-func (m *Mind) carryOutCall(ctx context.Context, c memory.Call, option int, now time.Time) string {
-	goals, err := m.Store.Goals(ctx, false)
-	if err != nil {
-		return "loading goals failed: " + err.Error()
-	}
-	var g *memory.Goal
-	for i := range goals {
-		if goals[i].ID == c.Ref {
-			g = &goals[i]
-		}
-	}
-	if g == nil {
-		return "the goal is gone"
-	}
-	g.UpdatedAt = now.UTC()
-	switch c.Type {
-	case memory.CallNewGoal:
-		if g.Status != memory.GoalProposed {
-			return "the goal was already settled"
-		}
-		g.Status = memory.GoalDropped
-		if option == 0 {
-			g.Status = memory.GoalActive
-		}
-	case memory.CallDropGoal:
-		if option != 0 || g.Status != memory.GoalActive {
-			return "kept the goal"
-		}
-		g.Status = memory.GoalDropped
-		if plans, err := m.Store.Plans(ctx, true); err == nil {
-			for _, p := range plans {
-				if p.GoalID == g.ID {
-					if err := m.Store.EndPlan(ctx, p.ID, memory.PlanDropped, now.UTC()); err != nil {
-						m.Log.Error("end plan", "err", err)
-					}
-				}
-			}
-		}
-	default:
-		return "nothing to do"
-	}
-	if err := m.Store.SaveGoal(ctx, *g); err != nil {
-		return "saving the goal failed: " + err.Error()
-	}
-	if g.Status == memory.GoalActive {
-		m.EnsurePlans(ctx, now)
-		return "set the goal: " + g.Text
-	}
-	return "goal " + g.Status + ": " + g.Text
 }
 
 func (m *Mind) settleCall(ctx context.Context, c memory.Call, ending string) {
@@ -443,39 +324,6 @@ func (m *Mind) approvalCall(ctx context.Context, a memory.Approval, now time.Tim
 	if _, err := m.Store.AnswerCall(ctx, c, false); err != nil {
 		m.Log.Error("answer call", "err", err)
 	}
-}
-
-// goalCall returns false if calls are off, so the review does it itself.
-func (m *Mind) goalCall(ctx context.Context, typ string, g memory.Goal, why string, confidence float64, now time.Time) bool {
-	if !m.Calls.On {
-		return false
-	}
-	var (
-		situation string
-		options   []string
-	)
-	switch typ {
-	case memory.CallNewGoal:
-		situation = fmt.Sprintf("In my weekly review I want to set a new goal: %s (done when: %s; due %s)", g.Text,
-			orDefault(g.DoneWhen, "not said"), g.Due.In(m.Zone).Format("2 Jan"))
-		options = []string{"Set it", "Not now"}
-	case memory.CallDropGoal:
-		situation = fmt.Sprintf("In my weekly review I want to drop my goal: %s", g.Text)
-		options = []string{"Drop it", "Keep going"}
-	default:
-		return false
-	}
-	c, ok := newCall(typ, memory.CallBefore, situation, options, 0, why, confidence, now)
-	if !ok {
-		return false
-	}
-	c.Ref, c.Stakes, c.Reversible = g.ID, memory.StakesMedium, typ == memory.CallNewGoal // a set goal can be dropped; a dropped one's plan is gone
-	if err := m.Store.SaveCall(ctx, c); err != nil {
-		m.Log.Error("save call", "err", err)
-		return false
-	}
-	m.changed.Store(true)
-	return true
 }
 
 func (m *Mind) disagreementsNote(ctx context.Context, now time.Time) (string, map[string]string) {
@@ -517,92 +365,6 @@ func (m *Mind) ownerName(ctx context.Context) string {
 	return "your owner"
 }
 
-const (
-	lookBackAfter     = 2 * 24 * time.Hour
-	lookBackPerReview = 10
-)
-
-// lookBackTypes are the calls worth looking back on: its own decisions, not
-// approvals (what happened after those is the owner's doing).
-var lookBackTypes = []string{memory.CallFocus, memory.CallStart, memory.CallNewGoal, memory.CallDropGoal}
-
-var outcomesFormat = map[string]any{"type": "array", "items": map[string]any{
-	"type": "object", "additionalProperties": false, "required": []string{"call_id", "outcome", "verdict", "note"},
-	"properties": map[string]any{
-		"call_id": map[string]any{"type": "string"},
-		"outcome": map[string]any{"type": "string", "enum": memory.Outcomes},
-		"verdict": map[string]any{"type": "string", "enum": memory.Verdicts,
-			"description": "good_call: a good decision that went well; lucky: went well despite the decision; unlucky: a good decision that went badly anyway; bad_call: went badly because of the decision"},
-		"note": map[string]any{"type": "string", "description": "what actually happened, in a sentence, from what you made and lived"},
-	},
-}}
-
-// done is what a call led it to do: its pick, or for a before-call the
-// owner's choice when they gave one.
-func done(c memory.Call) string {
-	if c.Mode == memory.CallBefore && c.Agreed != nil {
-		if c.OwnerPick >= 0 && c.OwnerPick < len(c.Options) {
-			return c.Options[c.OwnerPick]
-		}
-		return c.OwnerChoice
-	}
-	return c.Options[c.Pick]
-}
-
-func (m *Mind) lookBackNote(ctx context.Context, now time.Time) (string, []memory.Call) {
-	if !m.Calls.On {
-		return "", nil
-	}
-	calls, err := m.Store.CallsToLookBack(ctx, lookBackTypes, now.Add(-2*reviewWindow), now.Add(-max(3*time.Hour, m.paced(lookBackAfter))),
-		lookBackPerReview)
-	if err != nil || len(calls) == 0 {
-		return "", nil
-	}
-	owner := m.ownerName(ctx)
-	var b strings.Builder
-	b.WriteString("\n\nCalls of yours to look back on (by call id): how did each turn out, from what you made and lived since? Judge the decision apart from the luck.")
-	for _, c := range calls {
-		fmt.Fprintf(&b, "\n- [call %s] %s, %s: you did %q.", c.ID, c.CreatedAt.In(m.Zone).Format("Mon 2 Jan"),
-			strings.TrimSuffix(c.Situation, "."), done(c))
-		if c.Agreed != nil && !*c.Agreed {
-			theirs := c.OwnerChoice
-			if c.OwnerPick >= 0 && c.OwnerPick < len(c.Options) {
-				theirs = c.Options[c.OwnerPick]
-			}
-			fmt.Fprintf(&b, " %s would have chosen %q.", owner, theirs)
-		}
-	}
-	return b.String(), calls
-}
-
-func (m *Mind) lookBack(ctx context.Context, calls []memory.Call, outcomes []callOutcome, now time.Time) []string {
-	byID := map[string]memory.Call{}
-	for _, c := range calls {
-		byID[c.ID.String()] = c
-	}
-	var changes []string
-	for _, o := range outcomes {
-		c, ok := byID[strings.TrimSpace(o.CallID)]
-		if !ok || !slices.Contains(memory.Outcomes, o.Outcome) || !slices.Contains(memory.Verdicts, o.Verdict) {
-			continue
-		}
-		if ok, err := m.Store.SetOutcome(ctx, c.ID, o.Outcome, o.Verdict, strings.TrimSpace(o.Note), memory.OutcomeBySelf, now.UTC()); err != nil || !ok {
-			continue
-		}
-		changes = append(changes, fmt.Sprintf("%s: %s (%s)", c.Type, strings.ReplaceAll(o.Outcome, "_", " "), strings.ReplaceAll(o.Verdict, "_", " ")))
-	}
-	return changes
-}
-
-type callOutcome struct {
-	CallID  string `json:"call_id"`
-	Outcome string `json:"outcome"`
-	Verdict string `json:"verdict"`
-	Note    string `json:"note"`
-}
-
-// approvalStakes: a message sent can't be unsent, a promise is hard to take
-// back, a work can come off the page, a dream can change again.
 func approvalStakes(class action.Class) (string, bool) {
 	switch class {
 	case action.ReachOut:
@@ -611,8 +373,6 @@ func approvalStakes(class action.Class) (string, bool) {
 		return memory.StakesMedium, false
 	case action.Publish:
 		return memory.StakesMedium, true
-	case action.Dream:
-		return memory.StakesHigh, true
 	case action.Spend, action.ExternalMessage:
 		return memory.StakesHigh, false
 	}

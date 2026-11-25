@@ -298,3 +298,30 @@ func (s *fakeStore) PerceptTopic(_ context.Context, id ulid.ULID) (string, error
 	p, _ := find(s.percepts, func(p perception.Percept) bool { return p.ID == id })
 	return p.Topic, nil
 }
+
+func (s *fakeStore) RecentApprovals(_ context.Context, limit int) ([]memory.Approval, error) {
+	return keep(s.approvals, limit, func(memory.Approval) bool { return true }), nil
+}
+
+func (s *fakeStore) Morning(_ context.Context, day string) (memory.Morning, bool, error) {
+	mo, ok := s.mornings[day]
+	return mo, ok, nil
+}
+
+func (s *fakeStore) SaveMorning(_ context.Context, mo memory.Morning) error {
+	if s.mornings == nil {
+		s.mornings = map[string]memory.Morning{}
+	}
+	if was, ok := s.mornings[mo.Day]; ok {
+		mo.PreparedAt, mo.SentAt = was.PreparedAt, was.SentAt
+	}
+	s.mornings[mo.Day] = mo
+	return nil
+}
+
+func (s *fakeStore) MorningSent(_ context.Context, day string, at time.Time) error {
+	mo := s.mornings[day]
+	mo.SentAt = at
+	s.mornings[day] = mo
+	return nil
+}

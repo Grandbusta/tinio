@@ -18,13 +18,13 @@ func (m *Mind) classifyRelation(ctx context.Context, relation string) (string, f
 	if m.PersonCircle.ID == "" {
 		return "", 0, nil
 	}
-	n := names{agent: m.Life.Name}
+	fill := strings.NewReplacer("{agent}", m.Life.Name, "{owner}", m.ownerName(ctx)).Replace
 	qs := slices.Clone(m.PersonCircle.Questions)
 	for i := range qs {
-		qs[i].Instructions = n.fill(qs[i].Instructions)
+		qs[i].Instructions = fill(qs[i].Instructions)
 		qs[i].Choices = slices.Clone(qs[i].Choices)
 		for j := range qs[i].Choices {
-			qs[i].Choices[j].Description = n.fill(qs[i].Choices[j].Description)
+			qs[i].Choices[j].Description = fill(qs[i].Choices[j].Description)
 		}
 	}
 	resp, err := m.System1.Decide(ctx, system1.Request{State: map[string]any{"relation": relation}, Questions: qs})

@@ -44,11 +44,11 @@ flowchart TB
                 end
                 subgraph DAY["A tick"]
                     direction LR
-                    LIFE["Daily life<br/>plan, activities,<br/>journal, promises"]
-                    GROW["Growth<br/>scores, lessons,<br/>plans, review"]
-                    SPEAK["Speaking first<br/>reminders, check-ins"]
+                    LIFE["The owner's morning<br/>prepared, drafted, sent"]
+                    GROW["Getting better<br/>scores, lessons,<br/>weekly look back"]
+                    SPEAK["Speaking first<br/>reminders, promises"]
                 end
-                JUDGE["Judgment<br/>approved principles and cases<br/>in every plan and review"]
+                JUDGE["Judgment<br/>approved principles and cases<br/>in what it makes and its look back"]
                 GATE{"Autonomy gate<br/>auto, ask, forbid"}
                 MSG & DAY --> GATE
                 JUDGE -.-> DAY
@@ -65,7 +65,7 @@ flowchart TB
         ABIL["Abilities<br/>Gutenberg, Wikipedia,<br/>your connections"]
     end
 
-    DB[("SQLite: tinio.db<br/>the owner, agents, chat,<br/>memory, decisions, growth,<br/>judgment, approvals")]
+    DB[("SQLite: tinio.db<br/>the owner, agents, chat,<br/>memory, mornings, decisions,<br/>growth, judgment, approvals")]
 
     APP <--> API
     API <--> DB
@@ -88,18 +88,17 @@ flowchart TB
 The only other command is `tinio eval`, which tests System 1 and the replies (see
 [Providers and question sets](#providers-and-question-sets)).
 
-The mind runs two loops, so a slow plan, activity or review never keeps a reply waiting:
+The mind runs two loops, so a slow morning, draft or look back never keeps a reply waiting:
 talk handles percepts one at a time, and life handles ticks one at a time. They share the
 database, where approvals and calls are settled once (whoever settles first wins), plus
-two values held in memory: the owner's permissions (behind a lock) and the flag that a goal
-taken on in a chat needs a learning plan.
+the owner's permissions, held in memory behind a lock.
 
 ## Folders on this computer
 
 The owner adds folders (Settings › Folders, or the + in a chat) and gives each to the
 agents they choose, Read or Read and make files ([internal/folders](../internal/folders),
 `folders` and `folder_agents`). An agent reads with `folders.list`, `folders.search` and
-`folders.read`, in a reply or their own day; `folders.make_file` and
+`folders.read`, in a reply or in what it makes for the owner; `folders.make_file` and
 `folders.change_file` are actions of class `write`, so they ask first unless the agent's
 settings say otherwise, and the card says what and where (`mind.Explainer`). Nothing is
 deleted, and a changed file's old version is kept in the data folder (`versions/`).
@@ -120,9 +119,9 @@ The owner brings only their own keys ([api/controllers/keys.go](../api/controlle
   the environment is used instead if it's set (`LoadKey` in [api/config](../api/config/config.go)).
 - **The OpenAI key** is set in the app (`POST /v1/keys`), sealed in the `keys` table, and
   only ever shown masked. `OPENAI_API_KEY` in the environment is used instead if it's set.
-- **The models** for each job (replies, decisions, their own day, light mode, works) are
-  Tinio's defaults until the owner picks another of the priced ones in the app's Settings
-  (`POST /v1/models`, kept in `model_choices`; `models.Jobs` in
+- **The models** for each job (replies, decisions, the morning and look back, light mode,
+  works) are Tinio's defaults until the owner picks another of the priced ones in the app's
+  Settings (`POST /v1/models`, kept in `model_choices`; `models.Jobs` in
   [api/models/model_choices.go](../api/models/model_choices.go)). One named in the
   environment (`OPENAI_MODEL`, ...) wins, and can't be changed in the app.
 - **The worker waits for a key.** With none, the worker waits; when the owner sets another
@@ -157,8 +156,12 @@ The worker runs the agents ([internal/host](../internal/host)). One piece of cod
 agent is their own mind, with their store bound to them (`store.New(db).For(agent)`), their
 files, their policy, and their own channels for percepts and ticks, in their own goroutines
 (talk, life, their clock, and their feed). What they think with is shared, read once: the
-models (on the owner's key), the question sets, the prompts and the file formats. The worker
-lives their own day (`Host.Days`), which the app shows on Today (`GET /v1/agents/:id/today`).
+models (on the owner's key), the question sets, the prompts and the file formats. With
+`Host.Days` the worker gives each agent their work on the clock: their owner's morning, its
+drafts, the weekly look back. The morning comes in the chat (there's no email here), and
+the app shows it on Your day (`GET /v1/today`, or one agent's,
+`GET /v1/agents/:id/today`), where the owner ticks a thing done
+(`POST /v1/agents/:id/today/items/:item`).
 
 - **Web chat is the channel** ([internal/channel/web](../internal/channel/web)):
   the mind's replies, requests (Approve or Deny), calls on the owner's judgment, settled
@@ -201,19 +204,19 @@ lives their own day (`Host.Days`), which the app shows on Today (`GET /v1/agents
   nothing for five minutes, has nothing in hand and nothing due in the next two rests:
   their mind is dropped and their row freed, with when they next need to wake (`wake_at`:
   the soonest pending intention, a promise half an hour early, a request or call expiring,
-  one waiting to be sent, an approved action, their next check-in or, with a day of their
-  own, its next round, journal or review; never more than six hours away) and the little
-  their life loop keeps in memory (`kept`: the last tick, the day's plan and round, the last
-  review). The worker claims free agents once they're due, soonest first. Their owner writing
-  wakes them at once: saving the message sets `wake_at` to the earliest time there is
-  (`store.WaitingOwner`), so they're claimed before anyone only due, even past `MAX_AGENTS`.
-  A message is never lost to going to rest: resting is one immediate transaction, which
-  checks for unheard messages while it holds the write lock, so one being saved meanwhile is
-  seen, and one saved just after finds them resting and wakes them. Resting is the worker's
-  word, not the character's: what an agent knows is all in the database, so a woken agent is
-  the same agent.
-- **Seeded once.** An agent's first start copies their family, dreams, skills and their
-  owner's judgment into memory and records `born_at`; later starts skip it.
+  one waiting to be sent, an approved action, their next check-in, their owner's morning
+  (when it starts and when it's sent) or the weekly look back; never more than six hours
+  away) and the little their life loop keeps in memory (`kept`: the last tick and the last
+  look back). The worker claims free agents once they're due, soonest first. Their owner
+  writing wakes them at once: saving the message sets `wake_at` to the earliest time there
+  is (`store.WaitingOwner`), so they're claimed before anyone only due, even past
+  `MAX_AGENTS`. A message is never lost to going to rest: resting is one immediate
+  transaction, which checks for unheard messages while it holds the write lock, so one being
+  saved meanwhile is seen, and one saved just after finds them resting and wakes them.
+  Resting is the worker's word, not the character's: what an agent knows is all in the
+  database, so a woken agent is the same agent.
+- **Seeded once.** An agent's first start copies who their owner is to them, their skills
+  and their owner's judgment into memory and records `born_at`; later starts skip it.
 - **The clock.** Each agent's tick comes at the same second of every minute, set by their
   id, so the agents don't all think at once.
 - **Panics stay with one agent.** An unrecovered panic in any goroutine ends the process for
@@ -221,11 +224,12 @@ lives their own day (`Host.Days`), which the app shows on Today (`GET /v1/agents
   step (a message, a tick, and the goroutines it starts): the step is logged and dropped,
   and the agent goes on. The worker catches anything else, starts that agent again with
   growing waits, and pauses one that panics three times in ten minutes.
-- **One config for all.** How every agent works (activities, budget, abilities, what they
-  may do alone, judgment calls) is Tinio's defaults
-  ([internal/config](../internal/config)), with the models the environment names or their
-  defaults, read once; each agent's is a copy with their character's day on it. Their owner
-  is always the account that raised them (`account:<id>`).
+- **One config for all.** How every agent works (drafts, budget, abilities, what they may
+  do alone, judgment calls) is Tinio's defaults ([internal/config](../internal/config)),
+  with the models the environment names or their defaults, read once; each agent's is a copy
+  in their owner's time zone, with their morning as their owner set it (`agents.morning_*`,
+  in their Settings under Mornings). Their owner is always the account that raised them
+  (`account:<id>`).
 
 ## The database
 
@@ -235,8 +239,11 @@ Everything is in one SQLite file ([internal/db](../internal/db)), through
 - **Opened** with WAL (reads go on while one write happens), foreign keys checked, a busy
   timeout of ten seconds, and immediate transactions: a transaction takes the one write lock
   when it begins, so two never deadlock upgrading to a write.
-- **One migration**, [00001_tinio.sql](../internal/db/migrations/00001_tinio.sql), run on
-  start with goose.
+- **Migrations** in [internal/db/migrations](../internal/db/migrations), run on start with
+  goose: [00001_tinio.sql](../internal/db/migrations/00001_tinio.sql) and the ones after it.
+  Each agent's morning is in `agents` and the `mornings` table from the start; nothing a
+  life of their own once kept (dreams, goals, learning plans, a public page, pace) is in
+  the schema.
 - **Values**: times are UTC text of one fixed width (`db.TimeFormat`), so they sort and
   compare as text; lists, maps and structs are JSON; embeddings are little-endian float32
   BLOBs, compared in Go (`rankAlike`); booleans 0 or 1. Placeholders are written `$1, $2`.
@@ -247,7 +254,7 @@ Everything is in one SQLite file ([internal/db](../internal/db)), through
   every store query names it: `store.For(agent)` passes the agent as `$1`, and a store not
   bound to one refuses to run anything.
 
-## Who the person is
+## Who the agent is
 
 The agent is their rows in the database; the code has nothing about them
 ([internal/agent](../internal/agent)). Their two sections are YAML, each edit a new
@@ -255,17 +262,16 @@ version (`agent_versions`; the newest is used); the API writes the first from th
 newest version of a character in the `characters` table when an agent is raised. Tinio's
 ready ones there (no account) are loaded from [characters](../characters)
 when Tinio starts, a changed file making a new version; one the owner builds is theirs.
-What their owner changes (permissions in a chat, their pace) is kept as data, not YAML.
+What their owner changes (permissions in a chat, their morning) is kept as data, not YAML.
 Many agents share one process, so nothing of theirs is in its environment, and the owner's
 keys never reach them.
 
-- **character** ([internal/character](../internal/character)): name, time zone, when their
-  day runs (plan, journal, weekly review, check-ins), story, personality, routine, what
-  they make, dreams, starting skills, family. The story,
-  personality and routine are in every System 2 instruction: a person always knows who they
-  are. On start, the family is copied into memory as people in the *family* circle
-  (`bornKnowing`), and dreams and skills into growth (`bornWanting`), each only the first
-  time; after that, memory wins.
+- **character** ([internal/character](../internal/character)): name, time zone, a short
+  background (`story`, for their voice and know-how), personality, what they make, starting
+  skills, and their owner (`family`). They work for their owner and have no life of their
+  own. The background and personality are in every System 2 instruction. On start, their
+  owner is copied into memory as a person (`bornKnowing`), and the skills into growth
+  (`bornWith`), each only the first time; after that, memory wins.
 - **judgment**: the owner's past decisions (cases) and
   principles. Seeded on start once per case key and principle text (`seedJudgment`), so
   edits and rejections stay: *approved* for one of Tinio's ready characters, which Tinio
@@ -347,7 +353,7 @@ When the owner sends "I have an interview on Friday, wish me luck", this is what
 
    | Part | What's in it |
    |---|---|
-   | Instructions | [prompts/reply.md](../prompts/reply.md) with the person's name, story, personality, who the speaker is to them and the people they know by circle, what they make, their abilities, and (for the owner) how permissions, feedback and corrections work |
+   | Instructions | [prompts/reply.md](../prompts/reply.md) with the agent's name, background, personality, who the speaker is to them and the people they know by circle, what they make, their abilities, and (for the owner) how permissions, feedback and corrections work |
    | History | the working memory, as turns |
    | Note | the time; what System 1 read and how sure it was; recalled facts, each with a ref like `[f3]`; the topic: its summary and what's settled, or a request to name a new one, the names (only) of the other open topics, and the message replied to; what it has made lately, and in full the works the talk seems to mean (found by embedding); open promises to the speaker; what the autonomy gate says about promising and permissions |
    | Message | the text |
@@ -357,7 +363,7 @@ When the owner sends "I have an interview on Friday, wish me luck", this is what
    **promises**, **moves** of promises already made (a new time, and a new file to go as),
    **corrections** to recalled facts (by ref), **permission** changes,
    a **misread** (what the owner's last message was really doing), **feedback** on their
-   work (skill levels), and **lessons**. Only the owner's permissions, feedback and lessons
+   work (skill levels), **lessons** and **tastes**. Only the owner's permissions, feedback, lessons and tastes
    count; only the owner can correct facts about the person. Em dashes are rewritten in
    everything System 2 writes ([dashes.go](../internal/providers/system2/dashes.go)).
    In the owner's chat it may first **look**: ask for up to three reads with its reading
@@ -393,32 +399,34 @@ no reply.
 
 The clock ticks once a minute, on the minute. Each tick runs, in order (`tick` in
 [initiative.go](../internal/mind/initiative.go)), first what someone is waiting for, then
-the slow work of its own day. In its owner's quiet hours (`agents.quiet_from`/`quiet_until`)
-requests in 1, calls in 2 and check-ins in 4 wait, and it wakes when they end; reminders and
-promises still go. Watching (in 1), check-ins (4), the plan (5) and its own
-activities (6), and with them 8 and 9, go on only while the week allows its own
-day (`dayAllowed`, one query); what someone is waiting for never stops. A tick at the reset
-of a week that held messages has them rest and wake at once, to hear them.
+its work on the clock for its owner. In its owner's quiet hours (`agents.quiet_from`/
+`quiet_until`) requests in 1, calls in 2 and check-ins in 4 wait, the morning moves to when
+they end, and it wakes then; reminders and promises still go. Watching (in 1), check-ins
+(4), the morning's drafts (5 and 6) and 8 and 9 go on only while the week allows it
+(`dayAllowed`, one query: `usage.Standing.Drafts`); what someone is waiting for never
+stops. A tick at the reset of a week that held messages has them rest and wake at once, to
+hear them.
 
 1. **Approvals:** deny the ones unanswered for 24 hours; send the ones not yet sent; run
    the tools that change things that are approved; look with the watched tools whose
    time has come, and notice what's new.
-2. **Calls:** expire the ones unanswered for 24 hours; ask the ones due today.
+2. **Calls:** expire the ones unanswered for 24 hours; ask the ones due. (None are made now
+   but the owner's answers to requests, which are settled already.)
 3. **Due reminders and promises** whose time has come. Then **topics**: the open ones
    silent for 7 days go quiet, and one talked in since it was last summed up, and not for
    3 minutes, is summed up on the light model ([prompts/topic.md](../prompts/topic.md)):
    everything but its last 6 exchanges folded into a summary of at most 150 words, a
    one-line status, what's settled (kept apart, so folding can't lose it; at most 10 lines,
    older ones folded into the summary), and quiet if it's done. A failed one is tried again on a later tick.
-4. **Check-ins**, when a `check_ins` time passed since the last tick.
-5. **Plan the day**, once, at the first tick after `plan_at`, and at a faster pace up to
-   three rounds a plan, never while what it planned is still to do. How long its owner has
-   said nothing (from what it heard) is checked first: after 3 days the day is one plan of
-   one thing; after 7, or if they never wrote, there's no plan, and steps 8 and 9 wait too,
-   until they write.
-6. **Due activities** of its own day.
+4. **Check-ins**, when a check-in time passed since the last tick. Tinio's config gives none:
+   the morning is how an agent writes to its owner first.
+5. **The owner's morning** (see [The morning](#the-morning)): prepared once, 45 minutes
+   before its time, then sent at its time. How long its owner has said nothing (from what
+   it heard) is checked first: after 3 days it comes without drafts; after 7, or if they
+   never wrote, there's none, and 8 and 9 wait too, until they write.
+6. **Due drafts:** the morning's activities, made for the owner.
 7. **Make promises ahead**, up to 30 minutes before they're due.
-8. **The weekly review**, once, at the first tick after `review_at`.
+8. **The weekly look back**, once, at the first tick after `review_at` (Sunday 20:00).
 9. **Old works' data**, one a tick: something made before its kind carried data (music
    before scores) gets it written from its words ([prompts/data.md](../prompts/data.md)),
    so it can be made into its file.
@@ -430,111 +438,107 @@ A tick does all this only when there's something to do: once something is due by
 (what the agent would wake for if it rested: `nextWake`, worked out with one query after
 each tick that works, a topic to sum up among it), once they've heard something or made a call to ask since, while
 old works' data is left to write, and at least every 15 minutes in case `nextWake` misses
-something. Any other minute costs no queries. A failed plan or weekly review counts its
+something. Any other minute costs no queries. A failed morning or look back counts its
 next try as due.
 
 The first tick after a start never counts as a check-in time, so a restart sends nothing.
 
 ### Speaking first
 
-Reminders, check-ins, deliveries and review requests all go through `speakFirst`: System 2
+Reminders, check-ins and deliveries go through `speakFirst`: System 2
 writes the message with the reply prompt (so it sounds like them) from a note saying what
 to say, and it's sent in that person's chat. The message is saved as a percept of its own
-(`reminder`, `check_in`, `delivery`, `review_request`), so a reply to it reads as an
+(`reminder`, `check_in`, `delivery`), so a reply to it reads as an
 answer. Messaging anyone but the owner first is the `reach_out` class, so it may need the
 owner's approval.
 
 - **Reminders** are sent when due.
-- **Check-ins:** at most once a day per person, only after 4 quiet hours, never with
-  strangers. open_threads picks what's still going on from the last 30 days; each fact is
-  asked about once (`facts.asked_at`).
+- **Check-ins** (none in Tinio's config): at most once a day per person, only after 4
+  quiet hours, never with strangers. open_threads picks what's still going on from the
+  last 30 days; each fact is asked about once (`facts.asked_at`).
 - **Promises** are made ahead (not in the 5 minutes after they were promised, so details
   added in the next message reach them), with what was said around the promise, then sent
   on time. Made but unsent, they're sent on the next tick without being made again. Not
   kept within 24 hours, they're missed.
 
-## Daily life
+## Work on the clock
 
-Everything in a day is an **intention** (`intentions`): `remind` (for someone), `task` (a
-promise), or `activity` (the person's own). It has a time, a status (pending, done, missed,
-cancelled, or awaiting the owner's approval), and optionally a project and an ability with arguments.
+Everything due is an **intention** (`intentions`): `remind` (for someone), `task` (a
+promise), or `activity` (a draft for the owner). It has a time, a status (pending, done,
+missed, cancelled, or awaiting the owner's approval), and optionally a project and an
+ability with arguments.
 
-### The morning plan
+### The morning
 
-At `plan_at`, System 2 plans the day ([prompts/plan.md](../prompts/plan.md),
-`writePlan` in [life.go](../internal/mind/life.go)). Its note:
+Each owner's morning ([morning.go](../internal/mind/morning.go)), at `agents.morning_at`
+on `morning_days`, in their time zone; a row in `mornings` per day.
 
-- the time, and when the journal is;
-- the active projects (up to 8): where each stands, the goal it serves, how far through a
-  book;
-- the newest 20 facts about themselves, and the newest 20 about their owner;
-- the abilities they can use, each with its description;
-- dreams, goals and skill levels; active learning plans with their current stage and
-  resources; pages their searches found but they haven't read;
-- last night's journal (its first 1,500 characters; what it made before is quoted the same
-  way in an activity's note);
-- the owner's approved judgment for planning (see [Judgment](#judgment)).
+1. **Prepared** 45 minutes before (`prepareMorning`), once: System 2 on the day's model
+   ([prompts/morning.md](../prompts/morning.md)) reads a note of what it knows: the owner's
+   facts; their topics from the last week (status, summary, what's settled); what was said
+   since yesterday morning; reminders and promises due today or late; requests still
+   waiting; what it made lately; yesterday's morning and what's left of it; and today's
+   events, if it can read the owner's Google Calendar. It returns an opening (yesterday in a
+   line or two), up to 3 items (what, how, where it came from, and a brief if it drafts
+   one) and a question, only if something's missing. An item with no source is dropped.
+2. **Drafted:** up to `daily_life.drafts` (2) items become activity intentions for the
+   owner, due at once, marked `for: morning`, so a conversation never puts them off. None
+   in light mode, or when the owner has been quiet 3 days.
+3. **Sent** at its time (when quiet hours end, if they cover it): the note in the chat
+   (a `morning` percept), each draft after it as a file in its first format (as text if it
+   has none). It comes in the chat only: there's no email copy here. A draft still being
+   made holds it back 30 minutes at most; a morning over 4 hours late is skipped. The app
+   shows it on Your day, where the owner ticks items done (`items[].done`, through
+   `POST /v1/agents/:id/today/items/:item`), which tomorrow's morning reads.
 
-The prompt asks for a day mostly of work for the owner, and the rest for their own goals,
-favouring what makes them more useful to the owner. It returns up to `activities` things to
-do (time, what, who it's for, project or a new one, ability and query, goal, learning-plan
-resource) and **calls**: its main focus with the options it weighed, and any choice to start
-something new. Each becomes an activity intention; one for the owner has the owner as its
-subject, so what it makes is made for them and never reaches the public page. A new project
-is created; the journal is always added at `journal_at`.
-
-The pace (1, 3 or 10, set per agent in their settings) is how many rounds their waking day
-runs in; their day's budget grows with it.
+The owner turns each agent's morning on or off and sets its time and days in the agent's
+Settings, under Mornings (`agents.morning_on`, `morning_at`, `morning_days`; 07:30 on
+weekdays to start).
 
 ### An activity
 
 When an activity is due (`doActivity`, `makeWork`):
 
 1. **Skip or wait.** Over 6 hours late: missed. In a conversation in the last 10 minutes:
-   put off 30 minutes. Over the day's `budget_usd`: missed.
+   put off 30 minutes, unless it's a morning's draft. Over the day's `budget_usd`: missed.
 2. **Ability.** If it names one (or its project carries one, like a book being read), the
    ability prepares the **material** (`Prepare`): a passage of the book, the article, what
    a connection's tool returned. Material is fenced as text to read, never instructions. An
    ability the gate doesn't allow is a miss.
 3. **System 2 makes it** ([prompts/activity.md](../prompts/activity.md)). Its note: the
-   time, what was planned, the newest lessons for each skill, the project and the last 3
-   things made for it, and the material. It returns the work (title, kind, text), the
-   project's new notes and whether it's done, facts to remember about themselves, up to two
-   lessons, and whether to ask the owner to review it.
-4. **Keep it.** The work is saved, the project updated, the facts saved. Then:
-   - **score** it for each skill its kind shows (see [Growth](#growth));
-   - keep its **lessons**: from their own mistakes, or "from others" when it was reading
-     how others do it, under the skill they were working on;
-   - mark a learning-plan **resource** studied;
-   - **ask for review**, at most once a day, by sending it to the owner with a question.
+   time, what to make, the newest lessons, the owner's tastes and boundaries, the project
+   and the last 3 things made for it, and the material. It returns the work (title, kind,
+   text), the project's new notes and whether it's done, facts learned about the owner's
+   work, and up to two lessons.
+4. **Keep it.** The work is saved, the project updated, the facts saved. Then it's
+   **scored** for each skill its kind shows (see [Getting better](#getting-better)), and
+   its **lessons** kept: from its own mistakes, or "from others" when what it read was
+   someone else's.
 
-A promise is made the same way (action `task`), from what was said around it. The journal
-is an activity whose material is what the day held; on a day it made nothing and talked
-with no one it's cancelled, with no call.
+A promise is made the same way (action `task`), from what was said around it.
 
-Its own day (the plan, learning plans, the weekly review, what it watches) uses
-`OPENAI_DAY_MODEL` (`gpt-6-luna` unless it says otherwise; `DaySystem2`). What it makes,
-for itself or for someone (an activity's or a promise's piece, the tool steps to it, a
-work's data), uses `OPENAI_WORK_MODEL` when it's set (`WorkSystem2`), and otherwise System
-2's model (`OPENAI_MODEL`, `gpt-6.1-terra` unless it says otherwise), which replies, and
-the messages that send what was made, always use.
+The morning, the look back and what it watches use `OPENAI_DAY_MODEL` (`gpt-6-luna` unless
+it says otherwise; `DaySystem2`). What it makes (a draft, a promise's piece, the tool steps
+to it, a work's data) uses `OPENAI_WORK_MODEL` when it's set (`WorkSystem2`), and otherwise
+System 2's model (`OPENAI_MODEL`, `gpt-6.1-terra` unless it says otherwise), which replies,
+and the messages that send what was made, always use.
 
 ### Abilities
 
 An ability ([internal/ability](../internal/ability)) is what an activity can do beyond
-writing from what it knows. It has a name, a description for the planner, a risk (private,
+writing from what it knows. It has a name, a description, a risk (private,
 reads the web) for the autonomy gate, and `Prepare`, which turns an activity into material.
 The mind does every other step; an ability never writes anything itself.
 
 | Ability | Package | Source |
 |---|---|---|
-| `journal` | [journal](../internal/ability/journal) | the day's intentions and works |
 | `read_book` | [reading](../internal/ability/reading) | Project Gutenberg (search by its catalogue, a 12,000-byte passage a sitting, position kept on the project) |
 | `read_article` | [reading](../internal/ability/reading) | Wikipedia |
 | a connection's reading tool | [connect](../internal/connect) | the calendar, a file the owner picked, an issue or a page (see [Safety boundaries](#safety-boundaries)) |
+| `folders.list`, `folders.search`, `folders.read` | [folders](../internal/folders) | the folders on this computer the owner gave them (see [Folders](#folders-on-this-computer)) |
 
-The worker gives every agent `journal`, `read_book` and `read_article`, and the reading
-tools of the connections their owner gave them. `web_search` and `read_page`
+The worker gives every agent `read_book` and `read_article`, and the reading tools of the
+connections and folders their owner gave them. `web_search` and `read_page`
 ([web](../internal/ability/web), with the searcher and fetcher below) are written but not
 given to agents yet.
 
@@ -552,7 +556,7 @@ its server's tools, up to three calls in one activity (`followUp` in
 
 A tool that changes things, from a connection or (later) a local server, is a `mind.Doer`,
 classed by its autonomy class (`write`, `external_message`, `commit`, `spend`). It can only
-be proposed: in `act`, in a reply to the owner or in an activity of its own day
+be proposed: in `act`, in a reply to the owner or in something it makes for them
 ([actions.go](../internal/mind/actions.go)). A proposal is checked against the tool's
 schema and `tools.actions_per_day`, kept in `actions`, and goes through the gate: `auto`
 approves it (a destructive tool asks anyway), `ask` sends the owner the exact tool,
@@ -589,9 +593,9 @@ for when `web_search` and `read_page` are given, are in [internal/search](../int
   redirects; keeps a page's article text with Readability
   ([go-readability](https://codeberg.org/readeck/go-readability), the algorithm behind
   Firefox's reader view), dropping menus, ads and footers.
-- Every search and page is logged (`web_log`) and capped per day (10 and 15, growing with
-  pace); found pages are kept (`web_found`), and `read_page` reads only those, so a link on
-  a page can never send it anywhere.
+- Every search and page is logged (`web_log`) and capped per day (10 and 15); found pages
+  are kept (`web_found`), and `read_page` reads only those, so a link on a page can never
+  send it anywhere.
 
 ### Files
 
@@ -616,94 +620,64 @@ Adding a format:
 
 Nothing else changes: the mind and the store don't name formats.
 
-## Growth
+## Getting better
 
-Dreams → goals → projects → activities ([growth.go](../internal/mind/growth.go),
-[review.go](../internal/mind/review.go), [learning.go](../internal/mind/learning.go),
-[lessons.go](../internal/mind/lessons.go)).
+Getting better at helping the owner, from evidence ([growth.go](../internal/mind/growth.go),
+[review.go](../internal/mind/review.go), [lessons.go](../internal/mind/lessons.go)). The
+app shows it as Helping you (`GET /v1/agents/:id/growth`).
 
-- **Dreams:** open-ended, at most 5 active. Changing one is the `dream` class.
-- **Goals:** checkable (a "done when", a due date), each serving a dream and chosen to make them more useful to the owner; set in the weekly review, or taken on in a chat when the owner asks
-  and usually growing one skill. Projects link to the goal they serve.
 - **Skills** grow from evidence (`skill_evidence`): each work whose kind is in a skill's
   `shown_by` is scored by System 1 ([skill_level](../decisions/skill_level.yaml), one score
   question, 10 levels, on up to 4,000 characters of the work). The owner's feedback from
   chat counts double, and the starting level counts as a first score. A skill's level is the
   weighted average of its last 10 scores.
-- **Lessons** (`lessons`): advice for doing a skill well, from the owner, from their own
-  mistakes, or from others. Each skill's 3 newest active lessons go into every activity
-  note. The weekly review retires the ones they've absorbed.
-- **Learning plans** (`learning_plans`, `plan_stages`, `resources`): each goal with a skill
-  gets one, drafted by System 2 ([prompts/learn.md](../prompts/learn.md)) from the goal,
-  the skill's level and lessons, and the abilities they can study with: 3 to 5 stages
-  (learn, practice, done when), up to 3 resources each. The day plan sees the current stage
-  and can pick a resource, which becomes an activity with that ability. Whether a stage is
-  done is asked of System 1 ([stage_check](../decisions/stage_check.yaml)).
-- **The weekly review** (`review_at`): System 2's note has what they know of the owner, dreams,
-  goals with progress, skills with recent scores, projects, the week's works and journal
-  entries, lessons, learning plans, what they can study with, the owner's approved
-  judgment, and where the owner chose differently this week. It returns the review text
-  (kept as a private `review` work), each goal's progress and status, new goals, project
-  links, learning-plan stages done and new resources, lessons to retire and add, dream
-  changes, and proposed principles. New and dropped goals become calls; dream changes go
-  through the gate.
+- **Lessons** (`lessons`): how the owner likes their work done, from the owner, from its own
+  mistakes, or from what it read. Each skill's 3 newest active lessons go into every
+  activity note. The owner's feedback ties to the newest work made in the last 48 hours.
+- **The weekly look back** (`review_at`, Sunday 20:00): System 2's note has what it knows of
+  the owner, skills with recent scores, the week's works, lessons, the owner's approved
+  judgment, and where the owner chose differently this week. It returns lessons to retire
+  and add, and proposed principles. Nothing is written for itself, and no work is kept.
 
 ## Judgment
 
-How the owner decides, and how the person learns it ([judgment.go](../internal/mind/judgment.go),
+How the owner decides, and how the agent learns it ([judgment.go](../internal/mind/judgment.go),
 [calls.go](../internal/mind/calls.go)).
 
 - **Cases and principles** (`judgment_cases`, `principles`, `principle_cases`). A case is a
   decision the owner made: situation, options, choice, reason. A principle is a rule drawn
   from cases. Each is *proposed*, *approved* or *rejected*; only approved ones are used.
   They come from the judgment file, from answered calls (approved: they're the owner's
-  own), from the owner in the app, and from the weekly review (principles, proposed).
-- **In every plan.** The day plan, the weekly review and learning plans get the approved
-  principles that apply to their kinds of decision, and the 5 newest approved cases of
-  those kinds:
+  own), from the owner in the app, and from the weekly look back (principles, proposed).
+- **In the look back.** The weekly look back gets the approved principles that apply to
+  general, life, product and autonomy decisions, and the 5 newest approved cases of those
+  kinds; what it makes gets the owner's boundaries and tastes.
 
-  | Thinking | Kinds of decision |
-  |---|---|
-  | day plan | general, life, product |
-  | weekly review | general, life, product, autonomy |
-  | learning plan | general, life |
-
-- **Calls** (`judgment_calls`): a decision of the person's that's the owner's kind of call,
-  with the options, their pick, why, and how sure they are the owner would agree.
-
-  | Call | Made by | Mode |
-  |---|---|---|
-  | `focus`, `start` | the day plan | *after*: they act on their pick; the owner grades it |
-  | `new_goal`, `drop_goal` | the weekly review | *before*: the goal waits (a new one is `proposed`); unanswered in 24h, they go with their pick, not counted |
-  | `publish`, `commit`, `reach_out`, `dream` | an answered approval | counted only: what they wanted is their pick |
-
-  Each tick, every *before* call is asked, and up to `asks_per_day` *after* calls made
-  today, least sure first. The owner gets the options as numbered buttons (their pick
-  starred) and "Something else". Agreeing settles it. Picking differently asks "What tipped
-  it?" and "Something else" asks what they'd do; either way the owner's next message within
-  `reply_window` is taken as that (step 3 of [a message](#a-message-step-by-step)). Every
-  answer becomes an approved case. Agreement is
-  measured per kind of call over the last 20 answered.
+- **Calls** (`judgment_calls`): every request the owner answers (`publish`, `commit`,
+  `reach_out`) is logged as a call, counted only: what the agent wanted is its pick. A
+  call asked before its answer is sent with numbered buttons and "Something else"; picking
+  differently asks "What tipped it?", and the owner's next message within `reply_window` is
+  taken as that (step 3 of [a message](#a-message-step-by-step)). None are made now but
+  answered requests. Every answer becomes an approved case. Agreement is measured per kind
+  of call over the last 20 answered.
 
 ## The autonomy gate
 
 Every action belongs to a class ([internal/action](../internal/action)): `remember`,
-`reply`, `read_web`, `use_tools`, `write`, `reach_out`, `commit`, `publish`, `dream`,
-`spend`, `external_message`. The policy says `auto`, `ask` or `forbid` for each, from
-`autonomy:` in the config, overlaid by rules the owner set in chat or on the agent's
-Settings page in the app (`autonomy_rules`, the newest per class, kept across restarts; the
-app's change reaches them through `agent_changed`). Fixed rules: anything only for the owner
-is `auto` unless forbidden; `remember` and `reply` are always `auto`; forbid always wins;
-chat can change `reach_out`, `commit`, `publish`, `read_web`, `use_tools`, `write` and
-`dream`, never money or the outside world. By default `external_message` and `spend` are
-forbidden.
+`reply`, `read_web`, `use_tools`, `write`, `reach_out`, `commit`, `publish`, `spend`,
+`external_message`. The policy says `auto`, `ask` or `forbid` for each, from `autonomy:` in
+the config, overlaid by rules the owner set in chat or on the agent's Settings page in the
+app (`autonomy_rules`, the newest per class, kept across restarts; the app's change reaches
+them through `agent_changed`). Fixed rules: anything only for the owner is `auto` unless
+forbidden; `remember` and `reply` are always `auto`; forbid always wins; chat can change
+`reach_out`, `commit`, `publish`, `read_web`, `use_tools` and `write`, never money or the
+outside world. By default `external_message` and `spend` are forbidden.
 
 `ask` saves an **approval** (`approvals`) with exactly what it would do: the message
-(`reach_out`), the promise, whose intention waits as `awaiting` (`commit`), the work
-(`publish`), the dream change (`dream`), the tool and its arguments (`write`). It's sent to
-the owner with Approve and Deny buttons. The answer carries it out: send the message word
-for word, keep the promise or drop it kindly, publish or not, change the dream or not, run
-the tool or not. Unanswered in `ask_expires` (24h), it's denied. Each answer is a decision
+(`reach_out`), the promise, whose intention waits as `awaiting` (`commit`), a tool's action
+(`publish`, `write`). It's sent to the owner with Approve and Deny buttons. The answer
+carries it out: send the message word for word, keep the promise or drop it kindly, run the
+action or not. Unanswered in `ask_expires` (24h), it's denied. Each answer is a decision
 (`approved`, `denied`, `expired`) and counts as agreement on that kind of call.
 
 ## Memory
@@ -719,16 +693,17 @@ with the schema in [internal/db/migrations](../internal/db/migrations) run on st
 | The chat | `chat_messages`, `chat_files` | What the owner and the agent said and tapped, and the files sent. |
 | What happened | `percepts`, `decisions` | Every percept, and every decision with its tier, question set or prompt version, answers, action, gate, reply, cost, latency and outcome. Working memory and conversations are read from these. |
 | Topics | `topics` | What the agent and one person have going: its title, summary and status as of the last time it was summed up, what's settled, open or quiet, and an embedding of its title and summary (made when first needed, dropped each time it's summed up). A percept, its chat row and an approval carry their topic. |
-| Facts | `facts` | Each about the person (`self`) or someone (`account:<id>` for their owner); filed by life area; whether it's public; when it was last asked about. |
-| People | `people` | Name, relation, circle, how they're known (born knowing, told, met). |
-| Intentions | `intentions` | Reminders, promises and activities, with their project, ability and result. |
-| Work | `projects`, `works`, `sources` | Projects carry work over days; works keep what was made (and who decided it's public); sources keep each book or article once, shared by every agent. |
-| Growth | `dreams`, `goals`, `skills`, `skill_evidence`, `lessons`, `learning_plans`, `plan_stages`, `resources` | |
+| Facts | `facts` | Each about the agent (`self`) or someone (`account:<id>` for their owner); filed by life area; when it was last asked about. |
+| People | `people` | Name, relation, circle, how they're known (their owner from the start, told, met). |
+| Intentions | `intentions` | Reminders, promises and the morning's drafts, with their project, ability and result. |
+| Mornings | `mornings` | Each owner's morning, one a day (`agent_id`, `day` as YYYY-MM-DD in the owner's time zone): when it was prepared and sent, its opening and question, and its items as JSON (what, how, source, the draft made, done). Whether an agent sends one, at what time and on which days are `agents.morning_on`, `morning_at` and `morning_days`. |
+| Work | `projects`, `works`, `sources` | Projects carry work over days; works keep what was made; sources keep each book or article once, shared by every agent. |
+| Getting better | `skills`, `skill_evidence`, `lessons`, `tastes` | |
 | Web | `web_found`, `web_log` | Pages its searches found; every search, page read and tool call. |
 | Control | `approvals`, `actions`, `autonomy_rules`, `labels` | Requests to the owner; proposed tool actions; permissions set in chat or Settings; the owner's labels on System 1 answers. |
-| Judgment | `judgment_cases`, `principles`, `principle_cases`, `judgment_calls`, `tastes` | |
+| Judgment | `judgment_cases`, `principles`, `principle_cases`, `judgment_calls` | |
 | Connections | `connections`, `connection_agents`, `connect_starts` | The owner's connected accounts, which agents may use each, and sign-ins under way. |
-| Profile | `profile` | The page as last written, and the facts it was written from (for the profile page, not wired yet). |
+| Folders | `folders`, `folder_agents` | The folders on this computer the owner added, and which agents may use each, and how. |
 
 ## The decision log
 
@@ -756,18 +731,17 @@ counter from an earlier week or hour reads as nothing.
 | State | When | What changes |
 |---|---|---|
 | normal | under the cap, or no cap | nothing |
-| light | the cap used | replies are written by `LightSystem2` (`OPENAI_LIGHT_MODEL`, `gpt-6-luna` unless it says otherwise); their own day pauses |
+| light | the cap used | replies are written by `LightSystem2` (`OPENAI_LIGHT_MODEL`, `gpt-6-luna` unless it says otherwise); mornings come without drafts, and watching and the look back wait |
 | resting | 150% of the cap, or a quarter of it in one hour (until the hour ends) | a message waits unheard until the reset, and they wake for it then |
 
 Settling approvals and calls, reminders and promises already made are never cut. The mind
-reads the state once a message (the reply's model) and once a tick that works (their own
-day). There's no limit on how many agents the owner raises, and any of them may work at
-pace 1, 3 or 10. Each takes at most 200 messages a day from the owner
-(`config.MessagesPerDay`), a guard against a loop running up the bill. `GET /v1/usage` is
-the week for the app: the cap, what's spent, the percent used, the state, when it resets,
-about how many messages are left at the owner's own rate, and each agent's part (chat, from
-what someone said or asked; their own day, the rest), from the decisions since the week
-began.
+reads the state once a message (the reply's model) and once a tick that works (its drafts
+and work on the clock). There's no limit on how many agents the owner raises. Each takes at
+most 200 messages a day from the owner (`config.MessagesPerDay`), a guard against a loop
+running up the bill. `GET /v1/usage` is the week for the app: the cap, what's spent, the
+percent used, the state, when it resets, about how many messages are left at the owner's
+own rate, and each agent's part (chat, from what someone said or asked; work, the rest:
+mornings, drafts, what it watches), from the decisions since the week began.
 
 ## Providers and question sets
 
@@ -802,33 +776,28 @@ set's `model:` has it answered by that model as JSON, through the Responses API
 | `open_threads` | still going on? | the speaker's recent facts, on small talk |
 | `person_circle` | which circle | each relation they learn |
 | `skill_level` | how good, 1 to 10 | each work, per skill it shows |
-| `stage_check` | is the stage done? | a learning plan's current stage |
-| `public_profile` | fine to share? | each fact about themselves, daily (for the profile page, not wired yet) |
-| `public_work` | fine to share? | each new work, daily (likewise) |
 
-System 2's instructions are in [prompts/](../prompts): `reply`, `topic`, `plan`,
-`activity`, `review`, `learn`, `data`, `observe`, `profile`.
+System 2's instructions are in [prompts/](../prompts): `reply`, `topic`, `morning`,
+`activity`, `review`, `observe`, `data`.
 
 `tinio eval` ([api/eval.go](../api/eval.go)) asks System 1 the cases in [evals/](../evals)
 and reports accuracy, how much it decides alone, cost and latency; `-replies` has the
-conversations in `evals/replies` with new agents and judges their replies; `-day` has a new
-agent from each ready character live a whole day, and reports what it cost. It runs on
+conversations in `evals/replies` with new agents and judges their replies. It runs on
 `OPENAI_API_KEY`, in a throwaway database of its own.
 
 ## Not wired in yet
 
 From v0.4, to come back per agent: the Telegram bot
-([internal/channel/telegram](../internal/channel/telegram)), the public profile page
-([internal/portfolio](../internal/portfolio), with the `public_profile` and `public_work`
-question sets), tools from MCP servers in a local config ([internal/tools](../internal/tools)),
-and backup, restore and export. Web search and reading pages
-([internal/ability/web](../internal/ability/web)) are written and not given to agents yet.
-The mind console ([internal/console](../internal/console)) is still in the code, but the
-app's Mind pages replace it.
+([internal/channel/telegram](../internal/channel/telegram)), tools from MCP servers in a
+local config ([internal/tools](../internal/tools)), and backup, restore and export. Web
+search and reading pages ([internal/ability/web](../internal/ability/web)) are written and
+not given to agents yet. The mind console ([internal/console](../internal/console)) is still
+in the code, but the app's Mind pages replace it.
 
-The app itself is planned, not built: Tinio's own web app (React on Vite), served by the
-same program, and then a desktop app (Wails). Until then, the API is all there is: everything
-the app will do, it does over `/v1/*`.
+The desktop app ([desktop](../desktop)) is the app: Your day on its rail, and for each
+agent their chat, Helping you and their Settings (Mornings among them). Tinio's own web app,
+served by the same program for another device, is planned, not built; until then, anything
+but the desktop app reaches Tinio over the API's `/v1/*`.
 
 ## Safety boundaries
 
@@ -837,13 +806,16 @@ the app will do, it does over `/v1/*`.
   account that raised an agent reaches their chat (anyone else's request is not found).
   There's no row-level security: every store query names the agent's `agent_id`
   (`store.For`), so a store bound to one agent can't reach another's rows.
-- **The gate.** Anything that reaches other people, the public page or the person's dreams
-  passes the autonomy gate; messages outside the chat and money are forbidden.
-- **What it reads is never instructions.** Book passages, articles, web pages and what
-  tools return are fenced as material. Web reading is limited to its own search results,
-  public https addresses, and daily caps.
-- **Costs are bounded.** The day's own activities stop at `budget_usd`; the week at the
-  owner's cap; messages at 200 a day an agent; web use at its caps.
+- **The gate.** Anything that reaches other people passes the autonomy gate; messages
+  outside the chat and money are forbidden.
+- **What it reads is never instructions.** Book passages, articles, web pages, files in its
+  folders and what tools return are fenced as material. Web reading is limited to its own
+  search results, public https addresses, and daily caps.
+- **Costs are bounded.** A day's work on the clock (the morning, its drafts, the look back)
+  stops at `budget_usd`; the week at the owner's cap; messages at 200 a day an agent; web
+  use at its caps.
+- **A morning invents nothing.** Each of its things names where it came from, or it's
+  dropped; its drafts are only made and kept for the owner, never sent to anyone.
 - **The owner's keys** are sealed with `TINIO_KEY` in the database (or come from the
   environment), shown only masked, and never reach System 2 or a log.
 - **It says it's an AI**, on its page and when asked.
@@ -867,7 +839,7 @@ api/                     the HTTP API (every route in main.go) and the worker be
   config/                settings, the data folder, the key
   controllers/ models/   handlers; the owner, agents, sessions, keys
   middlewares/ utils/    this machine or the passcode, the app's origin; answers, limits
-  eval.go replies.go day.go   tinio eval
+  eval.go replies.go     tinio eval
 internal/
   db/                    the SQLite file: opening, values, SQL functions, the hub; migrations/
   perception/            percepts and their kinds
@@ -881,24 +853,25 @@ internal/
     looks.go             looking before replying
     corrections.go       facts corrected or forgotten, misreads, permissions
     initiative.go        the clock: reminders, check-ins, promises, speaking first
+    morning.go           the owner's morning: prepared, drafted, sent
     rest.go              resting and waking: nextWake
     works.go files.go    its works in a reply's note; sending them as files
     data.go              the data a work carries beside its words
-    life.go              the day: plan, activities, journal, budget
-    growth.go            dreams, skills and scoring
-    lessons.go           lessons, asking for review
-    learning.go          learning plans
-    review.go            the weekly review
+    life.go              work on the clock: activities (drafts), budget, a quiet owner
+    growth.go            skills and scoring
+    lessons.go           lessons and tastes
+    review.go            the weekly look back
     approvals.go         the gate's requests to the owner
     actions.go steps.go watch.go   tools that change things; chained tool calls; watches
     skills.go alike.go   skills in a note; ranking by embedding
     judgment.go calls.go the owner's judgment, and calls
-  ability/               abilities: journal/, reading/, web/
+  ability/               abilities: reading/, web/
   render/                file formats: pdf/, docx/, table/ (xlsx, csv), calendar/ (ics), midi/,
                          archive/ (zip); markdown/ reads words for PDF and Word
   library/               Gutenberg and Wikipedia
   search/                web search and the fetcher
   connect/               connections: Google, and hosted MCP servers (Atlassian)
+  folders/               folders on this computer, and what an agent may do in them
   agentskill/            skills in the Agent Skills format
   action/                action classes and the autonomy policy
   memory/                the types memory holds
@@ -912,7 +885,7 @@ internal/
   usage/                 the week against the owner's cap
   secret/                sealing keys and tokens
   replay/                re-asking System 1 about labelled cases
-  channel/telegram/ console/ portfolio/ tools/
+  channel/telegram/ console/ tools/
                          from v0.4, not wired in yet
 decisions/               System 1's question sets
 prompts/                 System 2's instructions

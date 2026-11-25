@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/Grandbusta/tinio/internal/ability"
-	"github.com/Grandbusta/tinio/internal/ability/journal"
 	"github.com/Grandbusta/tinio/internal/ability/reading"
 	"github.com/Grandbusta/tinio/internal/agent"
 	"github.com/Grandbusta/tinio/internal/channel/web"
@@ -175,8 +174,8 @@ type shared struct {
 
 	incoming, followUp, lifeArea, personCircle questions.Set
 	factRelevance, openThreads, topicSort      questions.Set
-	skillLevel, stageCheck                     questions.Set
-	reply, topic                               mind.Prompt
+	skillLevel                                 questions.Set
+	reply, topic, morning                      mind.Prompt
 	day                                        mind.Day // only its prompts: the rest is each agent's
 	formats                                    *render.Set
 }
@@ -215,7 +214,6 @@ func loadShared(files fs.FS, models Models) (shared, error) {
 		{&sh.openThreads, "open_threads", factTemplate},
 		{&sh.topicSort, "topic", topicShaped},
 		{&sh.skillLevel, "skill_level", one(decision.QuestionScore)},
-		{&sh.stageCheck, "stage_check", one(decision.QuestionPredicate)},
 	} {
 		set, ok := sets[s.name]
 		if !ok {
@@ -230,9 +228,12 @@ func loadShared(files fs.FS, models Models) (shared, error) {
 	for _, p := range []struct {
 		to   *mind.Prompt
 		path string
-	}{{&sh.reply, cfg.Reasoning.Prompt}, {&sh.topic, cfg.Reasoning.TopicPrompt}, {&sh.day.PlanPrompt, dl.PlanPrompt}, {&sh.day.ActivityPrompt, dl.ActivityPrompt},
-		{&sh.day.ReviewPrompt, dl.ReviewPrompt}, {&sh.day.LearnPrompt, dl.LearnPrompt}, {&sh.day.DataPrompt, dl.DataPrompt},
-		{&sh.day.ObservePrompt, dl.ObservePrompt}} {
+	}{{&sh.reply, cfg.Reasoning.Prompt}, {&sh.topic, cfg.Reasoning.TopicPrompt}, {&sh.day.ActivityPrompt, dl.ActivityPrompt},
+		{&sh.day.ReviewPrompt, dl.ReviewPrompt}, {&sh.day.DataPrompt, dl.DataPrompt},
+		{&sh.day.ObservePrompt, dl.ObservePrompt}, {&sh.morning, dl.MorningPrompt}} {
+		if p.path == "" {
+			continue // not used
+		}
 		text, err := fs.ReadFile(files, p.path)
 		if err != nil {
 			return sh, fmt.Errorf("host: read prompt: %w", err)
@@ -283,19 +284,8 @@ func (h *Host) mind(ctx context.Context, r *runner) (m *mind.Mind, done func(), 
 	if err != nil {
 		return nil, nil, err
 	}
-	cfg := *h.shared.cfg // a copy: only its strings and the check-ins' slice change below
-	day := ag.Life.Day
-	cfg.Initiative.Timezone, cfg.Initiative.CheckIns = ag.Life.Timezone, day.CheckIns
-	for _, s := range []struct {
-		to   *string
-		from string
-	}{
-		{&cfg.DailyLife.PlanAt, day.PlanAt}, {&cfg.DailyLife.JournalAt, day.JournalAt}, {&cfg.DailyLife.ReviewAt, day.ReviewAt},
-	} {
-		if s.from != "" {
-			*s.to = s.from
-		}
-	}
+	cfg := *h.shared.cfg // a copy: only its time zone changes below
+	cfg.Initiative.Timezone = ag.Life.Timezone
 	zone, err := cfg.Initiative.Zone()
 	if err != nil {
 		return nil, nil, err
@@ -331,21 +321,22 @@ func (h *Host) mind(ctx context.Context, r *runner) (m *mind.Mind, done func(), 
 		}
 	}
 	sh := h.shared
-	var lived mind.Day // zero: no day of their own
+	var lived mind.Day // zero: nothing on the clock but what they're asked for
 	if h.Days {
 		lived = sh.day
-		dl := cfg.DailyLife
-		if lived.PlanAt, lived.JournalAt, err = dl.Times(); err != nil {
+		if lived.ReviewDay, lived.ReviewAt, err = cfg.DailyLife.ReviewTime(); err != nil {
 			return nil, nil, err
 		}
-		if lived.ReviewDay, lived.ReviewAt, err = dl.ReviewTime(); err != nil {
+		lived.BudgetUSD = cfg.DailyLife.BudgetUSD
+	}
+	var morning mind.Morning
+	if h.Days && r.row.morningOn {
+		if morning, err = h.morning(r.row, cfg.DailyLife.Drafts); err != nil {
 			return nil, nil, err
 		}
-		pace := max(r.row.pace, 1)
-		lived.MaxActivities, lived.BudgetUSD, lived.Pace = dl.Activities, dl.BudgetUSD*float64(pace), pace
 	}
 	log := h.log.With("agent", r.row.id)
-	abilities := []ability.Ability{journal.Journal{Store: st}}
+	var abilities []ability.Ability
 	if sh.models.Library != nil {
 		abilities = append(abilities, reading.Article{Library: sh.models.Library, Store: st}, reading.Book{Library: sh.models.Library, Store: st})
 	}
@@ -383,11 +374,12 @@ func (h *Host) mind(ctx context.Context, r *runner) (m *mind.Mind, done func(), 
 		LightSystem2: sh.models.Light,
 		Embedder:     sh.models.Embedder,
 		Incoming:     sh.incoming, FollowUp: sh.followUp, LifeArea: sh.lifeArea, PersonCircle: sh.personCircle,
-		FactRelevance: sh.factRelevance, OpenThreads: sh.openThreads, TopicSort: sh.topicSort, TopicPrompt: sh.topic, SkillLevel: sh.skillLevel, StageCheck: sh.stageCheck,
+		FactRelevance: sh.factRelevance, OpenThreads: sh.openThreads, TopicSort: sh.topicSort, TopicPrompt: sh.topic, SkillLevel: sh.skillLevel,
 		ReplyPrompt: sh.reply, RichChat: true, RecallCandidates: cfg.Memory.RecallCandidates,
 		Working:   mind.WorkingMemory{Turns: cfg.WorkingMemory.Turns, Window: cfg.WorkingMemory.Window},
 		Zone:      zone,
 		Day:       lived,
+		Morning:   morning,
 		CheckIns:  mind.CheckIns{Times: checkIns, Quiet: cfg.Initiative.Quiet},
 		Quiet:     quiet,
 		Abilities: ability.NewSet(abilities...),
@@ -397,4 +389,20 @@ func (h *Host) mind(ctx context.Context, r *runner) (m *mind.Mind, done func(), 
 		Calls:    mind.Calls{On: cfg.Judgment.Calls, AsksPerDay: cfg.Judgment.AsksPerDay, ReplyWindow: cfg.Judgment.ReplyWindow},
 		Log:      log,
 	}), done, nil
+}
+
+// morning is r's morning as their owner set it. It comes in the chat only:
+// there's no mail here to send a copy with.
+func (h *Host) morning(r agentRow, drafts int) (mind.Morning, error) {
+	at, err := time.Parse("15:04", r.morningAt)
+	if err != nil {
+		return mind.Morning{}, fmt.Errorf("morning time: %w", err)
+	}
+	mo := mind.Morning{Prompt: h.shared.morning, At: at.Sub(time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC)), Drafts: drafts}
+	for _, c := range r.morningDays {
+		if c >= '0' && c <= '6' {
+			mo.Days[c-'0'] = true
+		}
+	}
+	return mo, nil
 }

@@ -21,7 +21,6 @@ const (
 	ReachOut        Class = "reach_out" // message someone first: reminders, check-ins, deliveries
 	Commit          Class = "commit"
 	Publish         Class = "publish"
-	Dream           Class = "dream"
 	Spend           Class = "spend"            // spend money (later)
 	ExternalMessage Class = "external_message" // email, a post or a DM outside the chat, through a tool
 )
@@ -43,7 +42,7 @@ type Policy struct {
 func Defaults() map[Class]Verdict {
 	return map[Class]Verdict{
 		Remember: Auto, Reply: Auto, ReadWeb: Auto, UseTools: Auto,
-		ReachOut: Ask, Commit: Ask, Publish: Ask, Dream: Ask, Write: Ask,
+		ReachOut: Ask, Commit: Ask, Publish: Ask, Write: Ask,
 		ExternalMessage: Ask, Spend: Forbid,
 	}
 }
@@ -70,7 +69,7 @@ func (p Policy) Check(class Class, person string) Verdict {
 // ByChat reports whether the owner may change class by telling the agent.
 func ByChat(c Class) bool {
 	switch c {
-	case ReachOut, Commit, Publish, ReadWeb, UseTools, Write, Dream:
+	case ReachOut, Commit, Publish, ReadWeb, UseTools, Write:
 		return true
 	}
 	return false

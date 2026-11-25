@@ -68,17 +68,16 @@ func TestRepliesKnowItsOwnWorks(t *testing.T) {
 	addWork(s, "Lagos After Rain", "beat_idea", "82 BPM, D minor. A soft beat, kick on one.", "", now.Add(-3*time.Hour))
 	addWork(s, "Money Notes", "notes", "Saving money each month.", "", now.Add(-2*time.Hour))
 	addWork(s, "Ada's Song", "lyrics", "A song for Ada.", "test:ada", now.Add(-time.Hour))
-	addWork(s, "Diary", "journal", "Tired today, beat.", "", now.Add(-time.Minute))
 
 	m.handle(context.Background(), percept("1", "Can you send me that beat you made?"))
 	note := s2.requests[0].Note
 	if !strings.Contains(note, "Money Notes") || !strings.Contains(note, "Lagos After Rain") {
 		t.Errorf("no list of its works:\n%s", note)
 	}
-	if strings.Contains(note, "Ada's Song") || strings.Contains(note, "Diary") {
-		t.Errorf("brought up someone else's work or its journal:\n%s", note)
+	if strings.Contains(note, "Ada's Song") {
+		t.Errorf("brought up someone else's work:\n%s", note)
 	}
-	if !strings.Contains(note, "What this seems to be about, exactly as you made it:\n\n[w2] \"Lagos After Rain\" (Tue 27 Oct 11:16, beat idea, your own):\n<<<WORK\n82 BPM, D minor.") ||
+	if !strings.Contains(note, "What this seems to be about, exactly as you made it:\n\n[w2] \"Lagos After Rain\" (Tue 27 Oct 11:16, beat idea, made for your owner):\n<<<WORK\n82 BPM, D minor.") ||
 		strings.Contains(note, "Saving money each month") {
 		t.Errorf("the work meant isn't given in full, or another is:\n%s", note)
 	}

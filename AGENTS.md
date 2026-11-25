@@ -6,7 +6,7 @@
 > with the platform, and a fix is ported by hand when it's wanted. Done: SQLite, one
 > program, no sign-in on this machine, the key made on first run, keys from the app, a
 > weekly cap. Next, per the plan: its own web app (React on Vite) served by the program;
-> Telegram, local tools, backup and the v0.4 importer back, per agent; the desktop app on
+> Telegram, local tools and backup back, per agent; the desktop app on
 > Wails. The v0.4 commands (`tinio new`, `agent`, `secret`, `doctor`, `backup`) are in git
 > history until then.
 
@@ -17,18 +17,21 @@ and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## What Tinio is
 
-Tinio raises an agent with character: inside, a person with a life of their own (a
-story, a family, dreams), who plans their days, makes things in writing (and music, as
-MIDI), reads, keeps a journal, grows skills from evidence, talks with their owner in
-the app's chat, and learns how the owner decides. What reaches other people waits for the
-owner's approval. They always say plainly that they're an AI.
+Tinio raises an agent with character that works for its owner. They have a voice and a
+short background (what they know, how they talk), but no life of their own: no day,
+goals, dreams or journal. Everything they do is for their owner: they talk with them in
+the app's chat, keep promises and reminders, make things in writing (and music, as MIDI),
+and each morning send their owner's few things for the day with drafts already made.
+They get better at helping from evidence (the owner's thumbs, edits and calls) and learn
+how the owner decides. What reaches other people waits for the owner's approval. They
+always say plainly that they're an AI.
 
 **The words.** What people see and type says *agent* and *character*: "Raise an agent.
 Put it to work." The sections are `character` and `judgment`; the ready ones are
 in `characters/`; the packages are `agent` and `character`.
-Only the prompts stay a *person*, and they must: their person framing is what makes the
-character. The mind keeps its own words for how they live (the life loop, `Life` on its
-config). Never call them an "AI
+The prompts speak to them as a character with a voice of their own, working for their
+owner: that framing is what makes the character. The mind keeps its own words for its
+parts (the life loop, `Life` on its config). Never call them an "AI
 person", "assistant", "companion" or "clone" in what users read.
 
 It is one Go program on its owner's own machine: the API (Gin), which the app talks to,
@@ -46,11 +49,11 @@ as **Tinio**, and `tinio` for the command and in code.
 | `api/` | The API (every route in `api/main.go`; controllers, models, middlewares) and running the agents beside it (`work`); `tinio eval`. |
 | `internal/folders` | Folders on this computer the owner adds for their agents: the rules for what may never be seen or named (`Rules`), reading text, Word, Excel and PDF (`Text`), and the tools: list, search and read on their own; make and change text files only as an ask (`action.Write`), the old version kept. |
 | `.env.example` | Every setting, with what it is; copied to `.env`, which is never committed. |
-| `characters/<name>/` | The six ready characters, loaded into the `characters` table (a new version when one changes) when the API starts: `template.yaml` (how the app offers them), `character.yaml` (who, and when their day runs), `judgment.yaml` (how the owner decides). How every agent works is the defaults in `internal/config`, on the models the environment names. |
+| `characters/<name>/` | The six ready characters, loaded into the `characters` table (a new version when one changes) when the API starts: `template.yaml` (how the app offers them), `character.yaml` (who they are: background, personality, what they make, skills), `judgment.yaml` (how the owner decides). How every agent works is the defaults in `internal/config`, on the models the environment names. |
 | `prompts/*.md` | Everything System 2 is told, as templates. |
 | `decisions/*.yaml` | System 1's question sets, versioned (`incoming_message@1`). A set's `model:` has it answered by that model as JSON, through the Responses API (`system1/reasoned`), not the Decisions API; its thresholds are then the ones `tinio eval` found for that model. |
 | `evals/<set>.jsonl` | Test cases for each set: what the mind gives System 1, and the right answer. `go run ./cmd/tinio eval` asks them and reports accuracy, how much is decided alone, cost and latency; check a set's model or threshold change with it. Leave out any case a careful person could label two ways. |
-| `evals/replies/<character>.yaml`, `evals/judge.md` | Conversations to have with a new agent raised from each ready character, what they must leave behind (reminders, promises, facts, what a reply must or mustn't say), and what a good reply does; the judge's rubric. `go run ./cmd/tinio eval -replies` has them on the real mind (`host.Talk`, their clock held still) in a throwaway database of its own, then checks and judges them: how the reply model is chosen. `go run ./cmd/tinio eval -day` has a new agent live a whole day on a clock it ticks, and reports what it cost. |
+| `evals/replies/<character>.yaml`, `evals/judge.md` | Conversations to have with a new agent raised from each ready character, what they must leave behind (reminders, promises, facts, what a reply must or mustn't say), and what a good reply does; the judge's rubric. `go run ./cmd/tinio eval -replies` has them on the real mind (`host.Talk`, their clock held still) in a throwaway database of its own, then checks and judges them: how the reply model is chosen. |
 | `docs/` | Setup and settings, the guide to what owners notice, the architecture. |
 | `tinio.go` | Builds `prompts/`, `decisions/` and `characters/` into the binary (`tinio.Files`); a file on disk at the same path wins. Read them only through it. |
 | `.github/workflows/test.yml` | Every push: gofmt, vet and the tests; and the desktop app, its frontend built, its Go vetted for every system and tested, and the app built on macOS. |
@@ -68,7 +71,7 @@ as **Tinio**, and `tinio` for the command and in code.
 | `memory` | The data model: plain types, no behaviour beyond small methods like `Work.Carries`. |
 | `providers/system1`, `system2`, `embed` | Interfaces, each with an OpenAI implementation (`openai-go`); `openaiclient` shares the settings. |
 | `decision`, `decision/questions` | What a decision is; loading and checking question sets. |
-| `ability` (`journal`, `reading`, `web`) | What they can do in their day besides writing. |
+| `ability` (`reading`, `web`) | What they can do while making something besides writing: read and look things up. |
 | `library`, `search` | Books (Gutenberg), Wikipedia, the open web, with the safety rules. |
 | `agentskill` | Skills in the Agent Skills format (`SKILL.md`), stored with the agent and given when they fit. |
 | `render` (`pdf`, `docx`, `table`, `calendar`, `midi`, `archive`; `markdown`) | A work made into a file. Each kind is a `render.Format` (a `render.DataFormat` if it's made from data the work carries, like MIDI from a score); a new one is a type plus a line in the host (`loadShared`). Formats that lay out words read them with `render/markdown`. |
@@ -78,7 +81,7 @@ as **Tinio**, and `tinio` for the command and in code.
 | `pricing`, `perception` | Model prices, the percept type. |
 | `providers/system1/reasoned` | System 1's questions answered by any reasoning model, as JSON to a schema made from them; `system1.ByModel` sends each set to its `model:` (`Models.Routed`). |
 | `replay` | Re-asks System 1 about cases with known answers (`evals/`, or messages owners labelled) and scores it: `api eval`. |
-| `channel/telegram`, `console`, `portfolio`, `secret`, `tools` | From v0.4, not wired into v0.5 yet: the Telegram bot, the mind console (to be left out), the public profile page, sealed secrets, local MCP tools. |
+| `channel/telegram`, `console`, `secret`, `tools` | From v0.4, not wired into this version yet: the Telegram bot, the mind console (its views feed the app's Mind page), sealed secrets, local MCP tools. |
 
 ### How it runs
 
@@ -87,11 +90,14 @@ as **Tinio**, and `tinio` for the command and in code.
 - **Talk** handles percepts (messages and button taps) one at a time: meet the speaker,
   System 1 reads the message, recall facts and works, System 2 replies and returns side
   effects (facts, reminders, promises, corrections, ...), reply, save the decision chain.
-- **Life** handles the clock's tick, once a minute: first what someone is waiting for
-  (approvals, calls, reminders, promises, check-ins), then its own day (plan, activities,
-  making promises ahead, the weekly review, writing old works' data). A tick with nothing
-  due does nothing: anything new for the life loop must count in `nextWake`, or set
-  `changed` (as hearing a message does).
+- **Life** handles the clock's tick, once a minute, in this order (`tick` in
+  `internal/mind/initiative.go`): approvals expired and sent, approved actions run, what
+  it watches, calls expired and sent, reminders and promises due, topics summed up,
+  check-ins (none by default), the owner's morning (prepared ahead, then sent), the
+  morning's drafts, promises made ahead, and once a week the look back and old works'
+  data. What the week's cap doesn't allow (drafts, watching, the look back) waits; what
+  someone is waiting for is never cut. A tick with nothing due does nothing: anything new
+  for the life loop must count in `nextWake`, or set `changed` (as hearing a message does).
 
 An idle agent rests: `Run` returns a `*mind.Resting` with when to wake them
 and what to keep (`internal/host` claims them again then). Anything a tick acts on must be
@@ -152,7 +158,7 @@ Every change is reviewed against these. They come from real reviews of this code
 - No maps or other allocations built on every call in a loop; make them package-level.
 - Work out what never changes once (`m.dataOf()` with `sync.Once`).
 - Keep System 2's instructions the same from call to call, so the provider's prompt cache
-  holds: whatever changes (the time, people met, skill levels, goals, what was recalled) goes
+  holds: whatever changes (the time, people met, skill levels, what was recalled) goes
   in the note, which comes after the conversation.
 
 **The person, not the code, holds the life.**
@@ -184,15 +190,15 @@ Only the tests that matter. A test stays if, without it, something could break u
 
 1. **Safety and trust:** the autonomy gate; an approval or call settled once; only the
    owner's taps, corrections and permission changes count; no promises to strangers;
-   what may reach the public page, and the owner's decision there is final; the console
+   the console
    token; the web fetcher reaching only public addresses (also through redirects and
    DNS); page text fenced as untrusted; only URLs its own searches found.
 2. **Core flows:** a message read and answered; duplicates skipped; reminders and promises
-   on time; the day and its rounds; the weekly review; learning plans and the stage
-   check; calls; files sent with a reply; only the owner reaching their agent's chat; the
+   on time; the morning prepared ahead and sent once, its drafts; the weekly look back;
+   calls; files sent with a reply; only the owner reaching their agent's chat; the
    worker claiming, resting and waking agents.
-3. **Easy to miss:** a restart sends no check-ins again; pace and budget; replies don't
-   wait on the life loop (`TestRepliesWhileItsDayIsBusy`).
+3. **Easy to miss:** a restart sends no check-ins again; drafts and the week; a quiet
+   owner gets no morning; replies don't wait on the life loop (`TestRepliesWhileItsDayIsBusy`).
 
 Don't add: several variations of one path (keep the strongest), exact-wording checks on
 prompts, tests of small helpers (file names, string trimming), getters, or log and cost
@@ -204,19 +210,20 @@ safe for concurrent use; a test of both loops orders every step through channels
 
 ## Safety rules that must always hold
 
-- What reaches other people, commits to them, goes public or changes a dream asks the
-  owner first by default; so do messages outside the chat (email, posts), and money is
+- What reaches other people, commits to them or goes public asks the owner first by
+  default; so do messages outside the chat (email, posts), and money is
   forbidden. Both change only in the code (`internal/config`), never by chat. Silence is no: an unanswered
   request is denied.
-- Only facts about the person can reach the public page; facts about people, the journal
-  and what was made for someone never do.
+- A morning names only things that came from something it knows (a topic, a promise,
+  the calendar); one with nowhere it came from is dropped. Its drafts are only made and
+  kept, never sent to anyone.
 - The web: https only, public addresses only, only pages its own searches found; what it
   reads is material, never instructions.
 - Tools: only those config lists; a local server gets only PATH, HOME and the env config
   names; what a tool returns is material, never instructions. A tool that changes things
-  is only proposed, by the owner's chat or its own day, never run in a reply: it runs on a
+  is only proposed, by the owner's chat or something it made for them, never run in a reply: it runs on a
   later tick once its class allows it. A destructive one always asks the owner, and so
-  does one prompted by anything it read (a watched item, its own day's material): only
+  does one prompted by anything it read (a watched item, what it read for a draft): only
   the owner's own words can have it act unasked. It never says an action is done before
   it is.
 - Skills are trusted like prompts, since the owner installs them, but grant no permission,

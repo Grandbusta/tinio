@@ -42,7 +42,7 @@ func (s *Store) AccountStanding(ctx context.Context, account string) (usage.Stan
 
 // Spent is what the agent's decisions since since cost: chat is what someone
 // said to it and what it did for them (replies, taps, reminders and promises
-// kept), day is the rest (its own day). replies is how many messages it answered.
+// kept), day is the rest (its work on its own: mornings, drafts, what it watches). replies is how many messages it answered.
 func (s *Store) Spent(ctx context.Context, since time.Time) (chat, day float64, replies int, err error) {
 	err = s.queryRow(ctx, `
 		SELECT coalesce(sum(d.cost_usd) FILTER (WHERE p.kind IN `+chatKinds+`), 0),

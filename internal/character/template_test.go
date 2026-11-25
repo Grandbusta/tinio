@@ -36,7 +36,7 @@ func TestCharacters(t *testing.T) {
 				if err != nil {
 					t.Fatalf("%s as %s: %v", tmpl.Key, rel, err)
 				}
-				if l.Name != tmpl.Name || l.Timezone != "Africa/Lagos" || len(l.Dreams) == 0 || len(l.Skills) == 0 || len(l.Makes) == 0 {
+				if l.Name != tmpl.Name || l.Timezone != "Africa/Lagos" || len(l.Skills) == 0 || len(l.Makes) == 0 {
 					t.Errorf("%s: life = %+v", tmpl.Key, l)
 				}
 				if j, err := ParseJudgment(files["judgment.yaml"]); err != nil || len(j.Principles) < 3 || len(j.Cases) < 3 ||
@@ -45,8 +45,8 @@ func TestCharacters(t *testing.T) {
 				} else if !strings.Contains(string(files["judgment.yaml"]), "Sam") {
 					t.Errorf("%s: judgment doesn't name its owner", tmpl.Key)
 				}
-				if d := l.Day; d.PlanAt == "" || d.JournalAt == "" || d.ReviewAt == "" || len(d.CheckIns) == 0 {
-					t.Errorf("%s: day = %+v; want all of it", tmpl.Key, d)
+				if len(l.Family) != 1 {
+					t.Errorf("%s: knows %d people from the start; want only their owner", tmpl.Key, len(l.Family))
 				}
 				owner := l.Family[0]
 				if owner.Name != "Sam" || owner.Relation != rel || owner.Account != account || owner.Circle != CircleOf(rel) {

@@ -50,13 +50,13 @@ func TestUsageIsCountedAndShown(t *testing.T) {
 	if rec, out := ta.do(t, "POST", "/v1/usage", map[string]any{"cap_usd": 0.23}, ada, site); rec.Code != http.StatusOK || data(out)["cap_usd"] != 0.23 {
 		t.Fatalf("setting the cap: %d %v", rec.Code, out)
 	}
-	// A week of $0.23. A reply ($0.0345) and some of their day ($0.0115).
+	// A week of $0.23. A reply ($0.0345) and some of their work on their own ($0.0115).
 	spend(0.0345, p.ID)
 	spend(0.0115, ulid.ULID{})
 	u := usage()
 	agent := u["agents"].([]any)[0].(map[string]any)
-	if u["used"] != 20.0 || u["spent_usd"] != 0.05 || u["state"] != "normal" || agent["chat"] != 15.0 || agent["day"] != 5.0 {
-		t.Errorf("after a reply and some of their day: %v", u)
+	if u["used"] != 20.0 || u["spent_usd"] != 0.05 || u["state"] != "normal" || agent["chat"] != 15.0 || agent["work"] != 5.0 {
+		t.Errorf("after a reply and some of their work: %v", u)
 	}
 
 	// Well past the week, and in an hour: they rest.

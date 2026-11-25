@@ -1,24 +1,26 @@
-# Which circle of the agent's life someone belongs to (person_circle's circle),
-# from how they were described. Mei is the agent.
-{"state":{"relation":"Wei is Mei's younger brother."},"fill":{"agent":"Mei"},"label":"family"}
-{"state":{"relation":"Lin is Mei's grandmother."},"fill":{"agent":"Mei"},"label":"family"}
-{"state":{"relation":"Bao is Mei's cousin."},"fill":{"agent":"Mei"},"label":"family"}
-{"state":{"relation":"Ana is Mei's mother-in-law."},"fill":{"agent":"Mei"},"label":"family"}
-{"state":{"relation":"Chen is Mei's boyfriend."},"fill":{"agent":"Mei"},"label":"partner"}
-{"state":{"relation":"Yu is Mei's wife."},"fill":{"agent":"Mei"},"label":"partner"}
-{"state":{"relation":"Diego is Mei's fiancé."},"fill":{"agent":"Mei"},"label":"partner"}
-{"state":{"relation":"Hui is Mei's best friend."},"fill":{"agent":"Mei"},"label":"friend"}
-{"state":{"relation":"Jun is an old friend of Mei's from university."},"fill":{"agent":"Mei"},"label":"friend"}
-{"state":{"relation":"Ada is Mei's mentor."},"fill":{"agent":"Mei"},"label":"school"}
-{"state":{"relation":"Ms Liao was Mei's English teacher."},"fill":{"agent":"Mei"},"label":"school"}
-{"state":{"relation":"Kai is Mei's classmate in her Japanese course."},"fill":{"agent":"Mei"},"label":"school"}
-{"state":{"relation":"Tony is Mei's boss at the bookshop."},"fill":{"agent":"Mei"},"label":"work"}
-{"state":{"relation":"Rita is a client who orders translations from Mei."},"fill":{"agent":"Mei"},"label":"work"}
-{"state":{"relation":"Zoe is a colleague of Mei's at the translation agency."},"fill":{"agent":"Mei"},"label":"work"}
-{"state":{"relation":"Mr Huang lives next door to Mei."},"fill":{"agent":"Mei"},"label":"community"}
-{"state":{"relation":"Grace sings in Mei's church choir."},"fill":{"agent":"Mei"},"label":"community"}
-{"state":{"relation":"Pei is on Mei's badminton team."},"fill":{"agent":"Mei"},"label":"community"}
-{"state":{"relation":"Mei met Leo once at a book fair."},"fill":{"agent":"Mei"},"label":"acquaintance"}
-{"state":{"relation":"Mei sometimes chats with the man who runs the tea stall."},"fill":{"agent":"Mei"},"label":"acquaintance"}
-{"state":{"relation":"Sam has just messaged Mei for the first time."},"fill":{"agent":"Mei"},"label":"stranger"}
-{"state":{"relation":"Mei doesn't know Kofi yet."},"fill":{"agent":"Mei"},"label":"stranger"}
+# Which circle of the owner's life a person belongs to (person_circle's circle),
+# from how they were described. Ada is the owner and Zara the agent, who knows
+# people only through Ada.
+{"state": {"relation": "Tunde is Ada's younger brother."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "family"}
+{"state": {"relation": "Mama Ngozi is Ada's grandmother."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "family"}
+{"state": {"relation": "Kemi is Ada's cousin."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "family"}
+{"state": {"relation": "Funmi is Ada's mother-in-law."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "family"}
+{"state": {"relation": "Femi is Ada's husband."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "partner"}
+{"state": {"relation": "Dayo is Ada's boyfriend."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "partner"}
+{"state": {"relation": "Chidi is Ada's fiancé."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "partner"}
+{"state": {"relation": "Bisi is Ada's best friend."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "friend"}
+{"state": {"relation": "Joke is an old friend of Ada's from university."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "friend"}
+{"state": {"relation": "Mrs Ade is Ada's daughter's teacher."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "school"}
+{"state": {"relation": "Mr Okon was Ada's tutor on her business course."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "school"}
+{"state": {"relation": "Lara is in Ada's evening pottery class."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "school"}
+{"state": {"relation": "Sam is a supplier who sends Ada's tea from Kenya."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "work"}
+{"state": {"relation": "Rita is a regular customer at Ada's shop."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "work"}
+{"state": {"relation": "Tobi works the till at Ada's shop on Saturdays."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "work"}
+{"state": {"relation": "Mr Bello is Ada's accountant."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "work"}
+{"state": {"relation": "Mr Huang lives next door to Ada."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "community"}
+{"state": {"relation": "Grace sings in Ada's church choir."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "community"}
+{"state": {"relation": "Pei is on Ada's running club."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "community"}
+{"state": {"relation": "Ada met Leo once at a trade fair."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "acquaintance"}
+{"state": {"relation": "Ada sometimes chats with the man who runs the market stall."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "acquaintance"}
+{"state": {"relation": "Kofi has just messaged Zara for the first time."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "stranger"}
+{"state": {"relation": "Neither Ada nor Zara knows Musa yet."}, "fill": {"agent": "Zara", "owner": "Ada"}, "label": "stranger"}

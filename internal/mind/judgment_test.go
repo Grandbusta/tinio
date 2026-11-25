@@ -30,7 +30,7 @@ func TestJudgment(t *testing.T) {
 		if len(s.cases) != 2 || len(s.principles) != 2 {
 			t.Fatalf("seeded %d cases, %d principles; want 2 and 2, once", len(s.cases), len(s.principles))
 		}
-		if note := m.judgmentNote(context.Background(), planJudgment, ""); note != "" {
+		if note := m.judgmentNote(context.Background(), reviewJudgment, ""); note != "" {
 			t.Errorf("note before any approval = %q; want none", note)
 		}
 	})
@@ -39,7 +39,7 @@ func TestJudgment(t *testing.T) {
 		m, _ := newMind(&fakeReplier{}, &fakeSystem1{}, &fakeSystem2{})
 		m.Judgment, m.JudgmentApproved = judgment, true
 		m.seedJudgment(context.Background())
-		if note := m.judgmentNote(context.Background(), planJudgment, ""); !strings.Contains(note, "Start small, then build on it.") {
+		if note := m.judgmentNote(context.Background(), reviewJudgment, ""); !strings.Contains(note, "Start small, then build on it.") {
 			t.Errorf("note = %q; want the seeded principle", note)
 		}
 	})
@@ -56,7 +56,7 @@ func TestJudgment(t *testing.T) {
 		for i := range s.cases {
 			s.cases[i].Status = memory.JudgmentApproved
 		}
-		note := m.judgmentNote(context.Background(), planJudgment, "")
+		note := m.judgmentNote(context.Background(), reviewJudgment, "")
 		if !strings.Contains(note, "Start small, then build on it.") || !strings.Contains(note, "the tiniest part") ||
 			strings.Contains(note, "switchable") || strings.Contains(note, "managed Postgres") { // engineering: not for planning its day
 			t.Errorf("note:\n%s", note)

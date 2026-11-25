@@ -72,7 +72,7 @@ func (m *Mind) worksNote(ctx context.Context, person, about string) (string, map
 func (m *Mind) whoseWork(ctx context.Context) func(memory.Work) string {
 	names := map[string]string{}
 	return func(w memory.Work) string {
-		origin := "your own"
+		origin := "made for your owner"
 		if w.MadeFor != "" && w.MadeFor != memory.SubjectSelf {
 			if _, ok := names[w.MadeFor]; !ok {
 				names[w.MadeFor] = orDefault(m.person(ctx, w.MadeFor).Name, fallbackName)

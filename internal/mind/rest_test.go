@@ -168,10 +168,10 @@ func TestReloadRestsThemAndWakesThemAtOnce(t *testing.T) {
 	m, _, ticks, _ := restingMind(&fakeSystem1{})
 	ten := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
 	m.lastHeard = ten
-	m.planned, m.round = "2026-10-29", 2
+	m.reviewed = ten.Add(-time.Hour)
 	m.Reload()
 	rest := runUntilRest(t, m, ticks, ten)
-	if !rest.Until.Equal(ten) || rest.Kept.Planned != "2026-10-29" || rest.Kept.Round != 2 {
+	if !rest.Until.Equal(ten) || !rest.Kept.Reviewed.Equal(ten.Add(-time.Hour)) {
 		t.Errorf("rest = %+v", rest)
 	}
 }

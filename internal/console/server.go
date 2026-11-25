@@ -2,8 +2,7 @@
 // everything about the agent. It writes only what the owner reviews: labels on
 // decisions, and their judgment.
 //
-// It never shares a server with the public profile page. It listens on
-// localhost, or, anywhere else, only with a token.
+// It listens on localhost, or, anywhere else, only with a token.
 package console
 
 import (
@@ -53,14 +52,10 @@ type Store interface {
 	RecentApprovals(ctx context.Context, limit int) ([]memory.Approval, error)
 	Labels(ctx context.Context, decisions []ulid.ULID) ([]memory.Label, error)
 	SaveLabel(ctx context.Context, l memory.Label) error
-	Dreams(ctx context.Context, activeOnly bool) ([]memory.Dream, error)
-	Goals(ctx context.Context, activeOnly bool) ([]memory.Goal, error)
 	Skills(ctx context.Context) ([]memory.Skill, error)
 	RecentEvidence(ctx context.Context, skill string, limit int) ([]memory.Evidence, error)
 	LatestWork(ctx context.Context, kind string) (memory.Work, bool, error)
 	Lessons(ctx context.Context, skill string, limit int) ([]memory.Lesson, error)
-	Plans(ctx context.Context, activeOnly bool) ([]memory.LearningPlan, error)
-	Resources(ctx context.Context, plan ulid.ULID) ([]memory.Resource, error)
 	Principles(ctx context.Context, status string) ([]memory.Principle, error)
 	JudgmentCases(ctx context.Context, status string, types []string) ([]memory.JudgmentCase, error)
 	ReviewPrinciple(ctx context.Context, id ulid.ULID, status, text string, at time.Time) (bool, error)
@@ -335,7 +330,7 @@ func (s *Server) memory(w http.ResponseWriter, r *http.Request) {
 			about = s.Info.Name
 		}
 		fv[i] = map[string]any{"id": f.ID.String(), "subject": f.Subject, "about": about, "text": f.Text, "at": f.At,
-			"areas": nonNil(f.Areas), "public": f.Public, "asked_at": f.AskedAt}
+			"areas": nonNil(f.Areas), "asked_at": f.AskedAt}
 	}
 	s.json(w, map[string]any{"facts": fv, "people": pv})
 }
@@ -550,68 +545,9 @@ func (s *Server) approvals(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) growth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	dreams, err := s.Store.Dreams(ctx, false)
-	if s.failed(w, err) {
-		return
-	}
-	goals, err := s.Store.Goals(ctx, false)
-	if s.failed(w, err) {
-		return
-	}
-	projects, err := s.Store.AllProjects(ctx, 500)
-	if s.failed(w, err) {
-		return
-	}
 	skills, err := s.Store.Skills(ctx)
 	if s.failed(w, err) {
 		return
-	}
-	plans, err := s.Store.Plans(ctx, false)
-	if s.failed(w, err) {
-		return
-	}
-	planFor := map[ulid.ULID]map[string]any{}
-	for _, p := range plans {
-		rs, err := s.Store.Resources(ctx, p.ID)
-		if s.failed(w, err) {
-			return
-		}
-		stages := make([]map[string]any, len(p.Stages))
-		for i, st := range p.Stages {
-			var res []map[string]any
-			for _, r := range rs {
-				if r.Stage == st.N {
-					res = append(res, map[string]any{"ability": r.Ability, "query": r.Query, "why": r.Why, "status": r.Status, "title": r.Title})
-				}
-			}
-			stages[i] = map[string]any{"learn": st.Learn, "practice": st.Practice, "done_when": st.DoneWhen, "done": !st.DoneAt.IsZero(),
-				"resources": nonNilMaps(res)}
-		}
-		planFor[p.GoalID] = map[string]any{"id": p.ID.String(), "skill": p.Skill, "stage": p.Stage, "status": p.Status, "stages": stages}
-	}
-	dv := make([]map[string]any, 0, len(dreams))
-	for _, d := range dreams {
-		var gv []map[string]any
-		for _, g := range goals {
-			if g.DreamID != d.ID {
-				continue
-			}
-			var pv []map[string]any
-			for _, p := range projects {
-				if p.GoalID == g.ID {
-					pv = append(pv, map[string]any{"id": p.ID.String(), "title": p.Title, "status": p.Status})
-				}
-			}
-			gv = append(gv, map[string]any{"id": g.ID.String(), "text": g.Text, "done_when": g.DoneWhen, "due": g.Due,
-				"status": g.Status, "progress": g.Progress, "created_at": g.CreatedAt, "projects": nonNilMaps(pv), "skill": g.Skill,
-				"plan": planFor[g.ID]})
-		}
-		v := map[string]any{"id": d.ID.String(), "text": d.Text, "status": d.Status, "source": d.Source, "since": d.Since,
-			"goals": nonNilMaps(gv)}
-		if !d.EndedAt.IsZero() {
-			v["ended_at"] = d.EndedAt
-		}
-		dv = append(dv, v)
 	}
 	sv := make([]map[string]any, 0, len(skills))
 	for _, sk := range skills {
@@ -637,11 +573,7 @@ func (s *Server) growth(w http.ResponseWriter, r *http.Request) {
 		sv = append(sv, map[string]any{"name": sk.Name, "level": sk.Level, "shown_by": nonNil(sk.ShownBy),
 			"updated_at": sk.UpdatedAt, "evidence": evv, "lessons": lv})
 	}
-	out := map[string]any{"dreams": dv, "skills": sv}
-	if rv, ok, err := s.Store.LatestWork(ctx, "review"); err == nil && ok {
-		out["review"] = map[string]any{"id": rv.ID.String(), "title": rv.Title, "text": rv.Text, "at": rv.CreatedAt}
-	}
-	s.json(w, out)
+	s.json(w, map[string]any{"skills": sv})
 }
 
 func (s *Server) judgment(w http.ResponseWriter, r *http.Request) {
@@ -1003,7 +935,7 @@ func (s *Server) workViews(ws []memory.Work, withText bool) []map[string]any {
 	out := make([]map[string]any, len(ws))
 	for i, w := range ws {
 		v := map[string]any{"id": w.ID.String(), "kind": w.Kind, "title": w.Title, "created_at": w.CreatedAt,
-			"words": wordCount(w.Text), "public": w.Public, "public_by": w.PublicBy, "files": formatNames(s.Formats.For(w))}
+			"words": wordCount(w.Text), "files": formatNames(s.Formats.For(w))}
 		if !w.ProjectID.IsZero() {
 			v["project_id"] = w.ProjectID.String()
 		}

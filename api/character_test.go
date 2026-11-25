@@ -34,8 +34,7 @@ func TestTheOwnerChangesTheirCharacterAndGoesBack(t *testing.T) {
 		rec, _ := ta.do(t, "POST", "/v1/agents/"+zara+"/character", body, ada, site)
 		return rec.Code
 	}
-	if code := save(map[string]any{"story": []string{"  Zara writes hooks   for a living. ", ""}, "personality": []string{"Dry"},
-		"day": map[string]any{"plan_at": "07:30"}}); code != http.StatusOK {
+	if code := save(map[string]any{"story": []string{"  Zara writes hooks   for a living. ", ""}, "personality": []string{"Dry"}}); code != http.StatusOK {
 		t.Fatalf("saving: %d", code)
 	}
 	select {
@@ -47,12 +46,9 @@ func TestTheOwnerChangesTheirCharacterAndGoesBack(t *testing.T) {
 		t.Error("whoever runs her wasn't told")
 	}
 	now := get()
-	if s := now["story"].([]any); len(s) != 1 || s[0] != "Zara writes hooks for a living." || now["day"].(map[string]any)["plan_at"] != "07:30" ||
+	if s := now["story"].([]any); len(s) != 1 || s[0] != "Zara writes hooks for a living." ||
 		now["versions"].([]any)[0].(map[string]any)["source"] != "edit" {
 		t.Errorf("after saving: %v", now)
-	}
-	if code := save(map[string]any{"story": []string{"x"}, "day": map[string]any{"plan_at": "8am"}}); code != http.StatusBadRequest {
-		t.Errorf("a day that isn't one: %d", code)
 	}
 	if code := save(map[string]any{"story": []string{" "}}); code != http.StatusBadRequest {
 		t.Errorf("no story: %d", code)

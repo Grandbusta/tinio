@@ -40,12 +40,12 @@ const KindMessage = "message"
 // Kinds of percept the agent makes itself when it speaks first, so a reply to
 // it reads as an answer. What it said is on the decision.
 const (
-	KindReminder      = "reminder"
-	KindCheckIn       = "check_in"
-	KindDelivery      = "delivery"
-	KindAction        = "action"      // what came of a tool it used
-	KindObservation   = "observation" // something new a watched tool returned
-	KindReviewRequest = "review_request"
+	KindReminder    = "reminder"
+	KindCheckIn     = "check_in"
+	KindDelivery    = "delivery"
+	KindAction      = "action"      // what came of a tool it used
+	KindObservation = "observation" // something new a watched tool returned
+	KindMorning     = "morning"     // the owner's morning note
 )
 
 // KindApproval is the owner answering the autonomy gate. Its Payload is an

@@ -28,28 +28,11 @@ const (
 	scoreChars     = 4000
 )
 
-// bornWanting copies dreams only if it has none yet, and each skill it
-// doesn't have. After that memory wins. False if something couldn't be saved.
-func (m *Mind) bornWanting(ctx context.Context) bool {
+// bornWith gives it each skill its character starts with that it doesn't
+// have yet; after that, memory wins. False if something couldn't be saved.
+func (m *Mind) bornWith(ctx context.Context) bool {
 	ok := true
 	now := time.Now().UTC()
-	if len(m.Life.Dreams) > 0 {
-		dreams, err := m.Store.Dreams(ctx, false)
-		if err != nil {
-			m.Log.Warn("loading dreams failed", "err", err)
-			ok = false
-		} else if len(dreams) == 0 {
-			for _, text := range m.Life.Dreams {
-				d := memory.Dream{ID: ulid.Make(), Text: text, Status: memory.DreamActive, Source: memory.DreamFromLife, Since: now}
-				if err := m.Store.SaveDream(ctx, d); err != nil {
-					m.Log.Warn("storing a dream failed", "err", err)
-					ok = false
-					continue
-				}
-				m.Log.Info("born wanting", "dream", text)
-			}
-		}
-	}
 	for _, sk := range m.Life.Skills {
 		if err := m.Store.AddSkill(ctx, memory.Skill{Name: sk.Name, Level: float64(sk.Level), ShownBy: sk.ShownBy,
 			UpdatedAt: now}); err != nil {
@@ -244,7 +227,7 @@ func (m *Mind) takeFeedback(ctx context.Context, p perception.Percept, reply *de
 	if err != nil {
 		return nil
 	}
-	asked, _, _ := m.Store.AskedForReview(ctx, p.At.Add(-reviewAnswerWithin)) // what they're likely judging
+	asked := m.judged(ctx, p.At)
 	var out []*decision.Decision
 	for _, f := range fs {
 		name := ""
@@ -303,23 +286,9 @@ func (m *Mind) craftKinds() []string {
 	return kinds
 }
 
-func (m *Mind) growthNote(ctx context.Context, now time.Time) string {
+// skillsNote is its skills and their latest scores, for its weekly look back.
+func (m *Mind) skillsNote(ctx context.Context) string {
 	var b strings.Builder
-	if dreams, err := m.Store.Dreams(ctx, true); err == nil && len(dreams) > 0 {
-		b.WriteString("\n\nWho you want to become (your dreams):")
-		for _, d := range dreams {
-			fmt.Fprintf(&b, "\n- [dream %s] %s", d.ID, d.Text)
-		}
-	}
-	if goals, err := m.Store.Goals(ctx, true); err == nil && len(goals) > 0 {
-		b.WriteString("\n\nYour goals now:")
-		for _, g := range goals {
-			fmt.Fprintf(&b, "\n- [goal %s] %s (done when: %s; due %s; skill: %s). Where it stands: %s", g.ID, g.Text, g.DoneWhen,
-				g.Due.In(m.Zone).Format("Mon 2 Jan"), orDefault(g.Skill, "none named yet"), orDefault(g.Progress, "just started"))
-		}
-	} else if err == nil {
-		b.WriteString("\n\nYou have no goals yet.")
-	}
 	if skills, err := m.Store.Skills(ctx); err == nil && len(skills) > 0 {
 		b.WriteString("\n\nYour skills (1-10, from what you've made and feedback):")
 		for _, sk := range skills {
@@ -336,119 +305,20 @@ func (m *Mind) growthNote(ctx context.Context, now time.Time) string {
 	return b.String()
 }
 
-func (m *Mind) goalsHelp(person memory.Person) string {
+// skillsFor is its skills, for a reply to its owner. In the note, not the
+// instructions: skill levels move with every piece of feedback, and the
+// instructions stay the same so the prompt cache holds.
+func (m *Mind) skillsFor(ctx context.Context, person memory.Person) string {
 	if person.Key == "" || person.Key != m.policy().Owner {
 		return ""
 	}
-	return "\nGoals they ask you to take on:\n- If they ask you to learn something or take on a goal (\"add that to your goals\", " +
-		"\"you should learn sales\") and you agree, put it in `goals`, so it really becomes yours: you'll plan how to learn it and " +
-		"practise it in your days. The skill it grows (one of yours by its exact name, or a new one, with level your honest starting " +
-		"level 1-10: a beginner is 1-2), the goal, done_when (a concrete test from what you'll make), due (YYYY-MM-DD, " + m.goalDue() + "), and " +
-		"the dream it serves (dream_id), or new_dream (third person with your name) if none fits. Only say you've added it if you " +
-		"put it in `goals`. The goal is to learn it yourself, not to make them a plan. Your dreams, skills and goals now are in " +
-		"the note: a goal there is already yours, so never add it again.\n"
-}
-
-// goalsNote is its dreams, skills and goals now, for a reply to its owner. In
-// the note, not the instructions: skill levels move with every piece of
-// feedback, and the instructions stay the same so the prompt cache holds.
-func (m *Mind) goalsNote(ctx context.Context, person memory.Person) string {
-	if person.Key == "" || person.Key != m.policy().Owner {
+	skills, err := m.Store.Skills(ctx)
+	if err != nil || len(skills) == 0 {
 		return ""
 	}
-	var b strings.Builder
-	if dreams, err := m.Store.Dreams(ctx, true); err == nil && len(dreams) > 0 {
-		b.WriteString("\n\nYour dreams:")
-		for _, d := range dreams {
-			fmt.Fprintf(&b, " [%s] %s;", d.ID, d.Text)
-		}
+	names := make([]string, len(skills))
+	for i, sk := range skills {
+		names[i] = fmt.Sprintf("%s (%.1f)", sk.Name, sk.Level)
 	}
-	if skills, err := m.Store.Skills(ctx); err == nil && len(skills) > 0 {
-		names := make([]string, len(skills))
-		for i, sk := range skills {
-			names[i] = fmt.Sprintf("%s (%.1f)", sk.Name, sk.Level)
-		}
-		fmt.Fprintf(&b, "\n\nYour skills: %s.", strings.Join(names, ", "))
-	}
-	if goals, err := m.Store.Goals(ctx, true); err == nil && len(goals) > 0 {
-		b.WriteString("\n\nYour goals now (already yours: never add one again):")
-		for _, g := range goals {
-			fmt.Fprintf(&b, " %s (%s);", g.Text, orDefault(g.Skill, "no skill"))
-		}
-	}
-	return b.String()
-}
-
-// takeGoals: a new skill starts where it honestly is, and the goal's
-// learning plan follows on the next tick.
-func (m *Mind) takeGoals(ctx context.Context, p perception.Percept, reply *decision.Decision, gs []system2.GoalTaken) []*decision.Decision {
-	if len(gs) == 0 || p.Speaker == "" || p.Speaker != m.policy().Owner {
-		return nil
-	}
-	now := time.Now().UTC()
-	var out []*decision.Decision
-	for _, gt := range gs {
-		d := m.child(p, reply, "take_goal")
-		d.Outcome.Detail = m.takeGoal(ctx, gt, now)
-		out = append(out, d)
-		m.Log.Info("took on a goal its owner asked for", "goal", gt.Text, "skill", gt.Skill, "detail", d.Outcome.Detail)
-	}
-	return out
-}
-
-func (m *Mind) takeGoal(ctx context.Context, gt system2.GoalTaken, now time.Time) string {
-	goals, err := m.Store.Goals(ctx, true)
-	if err != nil {
-		return "loading goals failed: " + err.Error()
-	}
-	for _, g := range goals {
-		if strings.EqualFold(strings.TrimSpace(g.Text), strings.TrimSpace(gt.Text)) {
-			return "already a goal: " + g.Text
-		}
-	}
-	due, err := time.ParseInLocation("2006-01-02", gt.Due, m.Zone)
-	if err != nil || !due.After(now) || due.Sub(now) > goalHorizon {
-		due = now.Add(m.paced(28 * 24 * time.Hour)).In(m.Zone) // four person-weeks, when the date it gave isn't one
-	}
-	dreams, err := m.Store.Dreams(ctx, true)
-	if err != nil {
-		return "loading dreams failed: " + err.Error()
-	}
-	var dream ulid.ULID
-	for _, d := range dreams {
-		if d.ID.String() == gt.DreamID {
-			dream = d.ID
-		}
-	}
-	if dream.IsZero() {
-		text := gt.NewDream
-		if text == "" {
-			text = fmt.Sprintf("%s wants to get good at %s.", m.Life.Name, gt.Skill)
-		}
-		if len(dreams) >= maxActiveDreams {
-			dream = dreams[len(dreams)-1].ID // no room for another: the newest it has
-		} else {
-			d := memory.Dream{ID: ulid.Make(), Text: text, Status: memory.DreamActive, Source: memory.DreamFromOwner, Since: now}
-			if err := m.Store.SaveDream(ctx, d); err != nil {
-				return "saving the dream failed: " + err.Error()
-			}
-			dream = d.ID
-		}
-	}
-	skill := m.skillNamed(ctx, gt.Skill)
-	if skill == "" {
-		level := max(1, min(10, gt.Level))
-		skill = gt.Skill
-		if err := m.Store.AddSkill(ctx, memory.Skill{Name: skill, Level: float64(level), ShownBy: []string{"notes", "writing", "reading_notes"}, UpdatedAt: now}); err != nil {
-			return "adding the skill failed: " + err.Error()
-		}
-		m.startingScore(ctx, skill, float64(level))
-	}
-	g := memory.Goal{ID: ulid.Make(), DreamID: dream, Text: gt.Text, Skill: skill, DoneWhen: gt.DoneWhen,
-		Due: time.Date(due.Year(), due.Month(), due.Day(), 23, 59, 0, 0, m.Zone).UTC(), Status: memory.GoalActive, CreatedAt: now, UpdatedAt: now}
-	if err := m.Store.SaveGoal(ctx, g); err != nil {
-		return "saving the goal failed: " + err.Error()
-	}
-	m.toPlan.Store(true)
-	return fmt.Sprintf("goal set (%s): %s", skill, g.Text)
+	return fmt.Sprintf("\n\nYour skills: %s.", strings.Join(names, ", "))
 }

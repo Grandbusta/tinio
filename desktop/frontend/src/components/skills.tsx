@@ -87,7 +87,7 @@ export function SkillsPage({ id }: { id: string }) {
                 <div className="flex min-w-0 flex-[1_1_240px] flex-col gap-1">
                   <h3 className="font-display text-lg font-semibold tracking-[-0.02em] first-letter:uppercase">{s.name}</h3>
                   <span className="text-[13px] text-muted">
-                    {s.born ? "Born with it · in their character" : "Grown · from their goals"}
+                    {s.born ? "Born with it · in their character" : "Grown · from their work for you"}
                     {s.shown_by.length > 0 && ` · shown by ${s.shown_by.map(words).join(", ")}`}
                   </span>
                 </div>

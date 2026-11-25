@@ -90,7 +90,7 @@ for; one set here wins, and can't be changed there.
 | `OPENAI_API_KEY` | none | Your OpenAI key, used instead of the one set in the app. |
 | `OPENAI_MODEL` | `gpt-6.1-terra` | System 2, which writes every reply. Must have a price in `internal/pricing`. |
 | `OPENAI_DECISION_MODEL` | `gpt-6-luna` | System 1, the decisions. |
-| `OPENAI_DAY_MODEL` | `gpt-6-luna` | Their own day: planning, learning, what they watch, the weekly review. About a cent a day. |
+| `OPENAI_DAY_MODEL` | `gpt-6-luna` | Their work on the clock: preparing your morning, the weekly look back, what they watch. A morning costs under a tenth of a cent. |
 | `OPENAI_LIGHT_MODEL` | `gpt-6-luna` | Replies once the week's cap is used (light mode). |
 | `OPENAI_WORK_MODEL` | `OPENAI_MODEL` | Making works, for themselves or someone. |
 | `TINIO_DATA` | see [above](#where-your-data-is) | The folder with the database and the key. |
@@ -115,21 +115,18 @@ judgment, and what their owner tells them in the chat. The defaults are in
 | Working memory | 8 exchanges, 30 minutes | How much of the current conversation System 2 sees, outside topics. |
 | Topics | the last 6 exchanges, and the chat's last 2 | What a reply in a topic is written from, besides its summary and what's settled. A topic is summed up after a 3-minute pause, and goes quiet after 7 days' silence. Quiet ones from the last 30 days are always considered for a message, and older ones when they're among the 3 closest in meaning (`internal/mind/topics.go`). |
 | Recall | 30 facts | The newest facts System 1 checks for relevance before each reply. |
-| Check-ins | after 4 hours' quiet | They consider checking in at their character's `check_ins` times, at most once a day. |
-| Their own day | 3 activities, $0.05, at pace 1 | Shown on Today. Budget and web caps (10 searches, 15 pages) grow with pace. The budget counts every model call of their day: plans, activities, promises, the review, learning plans, skill scores, stage checks, a work's data and what they watch. |
-| The week | a cap you set, $5 to start | What your agents may spend on your key in a week, all of them together (`POST /v1/usage`, `0` for no limit; `internal/usage`). Past it, light mode: replies on `OPENAI_LIGHT_MODEL` and their own day paused; past 150%, or a quarter of the week in one hour, they rest until it resets. The week counts from when Tinio first ran. |
+| Check-ins | off | Their morning is how they write to you first each day. |
+| Mornings | weekdays at 07:30, your time | Set per agent, in their settings or when you raise them (on or off, the time, the days). It starts 45 minutes before: up to 3 things for the day, each from something it knows, and up to 2 drafts made for them; a draft still being made holds the note back 30 minutes at most, and a morning more than 4 hours late is skipped. Quiet hours move it to when they end. It comes in the chat: there's no email copy on this computer. |
+| A day's work | $0.05 | The most a day of work on the clock may cost: the morning, its drafts, promises, the look back, skill scores, a work's data and what they watch. Web caps: 10 searches, 15 pages. |
+| Weekly look back | Sunday 20:00 | What it learned about how you like things (lessons kept or retired) and rules drawn from where you chose differently, for you to approve. Nothing is written for itself. |
+| The week | a cap you set, $5 to start | What your agents may spend on your key in a week, all of them together (`POST /v1/usage`, `0` for no limit; `internal/usage`). Past it, light mode: replies on `OPENAI_LIGHT_MODEL`, mornings without drafts, no watching or look back; past 150%, or a quarter of the week in one hour, they rest until it resets. The week counts from when Tinio first ran. |
 | Messages | 200 to each agent a day | A guard against a loop running up your bill, beside the cap (`api/config/constants.go`). |
-| Failed work | 3 more tries, 15, 30 and 60 minutes apart | A piece of work, a reminder, a promise's message, the day's plan or the weekly review that fails is tried again later, then given up; a piece cut off for length is given up at once. What a failed call cost is counted. |
+| Failed work | 3 more tries, 15, 30 and 60 minutes apart | A draft, a reminder, a promise's message, the morning or the weekly look back that fails is tried again later, then given up; a piece cut off for length is given up at once. What a failed call cost is counted. |
 | Models | must have a price | Tinio and `tinio eval` refuse to run agents on a model missing from `internal/pricing`: its cost would count as $0 and no cap could hold. |
-| A quiet owner | 3 days, 7 days | Counted from the owner's last message (what the agent says first doesn't count). When their owner hasn't written for 3 days, their own day is one thing a day; after 7 (or if they've never written), it stops: no plan, review or old works' data. Back at once when they write. Reminders, promises and what they watch go on. |
-| Abilities | `read_book`, `read_article`, and the reading tools of the accounts you connect | What they can do beyond writing, in their day and before a reply. Searching and reading the open web is written (`web_search`, `read_page`) but not given to agents yet. |
-| Judgment calls | on, 1 a day, 30 minutes | They ask what you'd choose; a different pick followed by a message within 30 minutes is taken as why. |
+| A quiet owner | 3 days, 7 days | Counted from the owner's last message (what the agent says first doesn't count). When their owner hasn't written for 3 days, their morning comes without drafts; after 7 (or if they've never written), there's no morning, look back or old works' data. Back at once when they write. Reminders, promises and what they watch go on. |
+| Abilities | `read_book`, `read_article`, and the reading tools of the accounts you connect | What they can use while making something for you, and before a reply, beyond writing. Searching and reading the open web is written (`web_search`, `read_page`) but not given to agents yet. |
+| Judgment calls | from requests | Every request you answer is a call: a yes or no that teaches them how you decide. A different answer followed by a message within 30 minutes is taken as why. |
 | Requests | denied after 24 hours | An unanswered request is no. |
-
-**Pace** is per agent, 1, 3 or 10, set in their settings (1 when they're raised): how much
-faster than a person they work and learn, and how much of your cap their own day uses. At a higher pace their waking day runs in that many rounds of
-planning and doing, and goals are due in days rather than weeks. Anything involving their
-owner stays at human pace.
 
 **What they may do on their own.** Each kind of action is `auto`, `ask` (the owner approves
 in the chat) or `forbid`:
@@ -142,8 +139,7 @@ in the chat) or `forbid`:
 | `write` | tools that change the owner's own things | ask |
 | `reach_out` | messaging someone first | ask |
 | `commit` | promising to make something for someone | ask |
-| `publish` | putting a work on their public page | ask |
-| `dream` | adding, rewording or dropping a dream | ask |
+| `publish` | posting publicly, through a tool | ask |
 | `external_message` | email, posts and DMs outside the chat | forbid: nothing leaves the chat yet |
 | `spend` | money | forbid |
 
@@ -152,9 +148,9 @@ money and messages outside the chat change only in the code, never by chat.
 
 ## Characters
 
-The six ready characters are folders in [characters](../characters): Zara (social media),
-Kenji (software), Marcus (futures trading research), Sofía (product), Henrik (bookkeeping
-and finance) and Ayesha (copywriting). Each arrives already good at their job, and all of
+The six ready characters are folders in [characters](../characters): Marcus (personal
+assistant), Kenji (software), Zara (social media), Ayesha (content writing), Sofía
+(customer support) and Henrik (bookkeeping and finance). Each arrives already good at their job, and all of
 them hand over drafts and plans: nothing they make leaves the chat without the owner. Tinio loads them
 into the `characters` table when it starts, a new version when one changes, and an agent
 raised from one keeps the version they were raised from. Each has three files, with
@@ -172,15 +168,12 @@ or a friend.
 | Key | What it is |
 |---|---|
 | `name` | What they're called. |
-| `timezone` | Their time zone, e.g. `Africa/Lagos`, or `"{timezone}"` for their owner's: their days, reminders and check-ins are in it. |
-| `day` | When their day runs, in their time zone: `plan_at`, `journal_at`, `review_at` (`Sun 20:00`) and `check_ins` (`HH:MM` times they consider checking in). |
-| `story` | Their life, one fact per line. They never contradict it; anything it doesn't cover they decide the first time it comes up, and remember. |
+| `timezone` | Their time zone, e.g. `Africa/Lagos`, or `"{timezone}"` for their owner's: their mornings, reminders and check-ins are in it. |
+| `story` | Their background, one fact per line: where they're from and what they know from their work, for their voice and know-how. They never contradict it. It isn't a life they live: they work for their owner. |
 | `personality` | How they are with people. It shapes every reply. |
-| `routine` | How their days usually go. It steers how they plan; they decide the rest. |
-| `makes` | What they make, in writing: `kind` (snake_case; their works are filed under it) and `about` (what it is and what a good one has). `data` (optional) is what each one carries so it can be made into a file: `score` for music (MIDI), `files` for code (a zip), `table` (a spreadsheet or CSV) or `events` (a calendar). Everyone can also write `notes`, short `writing`, a `table` and a `schedule`, and keeps a journal. |
-| `dreams` | Who they want to become. Copied into memory the first time; after that they may change them, asking their owner. |
+| `makes` | What they make, in writing: `kind` (snake_case; their works are filed under it) and `about` (what it is and what a good one has). `data` (optional) is what each one carries so it can be made into a file: `score` for music (MIDI), `files` for code (a zip), `table` (a spreadsheet or CSV) or `events` (a calendar). Everyone can also write `notes`, short `writing`, a `table` and a `schedule`. |
 | `skills` | Where they start: `name`, `level` (1–10) and `shown_by` (the kinds of work that show it). After that their levels come from what they make and their owner's feedback. |
-| `family` | Who they're born knowing: `name`, `relation`, `account` (only for their owner) and `circle` (`family` by default, or `friend`, `school`, `work`, `community`). |
+| `family` | Who they know from the start: their owner (`name`, `relation`, `account`, `circle`). |
 
 **judgment.yaml** is how the owner decides, a starting set that fits the character; the
 owner's answers to their calls add their own decisions.
@@ -209,8 +202,8 @@ Every test that needs a database opens a new SQLite file in its own temporary fo
 nothing to start, and nothing left behind. `gofmt -l .` must print nothing.
 
 `go run ./cmd/tinio eval` checks System 1's question sets against the cases in
-[evals](../evals), and `eval -replies` and `eval -day` raise agents in a throwaway
-database of their own; they call OpenAI, on `OPENAI_API_KEY`.
+[evals](../evals), and `eval -replies` raises agents in a throwaway
+database of its own; both call OpenAI, on `OPENAI_API_KEY`.
 
 The prompts ([prompts](../prompts)), the question sets ([decisions](../decisions)) and the
 characters are built into the binary; a file at the same path where it runs is used

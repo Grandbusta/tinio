@@ -9,7 +9,7 @@ type State string
 
 const (
 	Normal  State = "normal"
-	Light   State = "light"   // the week is used: replies on a small model, their own day paused
+	Light   State = "light"   // the week is used: replies on a small model, mornings without drafts
 	Resting State = "resting" // well past it, or an hour that used too much: only what's never cut
 )
 
@@ -94,6 +94,6 @@ func (s Standing) ResetsAt(now time.Time) time.Time {
 	return WeekOf(s.Started, now).Add(Week)
 }
 
-// OwnDay is whether their own day goes on: planning, activities, check-ins,
-// what they watch and the weekly review. Not past the week.
-func (s Standing) OwnDay(now time.Time) bool { return s.State(now) == Normal }
+// Drafts is whether they work on their own for their owner: their mornings'
+// drafts, what they watch and the weekly look back. Not past the week.
+func (s Standing) Drafts(now time.Time) bool { return s.State(now) == Normal }

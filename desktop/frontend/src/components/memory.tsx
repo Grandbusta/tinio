@@ -24,7 +24,7 @@ function origin(f: Fact) {
     case "action":
       return "From a tool they used";
     default:
-      return "From their own day";
+      return "From their work for you";
   }
 }
 
@@ -145,7 +145,7 @@ export function MemoryPage({ id }: { id: string }) {
   const name = agent?.name ?? "They";
   const tabs: { key: Fact["about"]; label: string; note: string }[] = [
     { key: "you", label: "About you", note: "From your chats" },
-    { key: "self", label: `${agent ? `${agent.name}'s` : "Their"} own life`, note: "From their days and their talks with you" },
+    { key: "self", label: `${agent ? `${agent.name}'s` : "Their"} character`, note: "Their background, and what they've said of themselves" },
   ];
   const needle = q.trim().toLowerCase();
   const shown = (facts ?? []).filter((f) => f.about === tab && (!needle || f.text.toLowerCase().includes(needle)));
@@ -206,7 +206,7 @@ export function MemoryPage({ id }: { id: string }) {
               <div key={f.id} className="flex flex-col gap-px border-b border-surface-2 pb-2 last:border-b-0 last:pb-0">
                 <span className="text-[13.5px]">{f.text}</span>
                 <span className="text-[11.5px] text-muted">
-                  {f.about === "you" ? "About you" : "Their own life"} · {when(f.at)}
+                  {f.about === "you" ? "About you" : "Their character"} · {when(f.at)}
                 </span>
               </div>
             ))}

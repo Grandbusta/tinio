@@ -13,8 +13,8 @@ import (
 	"github.com/Grandbusta/tinio/internal/store"
 )
 
-// What an agent made is theirs to show their owner: made for themselves or for
-// their owner, never the journal or something made for someone else. Any of it
+// What an agent made is theirs to show their owner: made for their owner, never
+// something made for someone else. Any of it
 // downloads in the formats it can be made into, or is sent into their chat.
 func TestWorksAreWhatTheyMadeForThemselvesAndYou(t *testing.T) {
 	ta := newTestAPI(t)
@@ -37,7 +37,6 @@ func TestWorksAreWhatTheyMadeForThemselvesAndYou(t *testing.T) {
 		"own":    {Kind: "post", Title: "Oat milk hooks", Text: "Three hooks.\n\nOne: oats, but make it morning."},
 		"yours":  {Kind: "content_calendar", Title: "December calendar", Text: "Week one: gifts.", IntentionID: promised(owner)},
 		"theirs": {Kind: "post", Title: "For someone else", Text: "Not for Ada.", IntentionID: promised("telegram:9")},
-		"diary":  {Kind: "journal", Title: "Journal", Text: "Mine."},
 	}
 	for name, w := range works {
 		w.ID, w.CreatedAt = ulid.Make(), now
@@ -68,7 +67,7 @@ func TestWorksAreWhatTheyMadeForThemselvesAndYou(t *testing.T) {
 		}
 	}
 
-	for name, want := range map[string]int{"own": http.StatusOK, "theirs": http.StatusNotFound, "diary": http.StatusNotFound} {
+	for name, want := range map[string]int{"own": http.StatusOK, "theirs": http.StatusNotFound} {
 		if rec, _ := ta.do(t, "GET", "/v1/agents/"+zara+"/works/"+works[name].ID.String(), nil, ada, ""); rec.Code != want {
 			t.Errorf("reading %s: %d, want %d", name, rec.Code, want)
 		}

@@ -66,10 +66,10 @@ func (s *sayings) SendFile(ctx context.Context, p perception.Percept, f render.F
 }
 
 // Talk starts agent's mind, seeded, for their owner (account, called owner),
-// at pace, until ctx is done or End.
-func (h *Host) Talk(ctx context.Context, agent, account, owner string, pace int) (*Talk, error) {
+// until ctx is done or End.
+func (h *Host) Talk(ctx context.Context, agent, account, owner string) (*Talk, error) {
 	// Unbuffered: a message is taken once the last is answered, a tick once the last is done.
-	r := &runner{row: agentRow{id: agent, account: account, ownerName: owner, ready: true, pace: pace},
+	r := &runner{row: agentRow{id: agent, account: account, ownerName: owner, ready: true},
 		percepts: make(chan perception.Percept), ticks: make(chan time.Time)}
 	m, done, err := h.mind(ctx, r)
 	if err != nil {

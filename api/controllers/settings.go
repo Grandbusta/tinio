@@ -31,9 +31,8 @@ type Settings struct {
 // them: the ones the owner may also change by chat (action.ByChat). fixed are
 // shown but set only by Tinio's config: messages outside the chat and money.
 var (
-	settable = []action.Class{action.ReadWeb, action.Dream, action.Commit, action.Publish, action.ReachOut, action.Write}
+	settable = []action.Class{action.ReadWeb, action.Commit, action.Publish, action.ReachOut, action.Write}
 	fixed    = []action.Class{action.ExternalMessage, action.Spend}
-	paces    = []int{1, 3, 10}
 )
 
 type classView struct {
@@ -49,16 +48,15 @@ type quietView struct {
 
 type settingsView struct {
 	Classes []classView `json:"classes"`
-	Pace    int         `json:"pace"`
-	Paces   []int       `json:"paces"`
 	Quiet   quietView   `json:"quiet"`
+	Morning morningView `json:"morning"`
 	Paused  bool        `json:"paused"`
 }
 
 type settingsInput struct {
 	Classes map[string]string `json:"classes"` // class → auto, ask or forbid; only the ones changed
-	Pace    int               `json:"pace"`    // 0: unchanged
 	Quiet   *quietView        `json:"quiet"`   // nil: unchanged
+	Morning *morningView      `json:"morning"` // nil: unchanged
 }
 
 // policy is the config's autonomy with the owner's changes over it, as the
@@ -95,7 +93,8 @@ func (s *Settings) view(c *gin.Context, ag models.Agent) (settingsView, error) {
 	if err != nil {
 		return settingsView{}, err
 	}
-	v := settingsView{Pace: ag.Pace, Paces: paces, Quiet: quietView{From: ag.QuietFrom, Until: ag.QuietUntil}, Paused: ag.Paused}
+	v := settingsView{Quiet: quietView{From: ag.QuietFrom, Until: ag.QuietUntil},
+		Morning: morningOf(ag), Paused: ag.Paused}
 	for _, c := range settable {
 		v.Classes = append(v.Classes, classView{Class: string(c), Verdict: verdictOf(p, c), Choices: choicesOf(c)})
 	}
@@ -119,7 +118,7 @@ func (s *Settings) answer(c *gin.Context, ag models.Agent) error {
 }
 
 // Save keeps what changed: each class as the owner's newest rule for it, the
-// pace on the agent.
+// quiet hours and the morning on the agent.
 func (s *Settings) Save(c *gin.Context) error {
 	var in settingsInput
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -143,8 +142,11 @@ func (s *Settings) Save(c *gin.Context) error {
 			return utils.Invalid("quiet", "Quiet hours are two different times, like 22:00 and 07:00.")
 		}
 	}
-	if in.Pace != 0 && !slices.Contains(paces, in.Pace) {
-		return utils.Invalid("pace", "Pick one of the paces offered.")
+	var days string
+	if in.Morning != nil {
+		if days, err = in.Morning.check(); err != nil {
+			return err
+		}
 	}
 	now := time.Now().UTC()
 	changed := false
@@ -157,18 +159,19 @@ func (s *Settings) Save(c *gin.Context) error {
 		}
 		changed = true
 	}
-	if in.Pace != 0 && in.Pace != ag.Pace {
-		if _, err := s.DB.Exec(c, `UPDATE agents SET pace = $1 WHERE id = $2`, in.Pace, ag.ID); err != nil {
-			return err
-		}
-		ag.Pace = in.Pace
-		changed = true
-	}
 	if q := in.Quiet; q != nil && (q.From != ag.QuietFrom || q.Until != ag.QuietUntil) {
 		if _, err := s.DB.Exec(c, `UPDATE agents SET quiet_from = $1, quiet_until = $2 WHERE id = $3`, q.From, q.Until, ag.ID); err != nil {
 			return err
 		}
 		ag.QuietFrom, ag.QuietUntil = q.From, q.Until
+		changed = true
+	}
+	if mo := in.Morning; mo != nil && (mo.On != ag.MorningOn || mo.At != ag.MorningAt || days != ag.MorningDays) {
+		if _, err := s.DB.Exec(c, `UPDATE agents SET morning_on = $1, morning_at = $2, morning_days = $3 WHERE id = $4`,
+			mo.On, mo.At, days, ag.ID); err != nil {
+			return err
+		}
+		ag.MorningOn, ag.MorningAt, ag.MorningDays = mo.On, mo.At, days
 		changed = true
 	}
 	if changed {

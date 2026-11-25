@@ -10,7 +10,6 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/internal/ability"
-	"github.com/Grandbusta/tinio/internal/ability/journal"
 	"github.com/Grandbusta/tinio/internal/memory"
 	"github.com/Grandbusta/tinio/internal/providers/system2"
 )
@@ -18,7 +17,7 @@ import (
 func promiseMind(r *fakeReplier, s2 *fakeSystem2) (*Mind, *fakeStore) {
 	m, s := initiativeMind(r, &fakeSystem1{choice: "other", confidence: 0.95}, s2)
 	look := &fakeAbility{name: "look_up", describe: "look it up", found: map[string]string{"afrobeat": "Afrobeat began in Lagos."}}
-	m.Abilities = ability.NewSet(journal.Journal{Store: s}, look)
+	m.Abilities = ability.NewSet(look)
 	m.Day = Day{ActivityPrompt: Prompt{Ref: "activity@test", Text: "You are {name}, making something."}}
 	return m, s
 }

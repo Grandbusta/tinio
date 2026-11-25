@@ -12,12 +12,11 @@ export type Character = {
   name: string;
   about: string;
   personality: string[];
-  toward: string;
   born_with: string[];
   relations: string[];
 };
 
-export type Agent = { id: string; character: string; name: string; owner_name: string; relation: string; pace: number; created_at: string; paused: boolean };
+export type Agent = { id: string; character: string; name: string; owner_name: string; relation: string; created_at: string; paused: boolean };
 
 // A request in parts, for its card; without a title it's an older one, shown as words.
 // editable: you may change quote before saying yes, and your version is what's used.
@@ -135,15 +134,19 @@ async function send<T>(path: string, body: unknown): Promise<Answer<T>> {
   return { ok: false, error: offline };
 }
 
-// An agent's own day, in their time. A plan item is done, now (due, being done), later,
-// waiting (for your approval) or missed (not done in time).
-export type Today = {
+// One agent's part of your day: their morning, once it's sent (sent, HH:MM, their time),
+// with the things they chose, what they drafted for each and which you ticked; next is when
+// it comes ("" if mornings are off). Their requests waiting too.
+export type MorningItem = { id: string; what: string; how: string; source: string; work?: { id: string; title: string; kind: string; at: string }; done: boolean };
+export type OwnerDay = {
+  agent: string;
+  name: string;
   date: string;
-  plans_at: string;
-  planned_at?: string;
-  plan: { at: string; what: string; detail?: string; state: "done" | "now" | "later" | "waiting" | "missed" }[];
-  made: { id: string; title: string; kind: string; at: string }[];
-  journal: string;
+  sent: string;
+  next: string;
+  opening: string;
+  question: string;
+  items: MorningItem[];
   waiting: number;
 };
 
@@ -164,26 +167,13 @@ export type Overview = {
 
 // Something an agent made that you may see: for themselves, or for you (for_you). peek is
 // in a list, text when it's read. formats are the files it can be downloaded as now.
-// What an agent grows towards: their active dreams, each with the goals that serve it (a
-// proposed goal waits for your answer), each goal's learning plan if it has one; their
-// newest weekly review, written for themselves; and the last seven days counted.
-export type Goal = {
-  id: string;
-  text: string;
-  done_when?: string;
-  due?: string; // YYYY-MM-DD
-  status: "proposed" | "active" | "done";
-  progress?: string; // as their last review put it
-  skill?: string;
-  level?: number; // the skill's, 1 to 10
-  plan?: { stage: number; status: string; stages: { learn: string; done: boolean }[] };
-};
-
+// How an agent is getting better at helping you: what they've learned about how you like
+// things (their lessons and your tastes, newest first; from: owner is your edits), their
+// skills, and the last seven days counted (things and done: in their mornings).
 export type Growth = {
-  dreams: { id: string; text: string; source: "life" | "self" | "owner"; since: string; goals: Goal[] }[];
-  other_goals: Goal[];
-  review: { title: string; text: string; at: string } | null;
-  week: { made: number; decided: number; approved: number; answered: number; guessed: number };
+  learned: { text: string; skill?: string; from: "owner" | "self" | "others" | "taste"; at: string }[];
+  skills: { name: string; level: number }[];
+  week: { made: number; decided: number; approved: number; answered: number; guessed: number; things: number; done: number };
 };
 
 // How their owner decides, as the agent has learnt it: the principles it may use (kept)
@@ -232,7 +222,7 @@ export type Decision = {
   latency_ms: number;
   cost_usd: number;
   outcome: { status: string; detail?: string } | null;
-  kind: string; // what it was about: message, hello, reminder, ...; "" for their own day
+  kind: string; // what it was about: message, hello, reminder, ...; "" for their work on their own
   text: string;
 };
 
@@ -246,23 +236,18 @@ export type Chain = {
   questions: Record<string, { set: string; type: string; instructions: string; choices?: { value: string; description?: string }[] }>;
 };
 
-// What an agent remembers, about you and about their own life, newest first; from is the
+// What an agent remembers, about you and about themselves (their character), newest first; from is the
 // kind of thing it was learnt from (message, activity, observation, ...).
 export type Fact = { id: string; about: "you" | "self"; text: string; at: string; areas: string[]; from: string };
 
-// Who an agent is: what their owner may change (story, personality, routine, day) and
-// what they're shown only (what they make, their dreams), and their versions, newest first.
-export type CharacterDay = { plan_at: string; journal_at: string; review_at: string; check_ins: string[] };
-
+// Who an agent is: what their owner may change (their background, as story, and
+// personality), what they're shown only (what they make), and their versions, newest first.
 export type CharacterSheet = {
   name: string;
   story: string[];
   personality: string[];
-  routine: string[];
   timezone: string;
-  day: CharacterDay;
   makes: { kind: string; about: string }[];
-  dreams: string[];
   versions: { id: string; source: "new" | "import" | "edit" | "rollback"; at: string }[];
 };
 
@@ -289,7 +274,7 @@ export type Usage = {
   used: number;
   resets_at: string;
   messages_left: number;
-  agents: { id: string; name: string; chat: number; day: number }[];
+  agents: { id: string; name: string; chat: number; work: number }[]; // work: mornings, drafts, what they watch
 };
 
 export type Verdict = "auto" | "ask" | "forbid";
@@ -297,11 +282,14 @@ export type Verdict = "auto" | "ask" | "forbid";
 // An agent's own settings. A class with no choices is fixed by Tinio.
 export type AgentSettings = {
   classes: { class: string; verdict: Verdict; choices: Verdict[] }[];
-  pace: number;
-  paces: number[];
   quiet: { from: string; until: string }; // HH:MM in their time zone; both "": none
+  morning: Morning;
   paused: boolean;
 };
+
+// An agent's morning as you set it: on or off, the time (HH:MM, your time zone) and the
+// days (Sunday 0 to Saturday 6). It comes in the chat.
+export type Morning = { on: boolean; at: string; days: number[] };
 
 // An agent's skills on the ladder, and the know-how their owner imported.
 export type AgentSkill = { name: string; level: number; rung: "apprentice" | "pro"; born: boolean; shown_by: string[]; scores: number[] };

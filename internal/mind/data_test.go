@@ -29,7 +29,7 @@ var musicLife = character.Character{Name: "Tobi", Story: []string{"Tobi makes be
 	{Kind: "beat_idea", About: "a beat", Data: "score"}, {Kind: "lyrics", About: "lyrics"}}}
 
 func TestMusicIsMadeWithItsScore(t *testing.T) {
-	m, s, s2, r, _ := learningMind()
+	m, s, s2, _, _ := learningMind()
 	m.Life = musicLife
 	m.Filer = &fakeFiler{}
 	s2.formats["activity"] = beatJSON
@@ -59,11 +59,6 @@ func TestMusicIsMadeWithItsScore(t *testing.T) {
 	if err := json.Unmarshal(beat.Data, &kept); err != nil || len(kept.Tracks) != 1 || len(kept.Tracks[0].Notes) != 2 ||
 		kept.Tracks[0].Notes[1].Velocity != 90 {
 		t.Errorf("score kept = %s (%v)", beat.Data, err)
-	}
-	filer := m.Filer.(*fakeFiler)
-	if len(filer.sent) != 1 || filer.sent[0].name != "lagos-after-rain.mid" || !bytes.HasPrefix(filer.sent[0].data, []byte("MThd")) ||
-		!strings.Contains(filer.sent[0].caption, "82 BPM, D minor") || len(r.sent) != 0 {
-		t.Errorf("review sent: files %d, messages %d", len(filer.sent), len(r.sent))
 	}
 }
 

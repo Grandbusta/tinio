@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/Grandbusta/tinio/api/config"
 	"github.com/Grandbusta/tinio/api/middlewares"
 	"github.com/Grandbusta/tinio/api/models"
 	"github.com/Grandbusta/tinio/api/utils"
@@ -27,10 +26,11 @@ type Agents struct {
 }
 
 type newAgentInput struct {
-	Character string `json:"character"`
-	OwnerName string `json:"owner_name"`
-	Relation  string `json:"relation"`
-	Timezone  string `json:"timezone"` // the owner's, from their browser; "": UTC
+	Character string       `json:"character"`
+	OwnerName string       `json:"owner_name"`
+	Relation  string       `json:"relation"`
+	Timezone  string       `json:"timezone"` // the owner's, from their browser; "": UTC
+	Morning   *morningView `json:"morning"`  // nil: the default
 }
 
 // Create raises an agent from a character the signed-in account may raise:
@@ -55,6 +55,14 @@ func (a *Agents) Create(c *gin.Context) error {
 	case !slices.Contains(t.Relations, in.Relation):
 		return utils.Invalid("relation", "Pick who you are to "+t.Name+".")
 	}
+	morning := defaultMorning
+	if in.Morning != nil {
+		morning = *in.Morning
+	}
+	days, err := morning.check()
+	if err != nil {
+		return err
+	}
 	if _, err := time.LoadLocation(in.Timezone); err != nil || strings.ContainsAny(in.Timezone, "\"\\\n{} ") {
 		return utils.Invalid("timezone", "That isn't a time zone like Africa/Lagos.")
 	}
@@ -70,7 +78,8 @@ func (a *Agents) Create(c *gin.Context) error {
 		now = a.Now().UTC()
 	}
 	ag := models.Agent{AccountID: account, CharacterKey: t.Key, CharacterVersion: version, Name: t.Name, OwnerName: owner,
-		Relation: in.Relation, Pace: config.Pace, CreatedAt: now}
+		Relation: in.Relation, CreatedAt: now,
+		MorningOn: morning.On, MorningAt: morning.At, MorningDays: days}
 	tx, err := a.DB.Begin(c)
 	if err != nil {
 		return err

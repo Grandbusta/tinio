@@ -173,21 +173,6 @@ func TestADeniedPromiseIsDroppedKindly(t *testing.T) {
 	}
 }
 
-func TestPublishingIsDecidedByTheOwner(t *testing.T) {
-	m, s, asker := gatedMind(&fakeReplier{}, &fakeSystem2{})
-	work := ulid.Make()
-	s.approvals = []memory.Approval{
-		{ID: ulid.Make(), Class: "publish", What: "Lagos Rain (lyrics)", Ref: work, Status: memory.ApprovalPending, AskedAt: now}}
-	m.tick(context.Background(), now) // sends what the profile writer saved
-	if len(asker.asked) != 1 {
-		t.Fatalf("asked %q", asker.asked)
-	}
-	m.handle(context.Background(), tap(owner, asker.ids[0], true))
-	if s.public[work] != "true by owner" {
-		t.Errorf("work = %q", s.public[work])
-	}
-}
-
 func TestReadingTheWebOrToolsCanBeForbidden(t *testing.T) {
 	for class, risk := range map[action.Class]ability.Risk{action.ReadWeb: ability.ReadsWeb, action.UseTools: ability.UsesTools} {
 		look := &fakeAbility{name: "look_up", describe: "look it up", found: map[string]string{"x": "y"}, risk: risk}

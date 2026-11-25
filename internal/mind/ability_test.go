@@ -9,7 +9,6 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"github.com/Grandbusta/tinio/internal/ability"
-	"github.com/Grandbusta/tinio/internal/ability/journal"
 	"github.com/Grandbusta/tinio/internal/memory"
 )
 
@@ -48,13 +47,12 @@ const notesJSON = `{"title":"Polyrhythm notes","kind":"notes","text":"Three agai
 func abilityMind(abs ...ability.Ability) (*Mind, *fakeStore, *fakeSystem2) {
 	s2 := &fakeSystem2{formats: map[string]string{"activity": notesJSON}}
 	m, s := lifeMind(s2)
-	m.planned = "2026-10-29"
-	m.Abilities = ability.NewSet(append([]ability.Ability{journal.Journal{Store: s}}, abs...)...)
+	m.Abilities = ability.NewSet(abs...)
 	return m, s, s2
 }
 
 func activity(text, abilityName, query string) memory.Intention {
-	i := memory.Intention{ID: ulid.Make(), Subject: memory.SubjectSelf, Kind: memory.IntentionActivity, Text: text,
+	i := memory.Intention{ID: ulid.Make(), Subject: owner, Kind: memory.IntentionActivity, Text: text,
 		Ability: abilityName, DueAt: at(29, 10, 0), Status: memory.IntentionPending}
 	if query != "" {
 		i.Args = map[string]string{"query": query}

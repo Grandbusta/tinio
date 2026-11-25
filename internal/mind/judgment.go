@@ -20,7 +20,6 @@ const (
 )
 
 var (
-	planJudgment   = []string{"general", "life", "product"}
 	reviewJudgment = []string{"general", "life", "product", "autonomy"}
 	learnJudgment  = []string{"general", "life"}
 )
@@ -190,31 +189,4 @@ func (m *Mind) similarCases(ctx context.Context, about string) ([]memory.Judgmen
 		picked[i] = r.item
 	}
 	return picked, true
-}
-
-func (m *Mind) dayAbout(ctx context.Context, projects []memory.Project) string {
-	var parts []string
-	if goals, err := m.Store.Goals(ctx, true); err == nil {
-		for _, g := range goals {
-			parts = append(parts, "goal: "+g.Text)
-		}
-	}
-	for _, p := range projects {
-		parts = append(parts, "project: "+p.Title)
-	}
-	if len(parts) == 0 {
-		return "Planning the day: what to focus on, and whether to start something new."
-	}
-	return "Planning the day: what to focus on, and whether to start something new or finish what's started. " + strings.Join(parts, "; ") + "."
-}
-
-func reviewAbout(goals []memory.Goal, projects []memory.Project) string {
-	var parts []string
-	for _, g := range goals {
-		parts = append(parts, "goal: "+g.Text)
-	}
-	for _, p := range projects {
-		parts = append(parts, "project: "+p.Title)
-	}
-	return "Reviewing the week: whether to keep, drop or set goals, and what to focus on next. " + strings.Join(parts, "; ")
 }

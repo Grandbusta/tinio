@@ -37,9 +37,7 @@ func evaluate(ctx context.Context, args []string, log *slog.Logger) error {
 	model := fs.String("model", "", "the model under test: it answers every set, through the reasoning API, not the model each set names; with -replies, it writes the replies (default OPENAI_MODEL)")
 	replies := fs.Bool("replies", false, "have the conversations in evals/replies with new agents, and check and judge their replies")
 	judge := fs.String("judge", "gpt-6-astra", "with -replies, the model that judges them")
-	characters := fs.String("character", "", "with -replies or -day, only these characters, comma-separated")
-	day := fs.Bool("day", false, "have a new agent from each ready character live a whole day of their own, and report what it cost")
-	pace := fs.Int("pace", 1, "with -day, their pace")
+	characters := fs.String("character", "", "with -replies, only these characters, comma-separated")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -49,9 +47,6 @@ func evaluate(ctx context.Context, args []string, log *slog.Logger) error {
 	}
 	if err := host.Priced(*model, *judge); err != nil {
 		return err
-	}
-	if *day {
-		return evaluateDays(ctx, models, dayOptions{only: *characters, pace: max(*pace, 1)}, log)
 	}
 	if *replies {
 		return evaluateReplies(ctx, models, replyOptions{model: *model, judge: *judge, only: *characters, limit: *limit,

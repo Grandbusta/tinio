@@ -93,12 +93,12 @@ export function UsageBanner() {
     warn90: {
       box: "bg-warn-soft",
       title: "90% of this week's cap used",
-      body: `At 100%, ${who} ${many ? "reply" : "replies"} more simply and their own day pauses until ${at}.`,
+      body: `At 100%, ${who} ${many ? "reply" : "replies"} more simply and mornings come without drafts until ${at}.`,
     },
     light: {
       box: "bg-warn-soft",
       title: `Light mode until ${at}`,
-      body: `You've reached this week's cap. ${who} still ${many ? "reply" : "replies"}, more simply, and their own day is paused until the reset. Asks, calls, reminders and promises carry on as usual.`,
+      body: `You've reached this week's cap. ${who} still ${many ? "reply" : "replies"}, more simply, and mornings come without drafts until the reset. Asks, calls, reminders and promises carry on as usual.`,
     },
     resting: {
       box: "bg-surface-2",
@@ -175,9 +175,9 @@ export function Appearance() {
 export function YouPage() {
   const { usage, refresh } = useFrame();
   const steps = usage && [
-    { at: "0 to 75%", title: "As usual", text: "Full replies, and their own day: planning, reading, making things." },
+    { at: "0 to 75%", title: "As usual", text: "Full replies, and mornings with drafts made before you wake." },
     { at: "75%, 90%", title: "A note from Tinio", text: "At the top of your chats." },
-    { at: "100%", title: "Light mode", text: "They still reply, more simply, and their own day pauses until the reset." },
+    { at: "100%", title: "Light mode", text: "They still reply, more simply, and mornings come without drafts until the reset." },
     { at: "About 150%", title: "Resting", text: "They rest until the reset. What you send is read then." },
     { at: "Always", title: "Never cut", text: "Asks and calls waiting for your answer, and reminders and promises already made." },
   ];
@@ -238,7 +238,7 @@ export function YouPage() {
               <h2 id="used" className="font-display text-lg font-semibold tracking-[-0.02em]">What used this week</h2>
               <span aria-hidden="true" className="flex h-3 overflow-hidden rounded-full bg-surface-2">
                 {usage.agents.map((a, i) => (
-                  <span key={a.id} className={colours[i % colours.length]} style={{ width: `${Math.min(a.chat + a.day, 100)}%` }} />
+                  <span key={a.id} className={colours[i % colours.length]} style={{ width: `${Math.min(a.chat + a.work, 100)}%` }} />
                 ))}
               </span>
               <ul className="m-0 flex list-none flex-col p-0">
@@ -248,10 +248,10 @@ export function YouPage() {
                     <span className="flex min-w-0 flex-auto flex-col">
                       <b className="text-sm font-semibold">{a.name}</b>
                       <span className="text-xs text-muted">
-                        Chat {Math.round(a.chat)}% · their own day {Math.round(a.day)}%
+                        Chat {Math.round(a.chat)}% · mornings and drafts {Math.round(a.work)}%
                       </span>
                     </span>
-                    <b className="text-sm font-semibold">{Math.round(a.chat + a.day)}%</b>
+                    <b className="text-sm font-semibold">{Math.round(a.chat + a.work)}%</b>
                   </li>
                 ))}
               </ul>
@@ -325,7 +325,7 @@ function CapForm({ usage, onSaved }: { usage: Usage; onSaved: () => void }) {
         </button>
       </div>
       <span id="cap-note" className={`text-[13px] ${error ? "text-bad-text" : "text-muted"}`}>
-        {error || "Paid to OpenAI on your key. 0 means no limit. A day of chatting and their own day is often a few cents."}
+        {error || "Paid to OpenAI on your key. 0 means no limit. A day of chatting and a morning is often a few cents."}
       </span>
     </form>
   );

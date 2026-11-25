@@ -86,6 +86,9 @@ CREATE TABLE agent_versions (
     PRIMARY KEY (agent_id, id),
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 );
+-- Each agent's morning for their owner: whether they send one, at what time
+-- (HH:MM in the owner's time zone), on which days (the weekdays as digits,
+-- Sunday 0, Monday 1). The note comes in the chat.
 CREATE TABLE agents (
     id TEXT NOT NULL,
     account_id TEXT NOT NULL,
@@ -93,13 +96,15 @@ CREATE TABLE agents (
     name TEXT NOT NULL,
     owner_name TEXT NOT NULL,
     relation TEXT NOT NULL,
-    pace INTEGER NOT NULL,
     created_at TEXT NOT NULL,
     character_version INTEGER DEFAULT 0 NOT NULL,
     owner_read_until TEXT DEFAULT '' NOT NULL,
     quiet_from TEXT DEFAULT '' NOT NULL,
     quiet_until TEXT DEFAULT '' NOT NULL,
     paused_at TEXT,
+    morning_on INTEGER DEFAULT 1 NOT NULL,
+    morning_at TEXT DEFAULT '07:30' NOT NULL,
+    morning_days TEXT DEFAULT '12345' NOT NULL,
     PRIMARY KEY (id),
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
@@ -230,17 +235,6 @@ CREATE TABLE decisions (
     FOREIGN KEY (agent_id, parent_id) REFERENCES decisions(agent_id, id),
     FOREIGN KEY (agent_id, percept_id) REFERENCES percepts(agent_id, id)
 );
-CREATE TABLE dreams (
-    agent_id TEXT NOT NULL,
-    id TEXT NOT NULL,
-    TEXT TEXT NOT NULL,
-    status TEXT NOT NULL,
-    source TEXT NOT NULL,
-    since TEXT NOT NULL,
-    ended_at TEXT,
-    PRIMARY KEY (agent_id, id),
-    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
-);
 CREATE TABLE facts (
     agent_id TEXT NOT NULL,
     id TEXT NOT NULL,
@@ -249,27 +243,10 @@ CREATE TABLE facts (
     TEXT TEXT NOT NULL,
     at TEXT NOT NULL,
     areas TEXT DEFAULT '[]' NOT NULL,
-    public INTEGER,
     asked_at TEXT,
     PRIMARY KEY (agent_id, id),
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
     FOREIGN KEY (agent_id, percept_id) REFERENCES percepts(agent_id, id)
-);
-CREATE TABLE goals (
-    agent_id TEXT NOT NULL,
-    id TEXT NOT NULL,
-    dream_id TEXT NOT NULL,
-    TEXT TEXT NOT NULL,
-    done_when TEXT NOT NULL,
-    due TEXT NOT NULL,
-    status TEXT NOT NULL,
-    progress TEXT DEFAULT '' NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    skill TEXT DEFAULT '' NOT NULL,
-    PRIMARY KEY (agent_id, id),
-    FOREIGN KEY (agent_id, dream_id) REFERENCES dreams(agent_id, id),
-    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 );
 CREATE TABLE intentions (
     agent_id TEXT NOT NULL,
@@ -358,20 +335,6 @@ CREATE TABLE labels (
     FOREIGN KEY (agent_id, decision_id) REFERENCES decisions(agent_id, id),
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 );
-CREATE TABLE learning_plans (
-    agent_id TEXT NOT NULL,
-    id TEXT NOT NULL,
-    goal_id TEXT NOT NULL,
-    skill TEXT NOT NULL,
-    stage INTEGER DEFAULT 0 NOT NULL,
-    status TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    UNIQUE (agent_id, goal_id),
-    PRIMARY KEY (agent_id, id),
-    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
-    FOREIGN KEY (agent_id, goal_id) REFERENCES goals(agent_id, id)
-);
 CREATE TABLE lessons (
     agent_id TEXT NOT NULL,
     id TEXT NOT NULL,
@@ -385,6 +348,23 @@ CREATE TABLE lessons (
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
     FOREIGN KEY (agent_id, skill) REFERENCES skills(agent_id, name),
     FOREIGN KEY (agent_id, work_id) REFERENCES works(agent_id, id)
+);
+-- A morning: what the agent read of their owner's yesterday and drafted for
+-- their today, one a day, in the owner's time zone (day is YYYY-MM-DD).
+-- prepared_at is when it was worked out (drafts start then), sent_at when the
+-- note went to the chat (NULL: not yet). items are up to three things for the
+-- day, as JSON: what, how, where it came from, the draft made for it (an
+-- intention, then its work) and whether the owner ticked it done.
+CREATE TABLE mornings (
+    agent_id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    prepared_at TEXT NOT NULL,
+    sent_at TEXT,
+    opening TEXT DEFAULT '' NOT NULL,
+    question TEXT DEFAULT '' NOT NULL,
+    items TEXT DEFAULT '[]' NOT NULL,
+    PRIMARY KEY (agent_id, day),
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 );
 CREATE TABLE people (
     agent_id TEXT NOT NULL,
@@ -414,18 +394,6 @@ CREATE TABLE percepts (
     PRIMARY KEY (agent_id, id),
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 );
-CREATE TABLE plan_stages (
-    agent_id TEXT NOT NULL,
-    plan_id TEXT NOT NULL,
-    n INTEGER NOT NULL,
-    learn TEXT NOT NULL,
-    practice TEXT NOT NULL,
-    done_when TEXT NOT NULL,
-    done_at TEXT,
-    PRIMARY KEY (agent_id, plan_id, n),
-    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
-    FOREIGN KEY (agent_id, plan_id) REFERENCES learning_plans(agent_id, id)
-);
 CREATE TABLE principle_cases (
     agent_id TEXT NOT NULL,
     principle_id TEXT NOT NULL,
@@ -451,14 +419,6 @@ CREATE TABLE principles (
     PRIMARY KEY (agent_id, id),
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
 );
-CREATE TABLE profile (
-    agent_id TEXT NOT NULL,
-    page TEXT NOT NULL,
-    inputs TEXT NOT NULL,
-    written_at TEXT NOT NULL,
-    PRIMARY KEY (agent_id),
-    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
-);
 CREATE TABLE projects (
     agent_id TEXT NOT NULL,
     id TEXT NOT NULL,
@@ -470,29 +430,9 @@ CREATE TABLE projects (
     updated_at TEXT NOT NULL,
     source_id TEXT,
     position INTEGER DEFAULT 0 NOT NULL,
-    goal_id TEXT,
     PRIMARY KEY (agent_id, id),
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
-    FOREIGN KEY (agent_id, goal_id) REFERENCES goals(agent_id, id),
     FOREIGN KEY (source_id) REFERENCES sources(id)
-);
-CREATE TABLE resources (
-    agent_id TEXT NOT NULL,
-    id TEXT NOT NULL,
-    plan_id TEXT NOT NULL,
-    stage INTEGER NOT NULL,
-    ability TEXT NOT NULL,
-    query TEXT NOT NULL,
-    why TEXT DEFAULT '' NOT NULL,
-    status TEXT NOT NULL,
-    title TEXT DEFAULT '' NOT NULL,
-    work_id TEXT,
-    added_at TEXT NOT NULL,
-    done_at TEXT,
-    PRIMARY KEY (agent_id, id),
-    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
-    FOREIGN KEY (agent_id, plan_id) REFERENCES learning_plans(agent_id, id),
-    FOREIGN KEY (agent_id, work_id) REFERENCES works(agent_id, id)
 );
 CREATE TABLE secrets (
     agent_id TEXT NOT NULL,
@@ -608,10 +548,7 @@ CREATE TABLE works (
     kind TEXT NOT NULL,
     title TEXT NOT NULL,
     TEXT TEXT NOT NULL,
-    public INTEGER,
     created_at TEXT NOT NULL,
-    public_by TEXT,
-    review_asked_at TEXT,
     embedding BLOB,
     embedded_with TEXT DEFAULT '' NOT NULL,
     data TEXT,
@@ -641,7 +578,6 @@ CREATE INDEX lessons_active ON lessons (agent_id, skill, at DESC) WHERE (retired
 CREATE INDEX percepts_by_speaker ON percepts (agent_id, speaker, kind, at DESC);
 CREATE INDEX percepts_thread ON percepts (agent_id, source, thread, at DESC);
 CREATE INDEX percepts_topic ON percepts (agent_id, topic_id, at DESC) WHERE (topic_id IS NOT NULL);
-CREATE INDEX resources_plan ON resources (agent_id, plan_id, stage);
 CREATE INDEX sessions_account ON sessions (account_id);
 CREATE INDEX skill_evidence_skill ON skill_evidence (agent_id, skill, at DESC);
 CREATE INDEX tastes_active ON tastes (agent_id, at DESC) WHERE (retired_at IS NULL);
@@ -660,23 +596,18 @@ DROP TABLE skills;
 DROP TABLE skill_evidence;
 DROP TABLE sessions;
 DROP TABLE secrets;
-DROP TABLE resources;
 DROP TABLE projects;
-DROP TABLE profile;
 DROP TABLE principles;
 DROP TABLE principle_cases;
-DROP TABLE plan_stages;
 DROP TABLE percepts;
 DROP TABLE people;
+DROP TABLE mornings;
 DROP TABLE lessons;
-DROP TABLE learning_plans;
 DROP TABLE labels;
 DROP TABLE judgment_cases;
 DROP TABLE judgment_calls;
 DROP TABLE intentions;
-DROP TABLE goals;
 DROP TABLE facts;
-DROP TABLE dreams;
 DROP TABLE decisions;
 DROP TABLE connections;
 DROP TABLE connection_agents;

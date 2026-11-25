@@ -31,37 +31,33 @@ import (
 )
 
 type fakeStore struct {
-	standing    usage.Standing
-	seen        map[string]bool
-	decisions   []decision.Decision
-	exchanges   []memory.Exchange
-	facts       []memory.Fact // newest first
-	people      map[string]memory.Person
-	intentions  []memory.Intention
-	actions     []memory.Action
-	projects    map[ulid.ULID]memory.Project
-	works       []memory.Work
-	spent       float64 // what CostSince returns
-	convs       []memory.Conversation
-	percepts    []perception.Percept
-	asked       map[ulid.ULID]time.Time
-	approvals   []memory.Approval
-	rules       map[string]string // autonomy rules: class → verdict
-	labels      []memory.Label
-	lastRead    ulid.ULID // what LastRead returns
-	dreams      []memory.Dream
-	goals       []memory.Goal
-	skills      []memory.Skill
-	evidence    []memory.Evidence // oldest first
-	lessons     []memory.Lesson
-	principles  []memory.Principle
-	cases       []memory.JudgmentCase
-	calls       []memory.Call
-	reviewAsked map[ulid.ULID]time.Time
-	plans       []memory.LearningPlan
-	resources   []memory.Resource
-	public      map[ulid.ULID]string // works set public: "true by owner", ...
-	topics      []memory.Topic
+	standing   usage.Standing
+	seen       map[string]bool
+	decisions  []decision.Decision
+	exchanges  []memory.Exchange
+	facts      []memory.Fact // newest first
+	people     map[string]memory.Person
+	intentions []memory.Intention
+	actions    []memory.Action
+	projects   map[ulid.ULID]memory.Project
+	works      []memory.Work
+	spent      float64 // what CostSince returns
+	convs      []memory.Conversation
+	percepts   []perception.Percept
+	asked      map[ulid.ULID]time.Time
+	approvals  []memory.Approval
+	rules      map[string]string // autonomy rules: class → verdict
+	labels     []memory.Label
+	lastRead   ulid.ULID // what LastRead returns
+	skills     []memory.Skill
+	evidence   []memory.Evidence // oldest first
+	lessons    []memory.Lesson
+	principles []memory.Principle
+	cases      []memory.JudgmentCase
+	calls      []memory.Call
+	public     map[ulid.ULID]string // works set public: "true by owner", ...
+	topics     []memory.Topic
+	mornings   map[string]memory.Morning
 }
 
 // keep returns the xs that match, at most limit of them (all, if limit < 0).
@@ -136,24 +132,6 @@ func (s *fakeStore) LastRead(context.Context, string, string, string, time.Time)
 	return s.lastRead, !s.lastRead.IsZero(), nil
 }
 
-func (s *fakeStore) SaveDream(_ context.Context, d memory.Dream) error {
-	s.dreams = upsert(s.dreams, d, func(x memory.Dream) bool { return x.ID == d.ID })
-	return nil
-}
-
-func (s *fakeStore) Dreams(_ context.Context, activeOnly bool) ([]memory.Dream, error) {
-	return keep(s.dreams, -1, func(d memory.Dream) bool { return !activeOnly || d.Status == memory.DreamActive }), nil
-}
-
-func (s *fakeStore) SaveGoal(_ context.Context, g memory.Goal) error {
-	s.goals = upsert(s.goals, g, func(x memory.Goal) bool { return x.ID == g.ID })
-	return nil
-}
-
-func (s *fakeStore) Goals(_ context.Context, activeOnly bool) ([]memory.Goal, error) {
-	return keep(s.goals, -1, func(g memory.Goal) bool { return !activeOnly || g.Status == memory.GoalActive }), nil
-}
-
 func (s *fakeStore) AddSkill(_ context.Context, sk memory.Skill) error {
 	if !slices.ContainsFunc(s.skills, func(x memory.Skill) bool { return x.Name == sk.Name }) {
 		s.skills = append(s.skills, sk)
@@ -188,66 +166,6 @@ func (s *fakeStore) Lessons(_ context.Context, skill string, limit int) ([]memor
 
 func (s *fakeStore) RetireLesson(_ context.Context, id ulid.ULID, at time.Time) error {
 	update(s.lessons, func(x memory.Lesson) bool { return x.ID == id }, func(x *memory.Lesson) { x.RetiredAt = at })
-	return nil
-}
-
-func (s *fakeStore) MarkReviewAsked(_ context.Context, work ulid.ULID, at time.Time) error {
-	if s.reviewAsked == nil {
-		s.reviewAsked = map[ulid.ULID]time.Time{}
-	}
-	s.reviewAsked[work] = at
-	return nil
-}
-
-func (s *fakeStore) AskedForReview(_ context.Context, since time.Time) (memory.Work, bool, error) {
-	var best memory.Work
-	var at time.Time
-	for _, w := range s.works {
-		if t, ok := s.reviewAsked[w.ID]; ok && !t.Before(since) && t.After(at) {
-			best, at = w, t
-		}
-	}
-	return best, !at.IsZero(), nil
-}
-
-func (s *fakeStore) SavePlan(_ context.Context, p memory.LearningPlan) error {
-	s.plans = append(s.plans, p)
-	return nil
-}
-
-func (s *fakeStore) Plans(_ context.Context, activeOnly bool) ([]memory.LearningPlan, error) {
-	return keep(s.plans, -1, func(p memory.LearningPlan) bool { return !activeOnly || p.Status == memory.PlanActive }), nil
-}
-
-func (s *fakeStore) AdvancePlan(_ context.Context, plan ulid.ULID, at time.Time) error {
-	for n := range s.plans {
-		if p := &s.plans[n]; p.ID == plan {
-			p.Stages[p.Stage].DoneAt = at
-			if p.Stage++; p.Stage >= len(p.Stages) {
-				p.Status = memory.PlanDone
-			}
-		}
-	}
-	return nil
-}
-
-func (s *fakeStore) EndPlan(_ context.Context, plan ulid.ULID, status string, _ time.Time) error {
-	update(s.plans, func(x memory.LearningPlan) bool { return x.ID == plan }, func(x *memory.LearningPlan) { x.Status = status })
-	return nil
-}
-
-func (s *fakeStore) SaveResource(_ context.Context, r memory.Resource) error {
-	s.resources = append(s.resources, r)
-	return nil
-}
-
-func (s *fakeStore) Resources(_ context.Context, plan ulid.ULID) ([]memory.Resource, error) {
-	return keep(s.resources, -1, func(r memory.Resource) bool { return r.PlanID == plan }), nil
-}
-
-func (s *fakeStore) FinishResource(_ context.Context, id, work ulid.ULID, title string, at time.Time) error {
-	update(s.resources, func(x memory.Resource) bool { return x.ID == id },
-		func(x *memory.Resource) { x.Status, x.WorkID, x.Title, x.DoneAt = memory.ResourceDone, work, title, at })
 	return nil
 }
 
@@ -306,14 +224,6 @@ func (s *fakeStore) DecideApproval(_ context.Context, id ulid.ULID, status, text
 
 func (s *fakeStore) StaleApprovals(_ context.Context, before time.Time, limit int) ([]memory.Approval, error) {
 	return keep(s.approvals, limit, func(a memory.Approval) bool { return a.Status == memory.ApprovalPending && a.AskedAt.Before(before) }), nil
-}
-
-func (s *fakeStore) SetWorkPublic(_ context.Context, id ulid.ULID, public bool, by string) (bool, error) {
-	if s.public == nil {
-		s.public = map[ulid.ULID]string{}
-	}
-	s.public[id] = fmt.Sprintf("%v by %s", public, by)
-	return true, nil
 }
 
 func (s *fakeStore) SaveIntention(_ context.Context, i memory.Intention) error {
@@ -480,9 +390,6 @@ func (s *fakeStore) WorksFor(_ context.Context, person string, limit int) ([]mem
 	var out []memory.Work
 	for n := len(s.works) - 1; n >= 0 && len(out) < limit; n-- {
 		w := s.works[n]
-		if w.Kind == "journal" || w.Kind == "review" {
-			continue
-		}
 		if i, ok, _ := s.Intention(context.Background(), w.IntentionID); ok {
 			if i.Subject != memory.SubjectSelf && i.Subject != person {
 				continue
@@ -755,7 +662,6 @@ type fakeSystem2 struct {
 	promises   []system2.Promise
 	lessons    []system2.LessonLearned
 	feedback   []system2.Feedback
-	goals      []system2.GoalTaken
 	send       system2.Send
 	moves      []system2.Move
 	acts       []system2.Act
@@ -786,7 +692,7 @@ func (f *fakeSystem2) Reason(_ context.Context, req system2.Request) (system2.Re
 		return system2.Response{Provider: "fake2/1", Looks: looks, CostUSD: 0.001}, nil
 	}
 	return system2.Response{Provider: "fake2/1", Text: "a thoughtful reply", Remember: f.remember, WhoTheyAre: f.whoTheyAre,
-		Reminders: f.reminders, Promises: f.promises, Lessons: f.lessons, Feedback: f.feedback, Goals: f.goals, Send: f.send, Moves: f.moves, Acts: f.acts, Topic: f.topic, Answers: f.answers, CostUSD: 0.001}, nil
+		Reminders: f.reminders, Promises: f.promises, Lessons: f.lessons, Feedback: f.feedback, Send: f.send, Moves: f.moves, Acts: f.acts, Topic: f.topic, Answers: f.answers, CostUSD: 0.001}, nil
 }
 
 var testSet = questions.Set{
@@ -843,7 +749,7 @@ func newMind(r Replier, s1 system1.DecisionModel, s2 system2.Reasoner) (*Mind, *
 		Formats: render.NewSet(pdf.Format{}, midi.Format{}),
 		Store:   s, Replier: r, System1: s1, System2: s2, Incoming: testSet, FollowUp: testFollowUp, LifeArea: testLifeArea,
 		FactRelevance: testFactRelevance, RecallCandidates: 30, PersonCircle: testPersonCircle, OpenThreads: testOpenThreads,
-		ReplyPrompt: Prompt{Ref: "reply@test", Text: "You are {name}, talking with {speaker}. {who_they_are}\n{life_story}"},
+		ReplyPrompt: Prompt{Ref: "reply@test", Text: "You are {name}, talking with {speaker}. {who_they_are}\n{background}"},
 		Working:     WorkingMemory{Turns: 8, Window: 2 * time.Hour},
 		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}), s

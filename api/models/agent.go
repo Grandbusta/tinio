@@ -19,20 +19,26 @@ type Agent struct {
 	Name             string    `json:"name"`
 	OwnerName        string    `json:"owner_name"` // what it calls its owner
 	Relation         string    `json:"relation"`   // who its owner is to it
-	Pace             int       `json:"pace"`
 	CreatedAt        time.Time `json:"created_at"`
 	Paused           bool      `json:"paused"`
 	// QuietFrom and QuietUntil are HH:MM in their time zone; both "": no quiet hours.
 	QuietFrom, QuietUntil string `json:"-"`
-	ReadUntil             string `json:"-"` // the last chat row their owner has seen; read only by AgentsOf
+	// Their morning: whether they send one, at HH:MM in their time zone, on
+	// MorningDays (the weekdays as digits, Sunday 0). It comes in the chat.
+	MorningOn   bool   `json:"-"`
+	MorningAt   string `json:"-"`
+	MorningDays string `json:"-"`
+	ReadUntil   string `json:"-"` // the last chat row their owner has seen; read only by AgentsOf
 }
 
 func (a *Agent) Save(ctx context.Context, db DB) error {
 	a.ID = ulid.Make().String()
 	_, err := db.Exec(ctx, `
-		INSERT INTO agents (id, account_id, character_key, character_version, name, owner_name, relation, pace, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		a.ID, a.AccountID, a.CharacterKey, a.CharacterVersion, a.Name, a.OwnerName, a.Relation, a.Pace, a.CreatedAt)
+		INSERT INTO agents (id, account_id, character_key, character_version, name, owner_name, relation, created_at,
+			morning_on, morning_at, morning_days)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		a.ID, a.AccountID, a.CharacterKey, a.CharacterVersion, a.Name, a.OwnerName, a.Relation, a.CreatedAt,
+		a.MorningOn, a.MorningAt, a.MorningDays)
 	if err == nil {
 		_, err = db.Exec(ctx, `INSERT INTO agent_runs (agent_id) VALUES ($1)`, a.ID) // free for a worker to claim
 	}
@@ -42,10 +48,12 @@ func (a *Agent) Save(ctx context.Context, db DB) error {
 	return nil
 }
 
-const agentColumns = `id, account_id, character_key, name, owner_name, relation, pace, created_at, paused_at IS NOT NULL, quiet_from, quiet_until`
+const agentColumns = `id, account_id, character_key, name, owner_name, relation, created_at, paused_at IS NOT NULL, quiet_from, quiet_until,
+	morning_on, morning_at, morning_days`
 
 func (a *Agent) fields() []any {
-	return []any{&a.ID, &a.AccountID, &a.CharacterKey, &a.Name, &a.OwnerName, &a.Relation, &a.Pace, &a.CreatedAt, &a.Paused, &a.QuietFrom, &a.QuietUntil}
+	return []any{&a.ID, &a.AccountID, &a.CharacterKey, &a.Name, &a.OwnerName, &a.Relation, &a.CreatedAt, &a.Paused, &a.QuietFrom, &a.QuietUntil,
+		&a.MorningOn, &a.MorningAt, &a.MorningDays}
 }
 
 // AgentsOf is an account's agents, oldest first.

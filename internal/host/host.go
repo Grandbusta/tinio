@@ -63,7 +63,8 @@ type Host struct {
 	// RestAfter is how long after they last heard something an idle agent goes
 	// to rest; 0: never.
 	RestAfter time.Duration
-	// Days: they live their own day, as the app's Today shows.
+	// Days: they work for their owner on the clock: their morning, and the
+	// drafts for it.
 	Days bool
 	// Connections, if set, gives each agent the tools of the accounts their
 	// owner connected and gave them; http is how they reach those services.
@@ -105,8 +106,9 @@ type agentRow struct {
 	ready                  bool   // raised from one of Tinio's ready characters, whose judgment comes approved
 	kept                   []byte // mind.Kept, as JSON: what they kept when they last rested
 	ownerWaiting           bool   // claimed because their owner wrote: they start ahead of the rest
-	pace                   int    // 0: 1
 	quietFrom, quietUntil  string // HH:MM; both "": no quiet hours
+	morningOn              bool
+	morningAt, morningDays string // HH:MM; the weekdays as digits, Sunday 0
 }
 
 // speaker is who their owner is to their mind: their policy's owner, and
@@ -212,7 +214,8 @@ func (h *Host) claimWhere(ctx context.Context, wg *sync.WaitGroup, which string,
 	}
 	defer tx.Rollback(ctx)
 	rows, err := tx.Query(ctx, `
-		SELECT r.agent_id, a.account_id, a.owner_name, a.pace, a.quiet_from, a.quiet_until, r.born_at IS NOT NULL, r.kept,
+		SELECT r.agent_id, a.account_id, a.owner_name, a.quiet_from, a.quiet_until,
+			a.morning_on, a.morning_at, a.morning_days, r.born_at IS NOT NULL, r.kept,
 			r.wake_at = `+store.WaitingOwner+`, EXISTS (SELECT 1 FROM characters c WHERE c.key = a.character_key AND c.account_id IS NULL)
 		FROM agent_runs r JOIN agents a ON a.id = r.agent_id
 		WHERE (`+which+`) AND a.paused_at IS NULL -- not paused by their owner
@@ -222,7 +225,8 @@ func (h *Host) claimWhere(ctx context.Context, wg *sync.WaitGroup, which string,
 	}
 	claimed, err := db.CollectRows(rows, func(r db.Scanner) (agentRow, error) {
 		var a agentRow
-		return a, r.Scan(&a.id, &a.account, &a.ownerName, &a.pace, &a.quietFrom, &a.quietUntil, &a.born, &a.kept, &a.ownerWaiting, &a.ready)
+		return a, r.Scan(&a.id, &a.account, &a.ownerName, &a.quietFrom, &a.quietUntil,
+			&a.morningOn, &a.morningAt, &a.morningDays, &a.born, &a.kept, &a.ownerWaiting, &a.ready)
 	})
 	if err != nil {
 		return 0, err

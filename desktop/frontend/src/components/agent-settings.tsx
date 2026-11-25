@@ -3,17 +3,16 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { Back, useFrame } from "@/components/app-frame";
-import { call, type AgentSettings, type Verdict } from "@/lib/api";
+import { call, type AgentSettings, type Morning, type Verdict } from "@/lib/api";
 
-// An agent's own settings, from About: what they may do on their own, how fast they work,
-// where you talk, and their data. A change is saved at once and reaches them within a
+// An agent's own settings, from About: what they may do on their own, their morning for
+// you and when they write, where you talk, and their data. A change is saved at once and reaches them within a
 // minute. Your own settings are on You.
 
 const classes: Record<string, { label: string; note: string }> = {
   read_web: { label: "Look things up on the web", note: "Searches and pages they read for their work. It happens mid-task, so it can't wait to ask." },
-  dream: { label: "Change one of their dreams", note: "From their weekly review." },
   commit: { label: "Promise something to someone else", note: "A date, a delivery, a reply. Anything for you is always fine." },
-  publish: { label: "Post publicly", note: "Their public page, once it's here." },
+  publish: { label: "Post publicly", note: "Instagram, your blog, anywhere public." },
   reach_out: { label: "Message other people first", note: "Reminders and check-ins to anyone but you." },
   write: { label: "Change things with tools you connect", note: "Files, docs, a calendar, once tools come with Connect." },
   external_message: { label: "Email or message outside this chat", note: "Nothing leaves the chat yet, so never, for now." },
@@ -22,10 +21,14 @@ const classes: Record<string, { label: string; note: string }> = {
 
 const verdictName: Record<Verdict, string> = { auto: "On their own", ask: "Asks you", forbid: "Never" };
 
-const paceNames: [number, string, string][] = [
-  [1, "Like a person", "One day of theirs is one of yours. The calmest, and uses the least of your week."],
-  [3, "Quicker", "Three rounds of work a day. They learn faster and use more of your week."],
-  [10, "Fast", "Ten rounds a day: what takes a person four weeks takes them about three days."],
+const weekdays: [number, string, string][] = [
+  [1, "Mon", "Monday"],
+  [2, "Tue", "Tuesday"],
+  [3, "Wed", "Wednesday"],
+  [4, "Thu", "Thursday"],
+  [5, "Fri", "Friday"],
+  [6, "Sat", "Saturday"],
+  [0, "Sun", "Sunday"],
 ];
 
 const box = "flex flex-col gap-3.5 rounded-lg border border-line px-[22px] py-5";
@@ -53,7 +56,7 @@ export function SettingsPage({ id }: { id: string }) {
 
   const name = agent?.name ?? "They";
 
-  async function save(change: { classes?: Record<string, Verdict>; pace?: number; quiet?: { from: string; until: string } }) {
+  async function save(change: { classes?: Record<string, Verdict>; quiet?: { from: string; until: string }; morning?: Morning }) {
     setBusy(true);
     setError("");
     setSaved("");
@@ -141,26 +144,48 @@ export function SettingsPage({ id }: { id: string }) {
             })}
           </section>
 
-          <section aria-labelledby="pace" className={box}>
-            <h2 id="pace" className={h2}>Their pace</h2>
-            <div className="flex flex-wrap gap-2">
-              {paceNames.map(([p, label]) => {
-                const allowed = s.paces.includes(p);
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    disabled={busy || !allowed}
-                    aria-pressed={s.pace === p}
-                    onClick={() => s.pace !== p && save({ pace: p })}
-                    className={`min-h-11 rounded-full px-4 text-sm disabled:cursor-not-allowed ${s.pace === p ? "bg-fg font-semibold text-bg" : allowed ? "font-medium text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)] hover:shadow-[inset_0_0_0_1px_var(--color-fg)]" : "font-medium text-muted/70 shadow-[inset_0_0_0_1px_var(--color-line)]"}`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
+          <section id="mornings" aria-labelledby="morning" className={box}>
+            <h2 id="morning" className={h2}>Mornings</h2>
+            <span className="text-[13px] text-muted">
+              Each morning {name} reads your yesterday for their job and sends your few things for today, with what they&apos;ve already drafted. Your time zone.
+            </span>
+            <label className="flex items-center justify-between gap-4">
+              <span className="flex flex-col">
+                <b className="text-sm font-semibold">Send me a morning</b>
+                <span className="text-[13px] text-muted">{s.morning.on ? `On, at ${s.morning.at}.` : `Off. ${name} still keeps promises and reminders.`}</span>
+              </span>
+              <input type="checkbox" role="switch" checked={s.morning.on} disabled={busy} onChange={(e) => save({ morning: { ...s.morning, on: e.target.checked } })} className="size-5 accent-[var(--color-accent)]" />
+            </label>
+            <div className="flex flex-wrap items-end gap-4 border-t border-line pt-3">
+              <label className="flex flex-col gap-1 text-[13px] font-semibold">
+                At
+                <input
+                  type="time"
+                  value={s.morning.at}
+                  disabled={busy}
+                  onChange={(e) => e.target.value && save({ morning: { ...s.morning, at: e.target.value } })}
+                  className="min-h-11 rounded-lg border border-line-strong bg-surface px-3 text-[15px] font-normal"
+                />
+              </label>
+              <div role="group" aria-label="Days" className="flex flex-wrap gap-1.5">
+                {weekdays.map(([d, short, full]) => {
+                  const on = s.morning.days.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      aria-pressed={on}
+                      aria-label={full}
+                      disabled={busy}
+                      onClick={() => save({ morning: { ...s.morning, days: on ? s.morning.days.filter((x) => x !== d) : [...s.morning.days, d] } })}
+                      className={`min-h-11 w-12 rounded-[10px] text-[13px] font-semibold ${on ? "bg-accent text-accent-ink" : "text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)]"}`}
+                    >
+                      {short}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <span className="text-[13px] text-muted">{paceNames.find(([p]) => p === s.pace)?.[2]}</span>
             <form
               onSubmit={(e) => {
                 e.preventDefault();

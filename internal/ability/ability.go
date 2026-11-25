@@ -13,8 +13,8 @@ import (
 
 type Ability interface {
 	Name() string
-	// Describe tells the planner what it is for and what to give as the
-	// query, in one line; "" if the planner never chooses it (the journal).
+	// Describe tells System 2 what it is for and what to give as the query,
+	// in one line; "" if it's never chosen, only used.
 	Describe() string
 	Risk() Risk
 	Prepare(ctx context.Context, a Act) (Material, error)

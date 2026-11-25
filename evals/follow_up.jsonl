@@ -16,7 +16,7 @@
 {"state":{"previous_reply":"Which do you prefer, tea or coffee?","message":"tea. what about you?"},"label":"true"}
 {"state":{"previous_reply":"What did you have for lunch?","message":"Can you remind me to call Tunde at 4?"},"label":"false"}
 {"state":{"previous_reply":"How was the interview?","message":"What's the capital of Ghana?"},"label":"false"}
-{"state":{"previous_reply":"I finished the poem this morning.","message":"Nice"},"label":"false","note":"nothing was asked"}
+{"state":{"previous_reply":"I finished the menu post this morning.","message":"Nice"},"label":"false","note":"nothing was asked"}
 {"state":{"previous_reply":"I'm reading about the night market today.","message":"What's your favourite food?"},"label":"false"}
 {"state":{"previous_reply":"Do you want me to remind you?","message":"Who are you anyway?"},"label":"false"}
 {"state":{"previous_reply":"Here's the recipe you asked for.","message":"Thanks!"},"label":"false"}

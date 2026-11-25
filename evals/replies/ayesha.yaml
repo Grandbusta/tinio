@@ -16,4 +16,4 @@
 - name: small-talk
   turns:
     - say: "Long day. Three rounds of edits on one headline."
-  judge: "Answers like a colleague who gets it: short, human, maybe a touch of their own life. No advice unless asked."
+  judge: "Answers like a colleague who gets it: short, human, no invented life of their own. No advice unless asked."

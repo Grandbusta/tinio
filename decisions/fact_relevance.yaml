@@ -5,13 +5,13 @@
 # "I go to Grace Chapel" arrive as "What is Tobi's church?" and "Sam go to
 # Grace Chapel", and each church is matched to the right person.
 id: fact_relevance
-version: 1
+version: 2
 primary: relevant
 
 questions:
   - name: relevant
     type: predicate
-    instructions: Would knowing {fact} help {agent} reply to `message`?
+    instructions: Would knowing {fact} help {agent} reply to `message` well, even indirectly, for example as a need, a limit, a plan or a history the reply should take into account?
 
 thresholds:
   act: 0.5 # at or above: the fact goes to System 2

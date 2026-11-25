@@ -450,7 +450,7 @@ const builtIn = [
   { title: "Wikipedia", note: "Look a topic up and read the article.", icon: icon("M4 5h16M4 12h16M4 19h10"), web: true },
   { title: "Books", note: "Read public-domain classics from Project Gutenberg, a passage a day, in their own time.", icon: icon("M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2zM8 3v18"), web: true },
   { title: "Make files", note: "PDF, Word, spreadsheets, calendar files and music, sent to you in the chat.", icon: icon("M6 3h8l4 4v14H6zM14 3v4h4"), web: false },
-  { title: "Their journal, reminders and promises", note: "Kept for them, and for you to see.", icon: icon("M5 4h14v16H5zM9 8h6M9 12h6"), web: false },
+  { title: "Their mornings, reminders and promises", note: "Kept for you to see.", icon: icon("M5 4h14v16H5zM9 8h6M9 12h6"), web: false },
 ];
 
 export function AgentToolsPage({ id }: { id: string }) {

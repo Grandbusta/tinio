@@ -119,14 +119,13 @@ func (s *Store) CostByDay(ctx context.Context, since time.Time, zone *time.Locat
 
 type FactView struct {
 	memory.Fact
-	Public  *bool // whether it may go on the profile; nil: not decided (or not its own)
 	AskedAt *time.Time
 	From    string // the kind of percept it was learnt from (a message, an activity, ...)
 }
 
 // AllFacts returns up to limit facts, newest first.
 func (s *Store) AllFacts(ctx context.Context, limit int) ([]FactView, error) {
-	rows, err := s.query(ctx, `SELECT f.id, f.percept_id, f.subject, f.text, f.at, f.areas, f.public, f.asked_at, coalesce(p.kind, '')
+	rows, err := s.query(ctx, `SELECT f.id, f.percept_id, f.subject, f.text, f.at, f.areas, f.asked_at, coalesce(p.kind, '')
 		FROM facts f LEFT JOIN percepts p ON p.agent_id = f.agent_id AND p.id = f.percept_id
 		WHERE f.agent_id = $1 ORDER BY f.at DESC, f.id DESC LIMIT $2`, limit)
 	if err != nil {
@@ -139,7 +138,7 @@ func (s *Store) AllFacts(ctx context.Context, limit int) ([]FactView, error) {
 			f             FactView
 			id, perceptID string
 		)
-		if err := rows.Scan(&id, &perceptID, &f.Subject, &f.Text, &f.At, &f.Areas, &f.Public, &f.AskedAt, &f.From); err != nil {
+		if err := rows.Scan(&id, &perceptID, &f.Subject, &f.Text, &f.At, &f.Areas, &f.AskedAt, &f.From); err != nil {
 			return nil, err
 		}
 		if f.ID, err = ulid.Parse(id); err != nil {

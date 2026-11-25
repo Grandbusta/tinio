@@ -12,74 +12,74 @@ import (
 	"github.com/Grandbusta/tinio/internal/store"
 )
 
-// Today is their own day as it stands: what they planned and how each went,
-// what they made, the start of their newest journal entry, and their requests
-// still waiting. Their reminders for their owner and yesterday aren't in it.
-func TestTodayIsTheirOwnDay(t *testing.T) {
+// Your day is each agent's morning once it's sent: the things it chose, the
+// draft it made for one, which the owner ticked, and its requests waiting.
+// A morning not sent yet shows nothing but when it comes.
+func TestYourDayIsEachAgentsMorning(t *testing.T) {
 	ta := newTestAPI(t)
 	ada := ta.signUp(t)
-	rec, out := ta.do(t, "POST", "/v1/agents", map[string]any{"character": "zara", "owner_name": "Ada", "relation": "friend", "timezone": "UTC"}, ada, site)
+	rec, out := ta.do(t, "POST", "/v1/agents", map[string]any{"character": "zara", "owner_name": "Ada", "relation": "friend", "timezone": "UTC",
+		"morning": map[string]any{"on": true, "at": "06:30", "days": []int{1, 2, 3, 4, 5, 6, 0}}}, ada, site)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("raising Zara: %d %v", rec.Code, out)
 	}
 	zara := data(out)["agent"].(map[string]any)["id"].(string)
 	midnight := time.Now().UTC().Truncate(24 * time.Hour)
-	ta.now = midnight.Add(12 * time.Hour)
-	at := func(h, m int) time.Time {
-		return midnight.Add(time.Duration(h)*time.Hour + time.Duration(m)*time.Minute)
+	ta.now = midnight.Add(9 * time.Hour)
+	ctx, st := context.Background(), store.New(ta.db).For(zara)
+	day := func() map[string]any {
+		t.Helper()
+		rec, out := ta.do(t, "GET", "/v1/today", nil, ada, "")
+		days, _ := data(out)["days"].([]any)
+		if rec.Code != http.StatusOK || len(days) != 1 {
+			t.Fatalf("your day: %d %v", rec.Code, out)
+		}
+		return days[0].(map[string]any)
 	}
 
-	ctx, st := context.Background(), store.New(ta.db).For(zara)
-	for _, i := range []memory.Intention{
-		{Text: "Draft the week's posts", DueAt: at(9, 0), Status: memory.IntentionDone, Result: "Five posts for the week"},
-		{Text: "Read about hooks", DueAt: at(11, 0), Status: memory.IntentionMissed},
-		{Text: "Plan the launch calendar", DueAt: at(11, 30), Status: memory.IntentionPending},
-		{Text: "Sketch a campaign", DueAt: at(15, 0), Status: memory.IntentionPending},
-		{Text: "Something dropped", DueAt: at(16, 0), Status: memory.IntentionCancelled},
-		{Text: "Yesterday's", DueAt: at(-10, 0), Status: memory.IntentionDone},
-		{Subject: "account:someone", Kind: memory.IntentionRemind, Text: "A reminder", DueAt: at(13, 0), Status: memory.IntentionPending},
-	} {
-		i.ID, i.CreatedAt = ulid.Make(), at(8, 0)
-		if i.Subject == "" {
-			i.Subject, i.Kind = memory.SubjectSelf, memory.IntentionActivity
-		}
-		if err := st.SaveIntention(ctx, i); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, w := range []memory.Work{
-		{Kind: "post", Title: "Five posts for the week", CreatedAt: at(9, 30)},
-		{Kind: "journal", Title: "Journal", Text: "Shorter is braver. The rest is mine.", CreatedAt: at(-2, 0)},
-	} {
-		w.ID = ulid.Make()
-		if err := st.SaveWork(ctx, w); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := st.SaveChat(ctx, memory.ChatMessage{ID: ulid.Make().String(), Author: memory.ChatAgent, Kind: memory.ChatAsk, Text: "May I post?", At: at(10, 0)}); err != nil {
+	mo := memory.Morning{Day: midnight.Format(time.DateOnly), PreparedAt: midnight.Add(5*time.Hour + 45*time.Minute),
+		Opening: "Morning, Ada.", Items: []memory.MorningItem{
+			{ID: "1", What: "Chase the supplier", How: "A short note.", Source: "from the topic Supplier"},
+			{ID: "2", What: "Book the tasting", Source: "from your calendar"},
+		}}
+	if err := st.SaveMorning(ctx, mo); err != nil {
 		t.Fatal(err)
 	}
+	if d := day(); d["sent"] != "" || len(d["items"].([]any)) != 0 || d["next"] != "06:30" {
+		t.Errorf("before it's sent: %v; want only when it comes", d)
+	}
 
-	rec, out = ta.do(t, "GET", "/v1/agents/"+zara+"/today", nil, ada, "")
-	today, _ := data(out)["today"].(map[string]any)
-	if rec.Code != http.StatusOK || today == nil {
-		t.Fatalf("today: %d %v", rec.Code, out)
+	w := memory.Work{ID: ulid.Make(), Kind: "writing", Title: "Note to the supplier", Text: "Dear...", CreatedAt: mo.PreparedAt}
+	if err := st.SaveWork(ctx, w); err != nil {
+		t.Fatal(err)
 	}
-	var states []string
-	for _, p := range today["plan"].([]any) {
-		states = append(states, p.(map[string]any)["at"].(string)+" "+p.(map[string]any)["state"].(string))
+	mo.Items[0].Work = w.ID.String()
+	if err := st.SaveMorning(ctx, mo); err != nil {
+		t.Fatal(err)
 	}
-	want := []string{"09:00 done", "11:00 missed", "11:30 now", "15:00 later"}
-	if len(states) != len(want) || states[0] != want[0] || states[1] != want[1] || states[2] != want[2] || states[3] != want[3] {
-		t.Errorf("plan = %v, want %v", states, want)
+	if err := st.MorningSent(ctx, mo.Day, midnight.Add(6*time.Hour+30*time.Minute)); err != nil {
+		t.Fatal(err)
 	}
-	if d := today["plan"].([]any)[0].(map[string]any)["detail"]; d != "Five posts for the week" {
-		t.Errorf("what came of it = %v", d)
+	rec, out = ta.do(t, "POST", "/v1/agents/"+zara+"/today/items/2", map[string]any{"done": true}, ada, site)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ticking it: %d %v", rec.Code, out)
 	}
-	if made := today["made"].([]any); len(made) != 1 || made[0].(map[string]any)["title"] != "Five posts for the week" {
-		t.Errorf("made = %v", made)
+	d := day()
+	items := d["items"].([]any)
+	first, second := items[0].(map[string]any), items[1].(map[string]any)
+	if d["sent"] != "06:30" || first["work"].(map[string]any)["title"] != "Note to the supplier" || first["done"] != false || second["done"] != true {
+		t.Errorf("after it's sent and one ticked: %v", d)
 	}
-	if today["journal"] != "Shorter is braver." || today["waiting"] != float64(1) || today["planned_at"] != "08:00" {
-		t.Errorf("journal %q, waiting %v, planned at %v", today["journal"], today["waiting"], today["planned_at"])
+	if rec, _ := ta.do(t, "POST", "/v1/agents/"+zara+"/today/items/9", map[string]any{"done": true}, ada, site); rec.Code != http.StatusNotFound {
+		t.Errorf("ticking a thing that isn't there: %d", rec.Code)
+	}
+
+	rec, out = ta.do(t, "GET", "/v1/agents/"+zara+"/settings", nil, ada, "")
+	if m := data(out)["morning"].(map[string]any); rec.Code != http.StatusOK || m["at"] != "06:30" || len(m["days"].([]any)) != 7 {
+		t.Errorf("the morning as raised: %d %v", rec.Code, data(out)["morning"])
+	}
+	rec, out = ta.do(t, "POST", "/v1/agents/"+zara+"/settings", map[string]any{"morning": map[string]any{"on": true, "at": "7:30", "days": []int{1}}}, ada, site)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("a time that isn't HH:MM: %d %v", rec.Code, out)
 	}
 }

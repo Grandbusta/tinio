@@ -23,8 +23,9 @@ const (
 	lessonsPerSkill = 3
 	lessonsPerWork  = 2
 	askReviewEvery  = 24 * time.Hour
-	// reviewAnswerWithin is how long after asking an owner's feedback is tied to that work.
-	reviewAnswerWithin = 48 * time.Hour
+	// judgedWithin: an owner's feedback is tied to the newest work made this
+	// recently, what they're likely judging.
+	judgedWithin = 48 * time.Hour
 )
 
 func (m *Mind) lessonsNote(ctx context.Context) string {
@@ -75,30 +76,14 @@ func (m *Mind) learnFromWork(ctx context.Context, w memory.Work, lessons []strin
 	}
 }
 
-func (m *Mind) workingOn(ctx context.Context, i memory.Intention, project *memory.Project) string {
-	if id := i.Args["resource"]; id != "" {
-		if plans, err := m.Store.Plans(ctx, false); err == nil {
-			for _, p := range plans {
-				if rs, err := m.Store.Resources(ctx, p.ID); err == nil {
-					for _, r := range rs {
-						if r.ID.String() == id {
-							return p.Skill
-						}
-					}
-				}
-			}
-		}
+// judged is the newest work it made within judgedWithin of at: what its
+// owner's feedback is likely about. Zero if none.
+func (m *Mind) judged(ctx context.Context, at time.Time) memory.Work {
+	ws, err := m.Store.WorksBetween(ctx, at.Add(-judgedWithin), at.Add(time.Second))
+	if err != nil || len(ws) == 0 {
+		return memory.Work{}
 	}
-	if project != nil && !project.GoalID.IsZero() {
-		if goals, err := m.Store.Goals(ctx, false); err == nil {
-			for _, g := range goals {
-				if g.ID == project.GoalID {
-					return g.Skill
-				}
-			}
-		}
-	}
-	return ""
+	return ws[len(ws)-1]
 }
 
 func (m *Mind) saveLesson(ctx context.Context, l memory.Lesson) bool {
@@ -111,38 +96,6 @@ func (m *Mind) saveLesson(ctx context.Context, l memory.Lesson) bool {
 	return true
 }
 
-// askForReview asks at most once a day. Messaging the owner needs no approval.
-func (m *Mind) askForReview(ctx context.Context, w memory.Work, question string, now time.Time) {
-	owner := m.policy().Owner
-	if owner == "" {
-		return
-	}
-	if last, ok, err := m.Store.LastPercept(ctx, owner, perception.KindReviewRequest); err != nil || (ok && now.Sub(last) < askReviewEvery) {
-		return
-	}
-	conv, ok := m.conversationWith(ctx, owner)
-	if !ok {
-		return
-	}
-	person := m.person(ctx, owner)
-	p := outgoing(conv, person, perception.KindReviewRequest, now)
-	n := m.namesFor(p)
-	note := fmt.Sprintf("You are messaging %s first: you just made this, and you'd like their honest eyes on it, the way a learner "+
-		"asks a teacher. It goes right after your message, word for word:\n\n%s\n\nWrite only the one or two short sentences you "+
-		"send with it: what it is, and your question: %s", n.speaker, titled(w), orDefault(question, "what would you do differently?"))
-	s := speech{action: "ask_review", note: note, attachment: titled(w), trim: firstParagraph}
-	if f, err := m.dataFile(w); err != nil { // music, so they can hear it, not only read it
-		m.Log.Warn("making its MIDI failed; asking with the words alone", "work", w.Title, "err", err)
-	} else {
-		s.file = f
-	}
-	if got := m.speakFirst(ctx, p, person, nil, s); got == sent {
-		if err := m.Store.MarkReviewAsked(ctx, w.ID, now.UTC()); err != nil {
-			m.Log.Error("mark review asked", "err", err)
-		}
-	}
-}
-
 // takeLessons ties advice to the work it last asked the owner to review, if
 // any.
 func (m *Mind) takeLessons(ctx context.Context, p perception.Percept, reply *decision.Decision, ls []system2.LessonLearned) []*decision.Decision {
@@ -153,7 +106,7 @@ func (m *Mind) takeLessons(ctx context.Context, p perception.Percept, reply *dec
 	if err != nil {
 		return nil
 	}
-	asked, _, _ := m.Store.AskedForReview(ctx, p.At.Add(-reviewAnswerWithin))
+	asked := m.judged(ctx, p.At)
 	var out []*decision.Decision
 	for _, l := range ls {
 		name := ""
@@ -190,7 +143,7 @@ func (m *Mind) takeTastes(ctx context.Context, p perception.Percept, reply *deci
 	if len(ts) == 0 || p.Speaker == "" || p.Speaker != m.policy().Owner {
 		return nil
 	}
-	asked, _, _ := m.Store.AskedForReview(ctx, p.At.Add(-reviewAnswerWithin))
+	asked := m.judged(ctx, p.At)
 	var out []*decision.Decision
 	for _, t := range ts {
 		kind := t.Kind

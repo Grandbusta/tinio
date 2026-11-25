@@ -43,6 +43,7 @@ var (
 	ErrNoSuchCharacter    = Problem{http.StatusNotFound, "no_such_character", "We don't have that character.", nil}
 	ErrNoSuchAgent        = Problem{http.StatusNotFound, "no_such_agent", "You don't have that agent.", nil}
 	ErrNoSuchFile         = Problem{http.StatusNotFound, "no_such_file", "That file isn't here.", nil}
+	ErrNoSuchItem         = Problem{http.StatusNotFound, "no_such_item", "That isn't one of today's things.", nil}
 	ErrNoSuchTopic        = Problem{http.StatusNotFound, "no_such_topic", "That isn't one of the topics you have going.", nil}
 	ErrNoSuchMessage      = Problem{http.StatusNotFound, "no_such_message", "That message isn't in this chat.", nil}
 	ErrNoSuchWork         = Problem{http.StatusNotFound, "no_such_work", "That isn't among what they've made.", nil}

@@ -1,4 +1,5 @@
-// Package self loads the agent's life story: who it is, written by its creator.
+// Package character loads who the agent is: their background, personality and
+// what they make, written by whoever made them, and who their owner is to them.
 package character
 
 import (
@@ -13,42 +14,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Character is the agent's life story. The agent never contradicts it; anything
-// else about itself it decides when it comes up, and remembers.
+// Character is who the agent is, for their voice and know-how: a short
+// background (Story) they never contradict, their personality, and what they
+// make. They work for their owner; they have no life of their own.
 type Character struct {
 	Name        string   `yaml:"name"`
 	Story       []string `yaml:"story"`
 	Timezone    string   `yaml:"timezone"`
-	Day         Day      `yaml:"day"`
 	Personality []string `yaml:"personality"`
-	Routine     []string `yaml:"routine"`
 	Makes       []Craft  `yaml:"makes"`
-	// Dreams, Skills and Family are copied into memory the first time; after
-	// that memory wins.
-	Dreams []string   `yaml:"dreams"`
+	// Skills and Family are copied into memory the first time; after that
+	// memory wins. Family is who the agent knows from the start: their owner.
 	Skills []Skill    `yaml:"skills"`
 	Family []Relative `yaml:"family"`
-}
-
-// Day is when their day runs, in their time zone. What's empty is the
-// platform's default.
-type Day struct {
-	PlanAt    string   `yaml:"plan_at"`
-	JournalAt string   `yaml:"journal_at"`
-	ReviewAt  string   `yaml:"review_at"` // a day and a time, like "Sun 20:00"
-	CheckIns  []string `yaml:"check_ins"` // none: they never check in unprompted
-}
-
-func (d Day) check() error {
-	for _, at := range append([]string{d.PlanAt, d.JournalAt}, d.CheckIns...) {
-		if _, err := time.Parse("15:04", at); at != "" && err != nil {
-			return fmt.Errorf("day: times must be HH:MM, like 08:30, have %q", at)
-		}
-	}
-	if _, err := time.Parse("Mon 15:04", d.ReviewAt); d.ReviewAt != "" && err != nil {
-		return fmt.Errorf("day: review_at must be a day and a time, like \"Sun 20:00\", have %q", d.ReviewAt)
-	}
-	return nil
 }
 
 type Craft struct {
@@ -66,8 +44,8 @@ var BuiltIn = []Craft{
 	{Kind: "schedule", About: "a plan of dated events, to put in a calendar", Data: "events"},
 }
 
-// Reserved are kinds an ability sets itself (the journal, reading notes).
-var Reserved = []string{"journal", "reading_notes", "review"}
+// Reserved are kinds an ability sets itself (reading notes).
+var Reserved = []string{"reading_notes"}
 
 var kindName = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
@@ -134,12 +112,8 @@ func Parse(raw []byte) (Character, error) {
 			return Character{}, fmt.Errorf("%s: timezone must be a time zone like Africa/Lagos, have %q", section, l.Timezone)
 		}
 	}
-	if err := l.Day.check(); err != nil {
-		return Character{}, fmt.Errorf("%s: %w", section, err)
-	}
 	l.Story = nonEmpty(l.Story)
 	l.Personality = nonEmpty(l.Personality)
-	l.Routine = nonEmpty(l.Routine)
 	if l.Name == "" || len(l.Story) == 0 {
 		return Character{}, errors.New(section + ": write the agent's name and at least one line of its life story first")
 	}
@@ -161,7 +135,6 @@ func Parse(raw []byte) (Character, error) {
 		kinds[c.Kind] = true
 		l.Makes[i] = c
 	}
-	l.Dreams = nonEmpty(l.Dreams)
 	skills := map[string]bool{}
 	for i, sk := range l.Skills {
 		sk.Name = strings.TrimSpace(sk.Name)
@@ -174,7 +147,7 @@ func Parse(raw []byte) (Character, error) {
 		skills[strings.ToLower(sk.Name)] = true
 		for j, k := range sk.ShownBy {
 			k = strings.TrimSpace(k)
-			if !kinds[k] || k == "journal" || k == "review" {
+			if !kinds[k] {
 				return Character{}, fmt.Errorf("%s: skill %q is shown by %q, which isn't a kind of work it makes", section, sk.Name, k)
 			}
 			sk.ShownBy[j] = k

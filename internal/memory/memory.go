@@ -113,7 +113,6 @@ type Project struct {
 	SourceID  ulid.ULID
 	Position  int      // in bytes of its text
 	Source    *Reading // set only when loaded with the project
-	GoalID    ulid.ULID
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -160,8 +159,6 @@ type Work struct {
 	Title       string
 	Text        string
 	CreatedAt   time.Time
-	Public      *bool  // whether it may go on its public page; nil until decided
-	PublicBy    string // who decided: PublicBySystem1 or PublicByOwner; "" until decided
 	// Data is what it carries beside its words, defined by the file made from
 	// it (render.DataFormat), like a beat's score; nil if none.
 	Data     json.RawMessage
@@ -256,6 +253,31 @@ const (
 	ApprovalExpired  = "expired" // not answered in time: denied
 )
 
+// Morning is what the agent sends their owner one morning: what it read of
+// their yesterday and the things it chose for their today. Day is the date,
+// YYYY-MM-DD, in the owner's time zone; SentAt is zero until the note is sent.
+type Morning struct {
+	Day        string
+	PreparedAt time.Time
+	SentAt     time.Time
+	Opening    string // the greeting and yesterday, in a line or two
+	Question   string // "" when nothing was missing
+	Items      []MorningItem
+}
+
+// MorningItem is one thing for the owner's day. Intention is the draft the
+// agent set out to make for it ("" for none), Work what came of it ("" until
+// made). Source is where it came from, as the owner would say it.
+type MorningItem struct {
+	ID        string `json:"id"`
+	What      string `json:"what"`
+	How       string `json:"how"`
+	Source    string `json:"source"`
+	Intention string `json:"intention,omitempty"`
+	Work      string `json:"work,omitempty"`
+	Done      bool   `json:"done"`
+}
+
 // Label is what a System 1 answer should have been, from the owner.
 type Label struct {
 	DecisionID ulid.ULID
@@ -269,87 +291,6 @@ const (
 	LabelFromChat    = "chat"
 	LabelFromConsole = "console"
 	LabelFromApp     = "app" // the owner, on the app's Mind page
-)
-
-type Dream struct {
-	ID      ulid.ULID
-	Text    string // third person with its name
-	Status  string // DreamActive or DreamDropped
-	Source  string // DreamFromLife (its creator), DreamFromSelf or DreamFromOwner
-	Since   time.Time
-	EndedAt time.Time
-}
-
-const (
-	DreamActive    = "active"
-	DreamDropped   = "dropped"
-	DreamFromLife  = "life"
-	DreamFromSelf  = "self"
-	DreamFromOwner = "owner" // its owner asked it to take on a goal no dream of its own covered
-)
-
-type Goal struct {
-	ID        ulid.ULID
-	DreamID   ulid.ULID
-	Text      string
-	DoneWhen  string
-	Due       time.Time
-	Status    string // GoalProposed, GoalActive, GoalDone or GoalDropped
-	Progress  string // from the last review
-	Skill     string // if it's about one; it then has a learning plan
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-type LearningPlan struct {
-	ID        ulid.ULID
-	GoalID    ulid.ULID
-	Skill     string
-	Stage     int    // the current stage, from 0
-	Status    string // PlanActive, PlanDone or PlanDropped
-	Stages    []Stage
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-const (
-	PlanActive  = "active"
-	PlanDone    = "done"
-	PlanDropped = "dropped"
-)
-
-type Stage struct {
-	N        int
-	Learn    string
-	Practice string
-	DoneWhen string
-	DoneAt   time.Time
-}
-
-type Resource struct {
-	ID      ulid.ULID
-	PlanID  ulid.ULID
-	Stage   int
-	Ability string
-	Query   string
-	Why     string
-	Status  string    // ResourceTodo or ResourceDone
-	Title   string    // what it turned out to be; "" until read
-	WorkID  ulid.ULID // its notes on it; zero until read
-	AddedAt time.Time
-	DoneAt  time.Time
-}
-
-const (
-	ResourceTodo = "todo"
-	ResourceDone = "done"
-)
-
-const (
-	GoalProposed = "proposed" // waiting for its owner's answer before it's set
-	GoalActive   = "active"
-	GoalDone     = "done"
-	GoalDropped  = "dropped"
 )
 
 type Skill struct {
@@ -546,12 +487,7 @@ var (
 	Verdicts = []string{VerdictGood, VerdictLucky, VerdictUnlucky, VerdictBad}
 )
 
-const (
-	CallFocus    = "focus" // what to work on today (the day plan)
-	CallStart    = "start" // starting something new rather than going on (the day plan)
-	CallNewGoal  = "new_goal"
-	CallDropGoal = "drop_goal"
-)
+const ()
 
 const (
 	CallAfter  = "after"  // it acts on its pick; the owner grades it later
@@ -587,12 +523,7 @@ type Agreement struct {
 	Agreed   int
 }
 
-const (
-	PublicBySystem1 = "system1"  // the daily check (public_work question set)
-	PublicByOwner   = "owner"    // its owner, which the daily check never overrides
-	PublicByGate    = "gate"     // the autonomy gate: forbidden, or the owner didn't answer
-	PublicAwaiting  = "awaiting" // judged public, waiting for the owner's approval
-)
+const ()
 
 // Conversation is where the agent last talked with a person, so it can
 // message them first.

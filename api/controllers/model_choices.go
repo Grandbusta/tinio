@@ -14,7 +14,8 @@ import (
 )
 
 // Models are the models the agents use for each of their jobs: replies,
-// decisions, their own day, light mode and works. The owner picks one of the
+// decisions, their work on the clock (the morning, what they watch, the weekly
+// look back), light mode and works. The owner picks one of the
 // models Tinio has prices for; a job set in the environment (OPENAI_MODEL, ...)
 // is shown and can't be changed here.
 type Models struct {

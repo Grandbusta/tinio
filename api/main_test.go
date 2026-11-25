@@ -242,14 +242,13 @@ func TestRaisingAnAgentFromAReadyCharacter(t *testing.T) {
 			zara = c.(map[string]any)
 		}
 	}
-	if len(chars) != 6 || zara == nil || zara["toward"] == "" || len(zara["relations"].([]any)) == 0 {
+	if len(chars) != 6 || zara == nil || zara["about"] == "" || len(zara["relations"].([]any)) == 0 {
 		t.Fatalf("characters: %v", out)
 	}
 
-	// A pace asked for is ignored: it comes with the plan.
-	rec, out := ta.do(t, "POST", "/v1/agents", map[string]any{"character": "zara", "owner_name": "Ada", "relation": "mentor", "pace": 10}, ada, site)
+	rec, out := ta.do(t, "POST", "/v1/agents", map[string]any{"character": "zara", "owner_name": "Ada", "relation": "mentor"}, ada, site)
 	agent, _ := data(out)["agent"].(map[string]any)
-	if rec.Code != http.StatusCreated || agent["name"] != "Zara" || agent["relation"] != "mentor" || agent["pace"] != float64(config.Pace) {
+	if rec.Code != http.StatusCreated || agent["name"] != "Zara" || agent["relation"] != "mentor" {
 		t.Fatalf("raising Zara: %d %v", rec.Code, out)
 	}
 	v, ok, err := store.New(ta.db).For(agent["id"].(string)).Self(context.Background(), "character")

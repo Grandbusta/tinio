@@ -23,8 +23,7 @@ import (
 	"github.com/Grandbusta/tinio/internal/store"
 )
 
-// Works is what an agent has made that their owner may see: for themselves or
-// for their owner, never the journal or reviews (store.WorksFor). Behind
+// Works is what an agent has made for their owner (store.WorksFor). Behind
 // middlewares.OwnAgent.
 type Works struct {
 	DB      *db.DB

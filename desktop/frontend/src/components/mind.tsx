@@ -38,7 +38,7 @@ function about(d: Decision) {
       return "A tool they used";
     case "":
     case "activity":
-      return "Their own day";
+      return "A draft for you";
     default:
       return d.kind.replaceAll("_", " ");
   }

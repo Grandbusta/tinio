@@ -55,7 +55,7 @@ func TestPromptBudget(t *testing.T) {
 		"reply to its owner":    len(m.instructions(ctx, s.people[owner], names{life.Name, "Busta"})),
 		"reply to someone else": len(m.instructions(ctx, memory.Person{Key: sam, Relation: "a friend"}, names{life.Name, "Sam"})),
 	}
-	for _, name := range []string{"plan", "activity", "review", "learn", "data", "observe"} {
+	for _, name := range []string{"morning", "activity", "review", "data", "observe"} {
 		got[name] = len(m.lifeInstructions(read(name)))
 	}
 

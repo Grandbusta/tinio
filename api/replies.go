@@ -242,7 +242,7 @@ func converse(ctx context.Context, d *db.DB, h *host.Host, tpl character.Templat
 	if err != nil {
 		return fail(err)
 	}
-	t, err := h.Talk(ctx, agent, account, evalOwner, 1)
+	t, err := h.Talk(ctx, agent, account, evalOwner)
 	if err != nil {
 		return fail(err)
 	}
@@ -366,7 +366,7 @@ func raiseForEval(ctx context.Context, d *db.DB, tpl character.Template, relatio
 		if err != nil {
 			return err
 		}
-		ag := models.Agent{AccountID: acc.ID, CharacterKey: tpl.Key, Name: tpl.Name, OwnerName: evalOwner, Relation: relation, Pace: 1, CreatedAt: now}
+		ag := models.Agent{AccountID: acc.ID, CharacterKey: tpl.Key, Name: tpl.Name, OwnerName: evalOwner, Relation: relation, CreatedAt: now}
 		if err := ag.Save(ctx, tx); err != nil {
 			return err
 		}
@@ -501,4 +501,33 @@ func saveReplies(o replyOptions, rs []replyResult) error {
 		Judge   string        `json:"judge"`
 		Results []replyResult `json:"results"`
 	}{o.model, o.judge, rs})
+}
+
+// evalDB is a throwaway database of its own, gone when the eval ends (done).
+func evalDB(ctx context.Context) (d *db.DB, done func(), err error) {
+	dir, err := os.MkdirTemp("", "tinio-eval-")
+	if err != nil {
+		return nil, nil, err
+	}
+	d, err = db.Open(ctx, filepath.Join(dir, "tinio.db"))
+	if err != nil {
+		os.RemoveAll(dir)
+		return nil, nil, err
+	}
+	return d, func() { d.Close(); os.RemoveAll(dir) }, nil
+}
+
+// saveEval keeps a run's results in evals/results, as <time>-<kind>-<label>.json.
+func saveEval(kind, label string, results any) error {
+	dir := filepath.Join(evalDir, "results")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(results, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("%s-%s-%s.json", time.Now().UTC().Format("20060102-150405"), kind, label))
+	fmt.Printf("Results in %s.\n", path)
+	return os.WriteFile(path, b, 0o644)
 }

@@ -60,8 +60,8 @@ func raise(t *testing.T, pool *db.DB, key string) string {
 			account, strings.ToLower(account)+"@example.com", now); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO agents (id, account_id, character_key, name, owner_name, relation, pace, created_at)
-			VALUES ($1, $2, $3, $4, 'Ada', $5, 1, $6)`, id, account, key, tpl.Name, tpl.Relations[0], now); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO agents (id, account_id, character_key, name, owner_name, relation, created_at)
+			VALUES ($1, $2, $3, $4, 'Ada', $5, $6)`, id, account, key, tpl.Name, tpl.Relations[0], now); err != nil {
 			return err
 		}
 		for _, f := range character.Files {

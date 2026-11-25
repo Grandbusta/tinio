@@ -51,7 +51,7 @@ type Page = "list" | "you" | "settings" | "connections" | "chat" | "today" | "wo
 // their chat, /agents/<id>/<page>[/...] one of their pages.
 function where(path: string): { open?: string; page: Page } {
   const [, top, id, page] = path.split("/");
-  if (top === "you" || top === "settings" || top === "connections") return { page: top };
+  if (top === "you" || top === "settings" || top === "connections" || top === "today") return { page: top };
   if (!id) return { page: "list" };
   return { open: decodeURIComponent(id), page: (page as Page) || "chat" };
 }
@@ -139,7 +139,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
   return (
     <FrameContext.Provider value={frame}>
       <div className="flex h-dvh overflow-hidden bg-bg text-fg">
-        <Rail account={account} on={page === "you" || page === "settings" || page === "connections" ? page : "chats"} />
+        <Rail account={account} on={page === "you" || page === "settings" || page === "connections" || page === "today" ? page : "chats"} />
         {/* You and connections aren't chats: they have the whole width, with the rail to go back. */}
         {!fullWidth.includes(page) && <List open={open} className={page === "list" ? "" : "max-[900px]:hidden"} />}
         <main
@@ -183,7 +183,7 @@ const railItem = "relative flex min-h-14 w-16 flex-col items-center justify-cent
 
 // The rail: Chats, Connect, Settings and You; at its foot, light or dark.
 // Each agent's settings are theirs, from About; yours are on You.
-function Rail({ account, on }: { account: Account | null; on: "chats" | "you" | "settings" | "connections" }) {
+function Rail({ account, on }: { account: Account | null; on: "chats" | "today" | "you" | "settings" | "connections" }) {
   const { dark, choose } = useTheme();
   return (
     <nav aria-label="Main" className="flex w-[76px] flex-none flex-col items-center gap-1 border-r border-line bg-surface-2/60 pb-4 max-[900px]:hidden">
@@ -197,6 +197,13 @@ function Rail({ account, on }: { account: Account | null; on: "chats" | "you" | 
           <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
         </svg>
         <span>Chats</span>
+      </Link>
+      <Link href="/today" aria-current={on === "today" ? "page" : undefined} className={`${railItem} ${railState(on === "today")}`}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+        </svg>
+        <span>Your day</span>
       </Link>
       <Link href="/connections" aria-current={on === "connections" ? "page" : undefined} className={`${railItem} ${railState(on === "connections")}`}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -438,7 +445,7 @@ function early(href: string) {
 function AboutPanel({ agent: a, eases }: { agent: Summary; eases: boolean }) {
   const { about, toggleAbout } = useFrame();
   const tiles = [
-    { label: "Today", sub: "Plan and now", href: `/agents/${a.id}/today` },
+    { label: "Your day", sub: "Their morning for you", href: `/agents/${a.id}/today` },
     { label: "Works", sub: "What they made", href: `/agents/${a.id}/works` },
     { label: "Skills", sub: "And their ladder", href: `/agents/${a.id}/skills` },
   ];
@@ -448,8 +455,9 @@ function AboutPanel({ agent: a, eases }: { agent: Summary; eases: boolean }) {
     { label: "How you decide", href: `/agents/${a.id}/judgment` },
     { label: "Memory", href: `/agents/${a.id}/memory` },
     { label: "Mind", href: `/agents/${a.id}/mind` },
-    { label: "Growth", href: `/agents/${a.id}/growth` },
+    { label: "Helping you", href: `/agents/${a.id}/growth` },
     { label: "Tools", href: `/agents/${a.id}/tools` },
+    { label: "Mornings", href: `/agents/${a.id}/settings#mornings` },
     { label: "Settings", href: `/agents/${a.id}/settings` },
   ];
   return (

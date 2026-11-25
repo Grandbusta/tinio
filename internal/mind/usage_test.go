@@ -44,23 +44,23 @@ func TestTheWeekSetsHowTheyReply(t *testing.T) {
 	}
 }
 
-// Their own day goes on only while the week allows it: not once it's used.
-func TestTheirDayNeedsTheWeek(t *testing.T) {
-	plan := at(29, 9, 0)
+// A morning's drafts are made only while the week allows it: not once it's
+// used. The morning itself still comes.
+func TestDraftsNeedTheWeek(t *testing.T) {
+	start := at(29, 6, 45)
 	for _, c := range []struct {
-		name  string
-		st    usage.Standing
-		plans bool
+		name   string
+		st     usage.Standing
+		drafts bool
 	}{
-		{"within the week", usage.Standing{CapUSD: 1.25, Started: plan.AddDate(0, 0, -3), WeekStart: plan.AddDate(0, 0, -3), WeekUSD: 0.5}, true},
-		{"the week used", usage.Standing{CapUSD: 1.25, Started: plan.AddDate(0, 0, -3), WeekStart: plan.AddDate(0, 0, -3), WeekUSD: 1.3}, false},
+		{"within the week", usage.Standing{CapUSD: 1.25, Started: start.AddDate(0, 0, -3), WeekStart: start.AddDate(0, 0, -3), WeekUSD: 0.5}, true},
+		{"the week used", usage.Standing{CapUSD: 1.25, Started: start.AddDate(0, 0, -3), WeekStart: start.AddDate(0, 0, -3), WeekUSD: 1.3}, false},
 	} {
-		s2 := &fakeSystem2{formats: map[string]string{"day_plan": `{"activities":[]}`}}
-		m, s := lifeMind(s2)
+		m, s, s2, _ := morningMind()
 		s.standing = c.st
-		m.tick(context.Background(), plan)
-		if got := len(s2.requests) > 0; got != c.plans {
-			t.Errorf("%s: planned %v, want %v", c.name, got, c.plans)
+		m.tick(context.Background(), start)
+		if got := len(s.works) > 0; len(s2.requests) == 0 || got != c.drafts {
+			t.Errorf("%s: %d requests, drafted %v; want the morning, drafted %v", c.name, len(s2.requests), got, c.drafts)
 		}
 	}
 }

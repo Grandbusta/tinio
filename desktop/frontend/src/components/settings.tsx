@@ -19,8 +19,8 @@ const jobs: Record<string, { title: string; note: string; env: string }> = {
   reply: { title: "Replies", note: "Everything they say to you. Most of what a week costs.", env: "OPENAI_MODEL" },
   decision: { title: "Decisions", note: "The quick calls before a reply. Only one model makes them for now.", env: "OPENAI_DECISION_MODEL" },
   day: {
-    title: "Their own day",
-    note: "Planning, learning, what they read, their weekly review. It runs every day, so a light model keeps it to about a cent.",
+    title: "Your mornings",
+    note: "Working out your morning, what they watch for you, and their weekly look back. It runs every day, so a light model keeps it to about a cent.",
     env: "OPENAI_DAY_MODEL",
   },
   light: { title: "Light mode", note: "Replies once the week's cap is reached.", env: "OPENAI_LIGHT_MODEL" },

@@ -19,7 +19,7 @@ type slowPlan struct {
 }
 
 func (s slowPlan) Reason(ctx context.Context, req system2.Request) (system2.Response, error) {
-	if req.Format != nil && req.Format.Name == "day_plan" {
+	if req.Format != nil && req.Format.Name == "morning" {
 		close(s.started)
 		<-s.release
 	}
@@ -42,8 +42,9 @@ func (s replyStore) SaveDecision(ctx context.Context, d decision.Decision) error
 }
 
 func TestRepliesWhileItsDayIsBusy(t *testing.T) {
-	inner := &fakeSystem2{formats: map[string]string{"day_plan": `{"activities":[]}`}}
-	m, s := lifeMind(inner)
+	inner := &fakeSystem2{formats: map[string]string{"morning": `{"opening":"Morning.","items":[],"question":""}`}}
+	m, s, _, _ := morningMind()
+	m.System2 = inner
 	plan := slowPlan{fakeSystem2: inner, started: make(chan struct{}), release: make(chan struct{})}
 	store := replyStore{fakeStore: s, replied: make(chan struct{})}
 	ticks, percepts := make(chan time.Time), make(chan perception.Percept)
@@ -54,21 +55,21 @@ func TestRepliesWhileItsDayIsBusy(t *testing.T) {
 	stopped := make(chan error)
 	go func() { stopped <- m.Run(ctx) }()
 
-	ticks <- at(29, 9, 0)
+	ticks <- at(29, 6, 45)
 	select {
 	case <-plan.started:
 	case <-ctx.Done():
-		t.Fatal("the tick never started planning the day")
+		t.Fatal("the tick never started the morning")
 	}
 	select {
 	case percepts <- percept("1", "how's your day going?"):
 	case <-time.After(3 * time.Second):
-		t.Fatal("the message waited for the day plan")
+		t.Fatal("the message waited for the morning")
 	}
 	select {
 	case <-store.replied:
 	case <-time.After(3 * time.Second):
-		t.Fatal("no reply while the day plan was still being written")
+		t.Fatal("no reply while the morning was still being written")
 	}
 	close(plan.release)
 	cancel()
@@ -132,16 +133,15 @@ func TestAPanicDropsOnlyThatMessage(t *testing.T) {
 func TestABornAgentIsntSeededAgain(t *testing.T) {
 	for _, born := range []bool{false, true} {
 		m, s := newMind(&fakeReplier{}, &fakeSystem1{}, &fakeSystem2{})
-		m.Life.Family = []character.Relative{{Name: "Ada", Relation: "mother"}}
-		m.Life.Dreams = []string{"Tobi wants to record an album."}
+		m.Life.Family = []character.Relative{{Name: "Ada", Relation: "owner", Account: owner}}
 		m.Born = born
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Run seeds, then sees it's done
 		if err := m.Run(ctx); err != nil {
 			t.Fatal(err)
 		}
-		if seeded := len(s.people) == 1 && len(s.dreams) == 1; seeded == born {
-			t.Errorf("born %v: %d people, %d dreams", born, len(s.people), len(s.dreams))
+		if seeded := len(s.people) == 1; seeded == born {
+			t.Errorf("born %v: %d people", born, len(s.people))
 		}
 	}
 }
