@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@tinio/ui";
 import { useState } from "react";
 import { MessageText } from "@/components/message-text";
@@ -65,6 +66,12 @@ export function JobCard({ row, agent, name }: { row: ChatRow; agent: string; nam
         </span>
         {!!p.steps && <span>{p.steps} steps</span>}
         {!!p.cost_usd && <span>{money(p.cost_usd)} of model time</span>}
+        {!!p.commit && <span>Committed {p.commit}</span>}
+        {!!p.pr && (
+          <a href={p.pr} target="_blank" rel="noreferrer" className="font-semibold text-accent-text">
+            Pull request
+          </a>
+        )}
         {!!p.asking && <span className="font-semibold text-fg">{p.asking === 1 ? "A question for you below" : `${p.asking} questions for you below`}</span>}
       </span>
       {files.length > 0 && (
@@ -78,6 +85,12 @@ export function JobCard({ row, agent, name }: { row: ChatRow; agent: string; nam
         </details>
       )}
       <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={`/agents/${agent}/jobs/${p.job}`}
+          className="inline-flex min-h-10 items-center rounded-full border border-line-strong px-4 text-[13px] font-semibold text-fg no-underline hover:border-fg"
+        >
+          {going ? "Open the job" : "Look at the changes"}
+        </Link>
         {going && (
           <Button
             type="button"

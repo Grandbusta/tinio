@@ -2,7 +2,10 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +21,13 @@ type Jobs struct {
 }
 
 type codingJobView struct {
+	Brief     string    `json:"brief,omitempty"`
+	Base      string    `json:"base"`
+	Rounds    int       `json:"rounds"`
+	Commit    string    `json:"commit,omitempty"`
+	PR        string    `json:"pr,omitempty"`
+	Turns     int       `json:"turns"`
+	EndedAt   time.Time `json:"ended_at,omitzero"`
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
 	Folder    string    `json:"folder"`
@@ -38,8 +48,7 @@ func (j *Jobs) List(c *gin.Context) error {
 	}
 	out := make([]codingJobView, 0, len(list))
 	for _, x := range list {
-		out = append(out, codingJobView{ID: x.ID, Title: x.Title, Folder: folderName(x.Repo), Topic: x.Topic, Branch: x.Branch, CLI: x.CLI,
-			Model: x.Model, Status: x.Status, Card: x.Card, CostUSD: x.CostUSD, StartedAt: x.StartedAt})
+		out = append(out, viewOf(x))
 	}
 	utils.SuccessWithData(c, http.StatusOK, gin.H{"jobs": out})
 	return nil
@@ -77,6 +86,114 @@ func (j *Jobs) Cancel(c *gin.Context) error {
 	}
 	utils.SuccessWithData(c, http.StatusOK, gin.H{"stopped": true})
 	return nil
+}
+
+func viewOf(x jobs.Job) codingJobView {
+	return codingJobView{ID: x.ID, Title: x.Title, Folder: folderName(x.Repo), Topic: x.Topic, Branch: x.Branch, CLI: x.CLI,
+		Model: x.Model, Status: x.Status, Card: x.Card, CostUSD: x.CostUSD, StartedAt: x.StartedAt, Brief: x.Brief, Base: x.Base,
+		Rounds: x.Rounds, Commit: x.CommitSHA, PR: x.PRURL, Turns: x.Turns, EndedAt: x.EndedAt}
+}
+
+// One is a job's page: its story, its changes (all of them, or ?round=n's),
+// and whether it can be pushed.
+func (j *Jobs) One(c *gin.Context) error {
+	x, err := j.Jobs.Get(c, c.Param("id"), c.Param("job"))
+	if err != nil {
+		if errors.Is(err, jobs.ErrNoJob) {
+			return utils.ErrNoSuchJob
+		}
+		return err
+	}
+	round, _ := strconv.Atoi(c.Query("round"))
+	steps, err := j.Jobs.Steps(c, x.ID)
+	if err != nil {
+		return err
+	}
+	changes, err := j.Jobs.Changes(c, x, round)
+	if err != nil {
+		return err
+	}
+	utils.SuccessWithData(c, http.StatusOK, gin.H{"job": viewOf(x), "steps": steps, "changes": changes, "github": j.Jobs.Finder.GH(c), "origin": j.Jobs.HasOrigin(c, x)})
+	return nil
+}
+
+// Back sends the job back with the owner's notes: on the whole, and on lines.
+func (j *Jobs) Back(c *gin.Context) error {
+	var in struct {
+		Note  string `json:"note"`
+		Lines []struct {
+			File string `json:"file"`
+			Line int    `json:"line"`
+			Text string `json:"text"`
+		} `json:"lines"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		return utils.ErrBadRequest
+	}
+	var b strings.Builder
+	if n := strings.TrimSpace(in.Note); n != "" {
+		b.WriteString(n + "\n")
+	}
+	for _, l := range in.Lines {
+		if t := strings.TrimSpace(l.Text); t != "" {
+			fmt.Fprintf(&b, "- %s, line %d: %s\n", l.File, l.Line, t)
+		}
+	}
+	if b.Len() == 0 {
+		return utils.Invalid("note", "Say what to change.")
+	}
+	if err := j.Jobs.Reply(c, c.Param("id"), c.Param("job"), "The owner looked at your changes and sends them back:\n"+b.String()); err != nil {
+		if errors.Is(err, jobs.ErrNoJob) {
+			return utils.Invalid("job", "That job has ended, and can't be carried on.")
+		}
+		return err
+	}
+	utils.SuccessWithData(c, http.StatusOK, gin.H{"sent": true})
+	return nil
+}
+
+// GoBack puts the job's copy back as it was before its last round.
+func (j *Jobs) GoBack(c *gin.Context) error {
+	x, err := j.Jobs.GoBack(c, c.Param("id"), c.Param("job"))
+	return j.after(c, x, err)
+}
+
+// Commit commits the job on its branch, on this computer: the owner's yes.
+func (j *Jobs) Commit(c *gin.Context) error {
+	var in struct {
+		Message string `json:"message"`
+	}
+	c.ShouldBindJSON(&in)
+	x, err := j.Jobs.Commit(c, c.Param("id"), c.Param("job"), in.Message)
+	return j.after(c, x, err)
+}
+
+// Push pushes the job's branch and opens a pull request: the owner's second yes.
+func (j *Jobs) Push(c *gin.Context) error {
+	var in struct {
+		Body string `json:"body"`
+	}
+	c.ShouldBindJSON(&in)
+	x, err := j.Jobs.Push(c, c.Param("id"), c.Param("job"), in.Body)
+	return j.after(c, x, err)
+}
+
+func (j *Jobs) after(c *gin.Context, x jobs.Job, err error) error {
+	switch {
+	case errors.Is(err, jobs.ErrNoJob):
+		return utils.ErrNoSuchJob
+	case err != nil:
+		return utils.Invalid("job", capitalFirst(err.Error())+".")
+	}
+	utils.SuccessWithData(c, http.StatusOK, gin.H{"job": viewOf(x)})
+	return nil
+}
+
+func capitalFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func folderName(repo string) string {

@@ -337,6 +337,11 @@ func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.
 		own.GET("/jobs", h(jc.List))
 		own.POST("/jobs/:job/asks/:ask", ours, h(jc.Answer))
 		own.POST("/jobs/:job/cancel", ours, h(jc.Cancel))
+		own.GET("/jobs/:job", h(jc.One))
+		own.POST("/jobs/:job/back", ours, h(jc.Back))
+		own.POST("/jobs/:job/goback", ours, h(jc.GoBack))
+		own.POST("/jobs/:job/commit", ours, h(jc.Commit))
+		own.POST("/jobs/:job/push", ours, h(jc.Push))
 	}
 	own.POST("/answers", ours, h(chat.Answer))
 	own.POST("/read", ours, h(chat.Read))

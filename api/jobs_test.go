@@ -48,7 +48,8 @@ func (s *fakeSession) play(n int, j coding.Job) {
 		s.events <- coding.Event{Kind: coding.Ask, AskID: id, Tool: tool, Input: input}
 		<-s.answered
 	}
-	if n > 1 { // carried on: it says it did it, and ends
+	if n > 1 { // carried on: it adds a note, says it did it, and ends
+		os.WriteFile(filepath.Join(j.Dir, "notes.txt"), []byte("15% off £13.30 is £11.31\n"), 0o644)
 		s.events <- coding.Event{Kind: coding.Started, SessionID: "s-1"}
 		s.events <- coding.Event{Kind: coding.Done, Status: coding.Completed, Text: "Added the test.", CostUSD: 0.05, Turns: 2}
 		return
@@ -61,6 +62,7 @@ func (s *fakeSession) play(n int, j coding.Job) {
 	ask("r2", "Bash", map[string]any{"command": "npm install decimal.js"})            // the owner: for this job
 	ask("r3", "Bash", map[string]any{"command": "npm install decimal.js"})            // allowed again, unasked
 	ask("r4", "WebFetch", map[string]any{"url": "https://example.com/docs"})          // the owner: no
+	os.WriteFile(filepath.Join(j.Dir, "basket.go"), []byte("package shop\n\n// Total rounds once.\nfunc Total() int { return 1131 }\n"), 0o644)
 	s.events <- coding.Event{Kind: coding.Done, Status: coding.Completed, Text: "Fixed it.", CostUSD: 0.15, Turns: 5}
 }
 
@@ -203,4 +205,109 @@ func TestACodingJob(t *testing.T) {
 		}
 	}
 	waitFor(t, "it to finish again", func() bool { g, _ := ta.jobs.Get(ctx, zara, j.ID); return g.Status == jobs.Ready && g.CostUSD > 0.19 })
+}
+
+// After a job: its page shows what it did and its changes, by round; going
+// back a round undoes the last; commit puts it on its branch; push sends the
+// branch to origin and opens a pull request through the owner's gh.
+func TestAJobsChangesCommitAndPullRequest(t *testing.T) {
+	ta := newTestAPI(t)
+	ada := ta.signUp(t)
+	zara := ta.raiseZara(t, ada)
+	fake := &fakeCoder{}
+	ta.jobs.Adapter = fake
+	repo := gitRepo(t)
+	ctx := context.Background()
+	st := store.New(ta.db).For(zara)
+	j, err := ta.jobs.Begin(ctx, zara, jobs.Folder{ID: "f1", Name: "shop-site", Path: repo}, "Fix the basket rounding", "Round once.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Answer its questions as they come: all yes.
+	go func() {
+		for end := time.Now().Add(5 * time.Second); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
+			rows, _ := st.Chat(ctx, "", 100)
+			for _, r := range rows {
+				if r.Kind == memory.ChatJobAsk && r.SettledAt.IsZero() {
+					var p struct{ Job, Ask string }
+					json.Unmarshal(r.Payload, &p)
+					ta.jobs.Answer(ctx, zara, p.Job, p.Ask, jobs.Once, "")
+				}
+			}
+		}
+	}()
+	waitFor(t, "the first round", func() bool { g, _ := ta.jobs.Get(ctx, zara, j.ID); return g.Status == jobs.Ready && g.Rounds == 1 })
+	page := func(q string) map[string]any {
+		t.Helper()
+		rec, out := ta.do(t, "GET", "/v1/agents/"+zara+"/jobs/"+j.ID+q, nil, ada, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("job page: %d %v", rec.Code, out)
+		}
+		return data(out)
+	}
+	p := page("")
+	ch := p["changes"].([]any)
+	if len(ch) != 1 || ch[0].(map[string]any)["path"] != "basket.go" || !strings.Contains(ch[0].(map[string]any)["patch"].(string), "+func Total() int { return 1131 }") {
+		t.Fatalf("changes %v", ch)
+	}
+	steps := p["steps"].([]any)
+	if first := steps[0].(map[string]any); first["who"] != "agent" || first["what"] != "Wrote the brief" {
+		t.Errorf("first step %v", first)
+	}
+	if out, _ := exec.Command("git", "-C", repo, "log", "--oneline").Output(); strings.Count(string(out), "\n") != 1 {
+		t.Errorf("the owner's log has more than their own commit:\n%s", out)
+	}
+
+	// A second round, its own changes, and back again.
+	if err := ta.jobs.Reply(ctx, zara, j.ID, "Write down the example."); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the second round", func() bool { g, _ := ta.jobs.Get(ctx, zara, j.ID); return g.Status == jobs.Ready && g.Rounds == 2 })
+	if ch := page("?round=2")["changes"].([]any); len(ch) != 1 || ch[0].(map[string]any)["path"] != "notes.txt" {
+		t.Fatalf("round 2's changes %v", ch)
+	}
+	if rec, out := ta.do(t, "POST", "/v1/agents/"+zara+"/jobs/"+j.ID+"/goback", nil, ada, site); rec.Code != http.StatusOK {
+		t.Fatalf("going back: %d %v", rec.Code, out)
+	}
+	if _, err := os.Stat(filepath.Join(j.Dir, "notes.txt")); !os.IsNotExist(err) {
+		t.Error("going back left the round's new file")
+	}
+	if ch := page("")["changes"].([]any); len(ch) != 1 || ch[0].(map[string]any)["path"] != "basket.go" {
+		t.Errorf("after going back %v", ch)
+	}
+
+	// Push before commit: no.
+	if rec, _ := ta.do(t, "POST", "/v1/agents/"+zara+"/jobs/"+j.ID+"/push", nil, ada, site); rec.Code != http.StatusBadRequest {
+		t.Errorf("pushing before committing: %d", rec.Code)
+	}
+	exec.Command("git", "-C", repo, "config", "user.name", "Ada").Run()
+	exec.Command("git", "-C", repo, "config", "user.email", "ada@example.invalid").Run()
+	rec, out := ta.do(t, "POST", "/v1/agents/"+zara+"/jobs/"+j.ID+"/commit", map[string]any{"message": "Round the basket total once"}, ada, site)
+	if rec.Code != http.StatusOK || data(out)["job"].(map[string]any)["commit"] == "" {
+		t.Fatalf("committing: %d %v", rec.Code, out)
+	}
+	if log, _ := exec.Command("git", "-C", j.Dir, "log", "-1", "--format=%s %an").Output(); strings.TrimSpace(string(log)) != "Round the basket total once Ada" {
+		t.Errorf("the commit: %q", log)
+	}
+
+	// Push: to a bare origin, and a pull request through a fake gh.
+	origin := t.TempDir()
+	exec.Command("git", "init", "-q", "--bare", origin).Run()
+	exec.Command("git", "-C", repo, "remote", "add", "origin", origin).Run()
+	gh := t.TempDir()
+	os.WriteFile(filepath.Join(gh, "gh"), []byte("#!/bin/sh\ncase \"$1 $2\" in\n\"auth status\") echo 'Logged in to github.com account ada';;\n\"pr create\") echo 'https://github.com/ada/shop/pull/7';;\nesac\n"), 0o755)
+	t.Setenv("PATH", gh+string(os.PathListSeparator)+os.Getenv("PATH"))
+	rec, out = ta.do(t, "POST", "/v1/agents/"+zara+"/jobs/"+j.ID+"/push", map[string]any{"body": "Rounds once."}, ada, site)
+	if rec.Code != http.StatusOK || data(out)["job"].(map[string]any)["pr"] != "https://github.com/ada/shop/pull/7" {
+		t.Fatalf("pushing: %d %v", rec.Code, out)
+	}
+	if b, _ := exec.Command("git", "-C", origin, "branch", "--list", j.Branch).Output(); !strings.Contains(string(b), j.Branch) {
+		t.Errorf("origin has no %s", j.Branch)
+	}
+	card, _, _ := st.ChatMessage(ctx, j.Card)
+	var c jobs.Card
+	json.Unmarshal(card.Payload, &c)
+	if c.PR != "https://github.com/ada/shop/pull/7" || c.Commit == "" || len(c.Files) == 0 {
+		t.Errorf("card %+v", c)
+	}
 }

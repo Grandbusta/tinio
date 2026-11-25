@@ -6,6 +6,7 @@ import { AppFrame } from "@/components/app-frame";
 import { CharacterPage } from "@/components/character";
 import { Chat } from "@/components/chat";
 import { AgentToolsPage, ConnectionsPage, ConnectPage } from "@/components/connections";
+import { JobPage } from "@/components/job-page";
 import { FirstRun, keySkipped, ready, skipKeyForNow, useSources } from "@/components/first-run";
 import { AddFolderPage } from "@/components/folders";
 import { GrowthPage } from "@/components/growth";
@@ -60,6 +61,7 @@ export function App() {
           <Route path="/agents/:id/today" element={<Agent title="Your day" page={(id) => <TodayPage id={id} />} />} />
           <Route path="/agents/:id/works" element={<Agent title="Works" page={(id) => <WorksPage id={id} />} />} />
           <Route path="/agents/:id/works/:work" element={<Work />} />
+          <Route path="/agents/:id/jobs/:job" element={<JobRoute />} />
           <Route path="/agents/:id/skills" element={<Agent title="Skills" page={(id) => <SkillsPage id={id} />} />} />
           <Route path="/agents/:id/skills/import" element={<Agent title="Import a skill" page={(id) => <SkillImportPage id={id} />} />} />
           <Route path="/agents/:id/topics" element={<Agent title="Topics" page={(id) => <TopicsPage id={id} />} />} />
@@ -111,6 +113,15 @@ function Agent({ title, page }: { title: string; page: (id: string) => ReactNode
 
 function PageFor({ children }: { children: ReactNode }) {
   return <>{children}</>;
+}
+
+function JobRoute() {
+  const { id = "", job = "" } = useParams();
+  return (
+    <Titled title="Coding job">
+      <JobPage key={`${id}/${job}`} agent={id} job={job} />
+    </Titled>
+  );
 }
 
 function Work() {

@@ -74,6 +74,13 @@ stopped, and a reply carries them on. Settings has Coding jobs: who writes the c
 5.5 to start), on a copy or not, how long a job runs, and GitHub through your own gh.
 Approved tools that only start something (a job) run as soon as you say yes.
 
+**A job's page:** open a job from its card to see what happened, told by who did it (the
+agent, Claude Code, you), and its changes, file by file, for the whole job or one round at
+a time. Tap a line to say something about it; Send it back takes your notes, and the line
+each is about, for another round. Go back a round undoes the last one. Commit it commits
+on the job's branch, on this computer, as you; then, if the repository has an origin and
+GitHub's gh is signed in, Push and open a pull request is a second yes.
+
 **Folders on your computer:** add a folder in Settings, or with the + beside the message
 box, and choose which agents may use it, Read or Read and make files. They list, search
 and read what's in it (text, Word, Excel, PDF) on their own; making or changing a file

@@ -340,4 +340,7 @@ export type JobPayload = {
   ask?: string;
   tool?: string;
   detail?: string;
+  rounds?: number;
+  commit?: string;
+  pr?: string;
 };

@@ -81,9 +81,7 @@ func (s *Service) Start(ctx context.Context) error {
 		if err := s.save(ctx, j); err != nil {
 			return err
 		}
-		c := cardOf(j)
-		c.Now = "Stopped when Tinio closed. Reply here to carry it on."
-		s.showCard(ctx, j, c)
+		s.editCard(ctx, j, func(c *Card) { c.Now = "Stopped when Tinio closed. Reply here to carry it on." })
 	}
 	return nil
 }
@@ -107,9 +105,12 @@ type Job struct {
 	CostUSD                                float64
 	Turns                                  int
 	StartedAt, EndedAt                     time.Time
+	BaseSHA                                string // the commit it started from
+	Rounds                                 int    // snapshots of its copy, one after each round
+	CommitSHA, PRURL                       string // on the owner's yes, and their second
 }
 
-const jobColumns = `id, agent_id, folder_id, topic_id, title, brief, cli, model, repo, dir, branch, base, session, status, card, cost_usd, turns, started_at, ended_at`
+const jobColumns = `id, agent_id, folder_id, topic_id, title, brief, cli, model, repo, dir, branch, base, session, status, card, cost_usd, turns, started_at, ended_at, base_sha, rounds, commit_sha, pr_url`
 
 func (s *Service) query(ctx context.Context, sql string, args ...any) ([]Job, error) {
 	rows, err := s.DB.Query(ctx, sql, args...)
@@ -120,7 +121,7 @@ func (s *Service) query(ctx context.Context, sql string, args ...any) ([]Job, er
 		var j Job
 		var ended string
 		err := r.Scan(&j.ID, &j.Agent, &j.Folder, &j.Topic, &j.Title, &j.Brief, &j.CLI, &j.Model, &j.Repo, &j.Dir, &j.Branch, &j.Base,
-			&j.Session, &j.Status, &j.Card, &j.CostUSD, &j.Turns, &j.StartedAt, &ended)
+			&j.Session, &j.Status, &j.Card, &j.CostUSD, &j.Turns, &j.StartedAt, &ended, &j.BaseSHA, &j.Rounds, &j.CommitSHA, &j.PRURL)
 		if ended != "" {
 			j.EndedAt, _ = time.Parse(time.RFC3339Nano, ended)
 		}
@@ -134,12 +135,13 @@ func (s *Service) save(ctx context.Context, j Job) error {
 		ended = j.EndedAt.UTC().Format(time.RFC3339Nano)
 	}
 	_, err := s.DB.Exec(ctx, `INSERT INTO coding_jobs (`+jobColumns+`)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
 		ON CONFLICT (id) DO UPDATE SET topic_id = excluded.topic_id, dir = excluded.dir, branch = excluded.branch, base = excluded.base,
 			session = excluded.session, status = excluded.status, card = excluded.card, cost_usd = excluded.cost_usd,
-			turns = excluded.turns, ended_at = excluded.ended_at`,
+			turns = excluded.turns, ended_at = excluded.ended_at, base_sha = excluded.base_sha, rounds = excluded.rounds,
+			commit_sha = excluded.commit_sha, pr_url = excluded.pr_url`,
 		j.ID, j.Agent, j.Folder, j.Topic, j.Title, j.Brief, j.CLI, j.Model, j.Repo, j.Dir, j.Branch, j.Base,
-		j.Session, j.Status, j.Card, j.CostUSD, j.Turns, j.StartedAt.UTC(), ended)
+		j.Session, j.Status, j.Card, j.CostUSD, j.Turns, j.StartedAt.UTC(), ended, j.BaseSHA, j.Rounds, j.CommitSHA, j.PRURL)
 	if err != nil {
 		return fmt.Errorf("jobs: save: %w", err)
 	}
@@ -179,11 +181,35 @@ type Card struct {
 	Asking  int      `json:"asking"` // questions waiting on the owner
 	CostUSD float64  `json:"cost_usd"`
 	Summary string   `json:"summary"` // its last words, when it's done
+	Rounds  int      `json:"rounds"`
+	Commit  string   `json:"commit"` // its commit's short sha, on the owner's yes
+	PR      string   `json:"pr"`     // its pull request, on their second
 }
 
 func cardOf(j Job) Card {
 	return Card{Job: j.ID, Title: j.Title, Folder: filepath.Base(j.Repo), Branch: j.Branch, Base: j.Base, CLI: j.CLI,
 		Model: j.Model, Status: j.Status, Files: []string{}, CostUSD: j.CostUSD}
+}
+
+// card is j's card as it is now.
+func (s *Service) card(ctx context.Context, j Job) Card {
+	c := cardOf(j)
+	if m, ok, err := store.New(s.DB).For(j.Agent).ChatMessage(ctx, j.Card); err == nil && ok {
+		json.Unmarshal(m.Payload, &c)
+	}
+	return c
+}
+
+// editCard changes j's card as it is now, keeping what edit doesn't change.
+func (s *Service) editCard(ctx context.Context, j Job, edit func(*Card)) {
+	c := s.card(ctx, j)
+	c.Status, c.Rounds, c.CostUSD = j.Status, j.Rounds, j.CostUSD
+	if j.CommitSHA != "" {
+		c.Commit = j.CommitSHA[:min(7, len(j.CommitSHA))]
+	}
+	c.PR = j.PRURL
+	edit(&c)
+	s.showCard(ctx, j, c)
 }
 
 func (s *Service) showCard(ctx context.Context, j Job, c Card) {
@@ -258,6 +284,9 @@ func (s *Service) Begin(ctx context.Context, agent string, f Folder, title, brie
 	if j.Base, err = git(ctx, repo, "rev-parse", "--abbrev-ref", "HEAD"); err != nil {
 		return Job{}, err
 	}
+	if j.BaseSHA, err = git(ctx, repo, "rev-parse", "HEAD"); err != nil {
+		return Job{}, err
+	}
 	if set.Copy {
 		j.Branch = "tinio/" + slug(j.Title) + "-" + strings.ToLower(id[len(id)-4:])
 		j.Dir = filepath.Join(s.Data, "worktrees", id)
@@ -283,6 +312,8 @@ func (s *Service) Begin(ctx context.Context, agent string, f Folder, title, brie
 	if err := s.save(ctx, j); err != nil {
 		return Job{}, err
 	}
+	s.step(ctx, j.ID, WhoAgent, "Wrote the brief", j.Brief)
+	s.step(ctx, j.ID, WhoOwner, "Started the job", "")
 	r := &run{s: s, job: j, card: c, gate: &coding.Gate{Rules: coding.Rules{Dir: j.Dir, Commands: coding.Commands(j.Dir)}}, asks: map[string]pending{}, over: make(chan struct{})}
 	r.owner = s.ownerName(ctx, agent)
 	s.mu.Lock()
@@ -372,9 +403,10 @@ func (s *Service) Reply(ctx context.Context, agent, job, text string) error {
 		return err
 	}
 	j.Status, j.EndedAt = Working, time.Time{}
-	r := &run{s: s, job: j, card: cardOf(j), gate: &coding.Gate{Rules: coding.Rules{Dir: j.Dir, Commands: coding.Commands(j.Dir)}}, asks: map[string]pending{}, over: make(chan struct{})}
+	s.step(ctx, j.ID, WhoOwner, "Sent more", text)
+	r := &run{s: s, job: j, card: s.card(ctx, j), gate: &coding.Gate{Rules: coding.Rules{Dir: j.Dir, Commands: coding.Commands(j.Dir)}}, asks: map[string]pending{}, over: make(chan struct{})}
 	r.owner = s.ownerName(ctx, agent)
-	r.card.Now = "Carrying on with what you said"
+	r.card.Now, r.card.Status, r.card.Summary = "Carrying on with what you said", Working, ""
 	s.mu.Lock()
 	s.runs[j.ID] = r
 	s.mu.Unlock()
@@ -393,4 +425,45 @@ func (s *Service) Cancel(ctx context.Context, agent, job string) error {
 	}
 	r.cancel()
 	return nil
+}
+
+// Who did a step.
+const (
+	WhoAgent = "agent"
+	WhoCLI   = "cli"
+	WhoOwner = "owner"
+	WhoTinio = "tinio"
+)
+
+// A Step is one thing in a job's story, told by who did it.
+type Step struct {
+	At     time.Time `json:"at"`
+	Who    string    `json:"who"`
+	What   string    `json:"what"`
+	Detail string    `json:"detail"`
+}
+
+// step keeps one thing a job did; a failure to is only logged.
+func (s *Service) step(ctx context.Context, job, who, what, detail string) {
+	if r := []rune(detail); len(r) > 4000 {
+		detail = string(r[:4000]) + "…"
+	}
+	if _, err := s.DB.Exec(ctx, `INSERT INTO coding_steps (job_id, seq, at, who, what, detail)
+		VALUES ($1, (SELECT coalesce(max(seq), 0) + 1 FROM coding_steps WHERE job_id = $1), $2, $3, $4, $5)`,
+		job, time.Now().UTC(), who, what, detail); err != nil {
+		s.Log.Warn("jobs: keeping a step failed", "job", job, "err", err)
+	}
+}
+
+// Steps is a job's story, oldest first.
+func (s *Service) Steps(ctx context.Context, job string) ([]Step, error) {
+	rows, err := s.DB.Query(ctx, `SELECT at, who, what, detail FROM coding_steps WHERE job_id = $1 ORDER BY seq`, job)
+	if err != nil {
+		return nil, fmt.Errorf("jobs: steps: %w", err)
+	}
+	return db.CollectRows(rows, func(r db.Scanner) (Step, error) {
+		var st Step
+		err := r.Scan(&st.At, &st.Who, &st.What, &st.Detail)
+		return st, err
+	})
 }

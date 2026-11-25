@@ -113,6 +113,9 @@ func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {
 			r.card.Steps++
 			r.mu.Unlock()
 			r.now(doing(e.Tool, e.Input), false)
+			if e.Tool != "TodoWrite" {
+				r.s.step(context.Background(), r.job.ID, WhoCLI, doing(e.Tool, e.Input), detail(e.Tool, e.Input))
+			}
 		case coding.Changed:
 			r.mu.Lock()
 			rel := e.Path
@@ -181,6 +184,18 @@ func (r *run) now(what string, force bool) {
 }
 
 func (r *run) end(status, text string, e coding.Event) {
+	// A snapshot of the copy as the round left it, for its changes and to go back to.
+	if r.job.Dir != "" {
+		if n, err := r.s.checkpoint(context.Background(), r.snapshot()); err != nil {
+			r.s.Log.Warn("jobs: no snapshot of the round", "job", r.job.ID, "err", err)
+		} else {
+			r.mu.Lock()
+			r.job.Rounds = n
+			r.mu.Unlock()
+		}
+	}
+	what := map[string]string{Ready: "Finished", Stopped: "Stopped", Failed: "Didn't work out", Cancelled: "Stopped by you"}[status]
+	r.s.step(context.Background(), r.job.ID, WhoCLI, what, strings.TrimSpace(text))
 	r.mu.Lock()
 	if r.job.Status == Cancelled {
 		status = Cancelled
@@ -189,7 +204,7 @@ func (r *run) end(status, text string, e coding.Event) {
 	r.job.EndedAt = time.Now().UTC()
 	r.job.CostUSD += e.CostUSD
 	r.job.Turns += e.Turns
-	r.card.CostUSD, r.card.Asking = r.job.CostUSD, 0
+	r.card.CostUSD, r.card.Asking, r.card.Rounds = r.job.CostUSD, 0, r.job.Rounds
 	r.card.Summary = strings.TrimSpace(text)
 	r.card.Now = map[string]string{Ready: "Done: for you to look at", Stopped: "Stopped: reply here to carry it on",
 		Failed: "It didn't work out", Cancelled: "You stopped it"}[status]
@@ -233,6 +248,7 @@ func (r *run) ask(e coding.Event) {
 	r.job.Status, r.card.Status = Waiting, Waiting
 	r.card.Asking = len(r.asks)
 	r.mu.Unlock()
+	r.s.step(context.Background(), j.ID, WhoCLI, "Asked to "+strings.ToLower(askVerb(e.Tool)), detail(e.Tool, e.Input))
 	r.now("Waiting for you: "+strings.ToLower(askVerb(e.Tool)), true)
 	r.s.save(context.Background(), r.snapshot())
 }
@@ -282,6 +298,7 @@ func (r *run) answer(ctx context.Context, ask, answer, note string) error {
 	// Saved and shown before the CLI hears it: once it has, the job may end at
 	// once, and what's saved after that would undo its end.
 	r.s.save(ctx, j)
+	r.s.step(ctx, j.ID, WhoOwner, strings.TrimPrefix(strings.TrimSuffix(said, "."), "✅ "), strings.TrimSpace(note))
 	store.New(r.s.DB).For(j.Agent).Settle(ctx, p.row, askText(p.event)+"\n\n"+said, time.Now().UTC())
 	r.now("", true)
 	return sess.Answer(ask, allow, why)
@@ -297,6 +314,7 @@ func (r *run) send(text string) error {
 	if err := sess.Send(text); err != nil {
 		return err
 	}
+	r.s.step(context.Background(), r.job.ID, WhoOwner, "Sent more", text)
 	r.now("Taking in what you said", true)
 	return nil
 }
