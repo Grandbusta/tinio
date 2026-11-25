@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button } from "@tinio/ui";
-import { useCallback, useEffect, useState } from "react";
-import { useFrame } from "@/components/app-frame";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Avatar, useFrame } from "@/components/app-frame";
 import { MessageText } from "@/components/message-text";
 import { ServiceLogo } from "@/components/service-logo";
 import { call } from "@/lib/api";
@@ -85,6 +85,15 @@ export function JobPage({ agent, job, back }: { agent: string; job: string; back
   const [message, setMessage] = useState("");
   const [pushing, setPushing] = useState(false);
   const [undoing, setUndoing] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const box = useRef<HTMLTextAreaElement>(null);
+  // The message box grows with what's written, up to a point, as the chat's does.
+  useEffect(() => {
+    const b = box.current;
+    if (!b) return;
+    b.style.height = "auto";
+    b.style.height = `${Math.min(b.scrollHeight, 192)}px`;
+  }, [note]);
 
   const load = useCallback(() => {
     call<Page>(`/agents/${agent}/jobs/${job}${round ? `?round=${round}` : ""}`).then((res) => {
@@ -126,6 +135,49 @@ export function JobPage({ agent, job, back }: { agent: string; job: string; back
   const verdict = j.status === "ready" && checked && checked.what !== "Checked it and sent it back" ? checked.detail : "";
   const [label, tone] = pill[j.status] ?? pill.working;
   const canDecide = !going && !j.commit;
+
+  // The top of the bar: the last word on the job, by who said it.
+  const step = [...page.steps].reverse().find((s) => s.who === "cli");
+  const top: { agent: boolean; who: string; text: ReactNode } = going
+    ? {
+        agent: false,
+        who: `Claude Code${j.rounds > 1 ? ` · round ${j.rounds}` : ""}`,
+        text: (
+          <span className="inline-flex items-center gap-2">
+            <span aria-hidden="true" className="size-2 flex-none animate-pulse rounded-full bg-accent" />
+            {j.status === "waiting" ? "Waiting on you: its question is in the chat" : step?.what || "Working"}
+          </span>
+        ),
+      }
+    : j.pr
+      ? { agent: false, who: "Pull request open", text: <>On <code>{j.branch}</code>. Pushing again adds what&apos;s committed since.</> }
+      : j.commit
+        ? { agent: false, who: "Committed", text: <>On <code>{j.branch || j.base}</code>, on this computer, as you. Nothing has left it.</> }
+        : verdict
+          ? { agent: true, who: `${name} checked it`, text: <MessageText text={verdict} /> }
+          : finished?.detail
+            ? { agent: false, who: j.status === "ready" ? "Claude Code finished" : "Claude Code stopped", text: <MessageText text={finished.detail} /> }
+            : { agent: false, who: "Claude Code", text: page.changes.length ? "Look it over: commit it, ask for changes, or undo it." : "It made no changes." };
+  const placeholder = going
+    ? `Tell the job something; ${name} passes it on`
+    : j.commit
+      ? "Carry the job on: what next?"
+      : notes.length
+        ? "Anything else to change?"
+        : `Answer ${name}, or ask for changes`;
+  const hint = going
+    ? "It reaches Claude Code between steps."
+    : j.commit
+      ? "Enter starts another round on the same branch."
+      : notes.length
+        ? `${notes.length === 1 ? "A note on a line goes" : `${notes.length} notes on lines go`} with it · Enter sends it back as a new round`
+        : "Enter sends it back as a new round · tap a line above to say something about it";
+  const canSend = !!note.trim() || (canDecide && notes.length > 0);
+  function say() {
+    if (!canSend || busy) return;
+    if (canDecide) return act("back", "back", { note, lines: notes }, () => (setNotes([]), setNote("")));
+    act("back", "back", { note, plain: true }, () => setNote(""));
+  }
 
   return (
     <div className="page-in flex min-h-full flex-col bg-bg">
@@ -394,24 +446,6 @@ export function JobPage({ agent, job, back }: { agent: string; job: string; back
                   )}
                 </div>
               ))}
-          {notes.length > 0 && (
-                <div className="flex flex-col gap-1.5 rounded-lg bg-accent-soft/40 px-3.5 py-3 text-[13px]">
-                  <b>{notes.length === 1 ? "One note" : `${notes.length} notes`} to send back</b>
-                  {notes.map((n, i) => (
-                    <span key={i} className="flex justify-between gap-2">
-                      <span>
-                        <code>
-                          {n.file}:{n.line}
-                        </code>{" "}
-                        {n.text}
-                      </span>
-                      <button type="button" onClick={() => setNotes((ns) => ns.filter((_, k) => k !== i))} className="font-semibold text-accent-text">
-                        Remove
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
               </div>
             </div>
           )}
@@ -479,42 +513,41 @@ export function JobPage({ agent, job, back }: { agent: string; job: string; back
               </Button>
             </div>
           </div>
+        ) : stopping ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-sm">Stop it where it is? What it has changed so far stays in the job&apos;s copy, to look over. It can&apos;t be picked up again.</span>
+            <div className="flex gap-2">
+              <Button kind="primary" type="button" disabled={!!busy} onClick={() => act("stop", "cancel", {}, () => setStopping(false))}>
+                {busy === "stop" ? "Stopping" : "Stop it"}
+              </Button>
+              <Button type="button" onClick={() => setStopping(false)}>
+                Let it carry on
+              </Button>
+            </div>
+          </div>
         ) : (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
-            <span className="min-w-0 flex-[1_1_280px] text-sm text-fg/85">
-              {going
-                ? "It's working. Its card in the chat shows how it goes."
-                : j.pr
-                  ? "The pull request is open. Carry the job on from its card to change it."
-                  : j.commit
-                    ? `Committed on ${j.branch || j.base}, on this computer.`
-                    : verdict
-                      ? `${name}: ${verdict}`
-                      : page.changes.length
-                      ? "Look it over: commit it, ask for changes, or undo it."
-                      : "It made no changes."}
-            </span>
-            {canDecide && (
-              <>
-                <label htmlFor="back-note" className="sr-only">
-                  What to change, in a word
-                </label>
-                <input
-                  id="back-note"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="What to change"
-                  className="min-h-10 min-w-0 flex-[1_1_220px] rounded-lg border border-line-strong bg-surface px-4 text-sm"
-                />
-                <Button type="button" disabled={!!busy || (!note.trim() && notes.length === 0)} onClick={() => act("back", "back", { note, lines: notes }, () => (setNotes([]), setNote("")))}>
-                  {busy === "back" ? "Asking" : "Ask for changes"}
-                </Button>
-                {j.rounds > 0 && (
-                  <Button type="button" disabled={!!busy} onClick={() => setUndoing(true)}>
-                    {j.rounds > 1 ? "Undo the last round" : "Discard the changes"}
-                  </Button>
+          <>
+            {/* Who said what last, as in the chat, with what you can decide beside it. */}
+            <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+              <span className="flex min-w-0 flex-[1_1_420px] items-start gap-3">
+                {top.agent && a ? <Avatar agent={a} size={32} /> : <ServiceLogo service="claude" size={32} />}
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-[12.5px] font-semibold text-muted">{top.who}</span>
+                  <span className="max-w-[72ch] text-[14.5px] leading-normal">{top.text}</span>
+                </span>
+              </span>
+              <span className="ml-auto flex flex-none flex-wrap items-center gap-1.5">
+                {going && (
+                  <button type="button" onClick={() => setStopping(true)} className="min-h-10 rounded-lg px-3.5 text-[13.5px] font-semibold text-muted hover:bg-surface-2 hover:text-fg">
+                    Stop it
+                  </button>
                 )}
-                {page.changes.length > 0 && (
+                {canDecide && j.rounds > 0 && (
+                  <button type="button" disabled={!!busy} onClick={() => setUndoing(true)} className="min-h-10 rounded-lg px-3.5 text-[13.5px] font-semibold text-muted hover:bg-surface-2 hover:text-fg">
+                    {j.rounds > 1 ? "Undo the last round" : "Discard the changes"}
+                  </button>
+                )}
+                {canDecide && page.changes.length > 0 && (
                   <Button
                     kind="primary"
                     type="button"
@@ -527,16 +560,77 @@ export function JobPage({ agent, job, back }: { agent: string; job: string; back
                     Commit it
                   </Button>
                 )}
-              </>
+                {j.commit && j.branch && !going && page.origin && (
+                  <Button kind="primary" type="button" disabled={!page.github.signed_in} onClick={() => setPushing(true)}>
+                    {j.pr ? "Push again" : "Push and open a pull request"}
+                  </Button>
+                )}
+              </span>
+            </div>
+            {j.status !== "cancelled" && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  say();
+                }}
+                className="flex flex-col gap-2 rounded-xl border border-line-strong bg-surface py-2 pr-2 pl-4 focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-accent"
+              >
+                {canDecide && notes.length > 0 && (
+                  <span className="flex flex-wrap gap-1.5 pt-0.5">
+                    {notes.map((n, i) => (
+                      <span key={i} className="inline-flex max-w-full items-center gap-2 rounded-lg bg-surface-2 py-1 pr-1 pl-2.5 text-[13px]">
+                        <code className="flex-none">
+                          {n.file.split("/").pop()}:{n.line}
+                        </code>
+                        <span className="min-w-0 truncate">{n.text}</span>
+                        <button type="button" aria-label="Take this note out" onClick={() => setNotes((ns) => ns.filter((_, k) => k !== i))} className="grid size-6 flex-none place-items-center rounded-md text-muted hover:bg-line hover:text-fg">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                            <path d="M6 6l12 12M18 6L6 18" />
+                          </svg>
+                        </button>
+                      </span>
+                    ))}
+                  </span>
+                )}
+                <span className="flex items-end gap-2.5">
+                  <label htmlFor="job-say" className="sr-only">
+                    {placeholder}
+                  </label>
+                  {/* Enter sends; Shift+Enter starts a new line. */}
+                  <textarea
+                    ref={box}
+                    id="job-say"
+                    rows={1}
+                    value={note}
+                    maxLength={4000}
+                    onChange={(e) => setNote(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        say();
+                      }
+                    }}
+                    placeholder={placeholder}
+                    className="max-h-48 min-h-10 min-w-0 flex-1 resize-none bg-transparent py-2 text-[14.5px] leading-6 text-fg outline-none"
+                  />
+                  <button
+                    type="submit"
+                    aria-label="Send"
+                    disabled={!!busy || !canSend}
+                    className="grid size-10 flex-none place-items-center rounded-full bg-accent text-accent-ink hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 12h14" />
+                      <path d="M13 6l6 6-6 6" />
+                    </svg>
+                  </button>
+                </span>
+              </form>
             )}
-            {j.commit && j.branch && !going && page.origin && (
-              <Button kind="primary" type="button" disabled={!page.github.signed_in} onClick={() => setPushing(true)}>
-                {j.pr ? "Push again" : "Push and open a pull request"}
-              </Button>
-            )}
+            {j.status !== "cancelled" && <span className="-mt-1 pl-1 text-xs text-muted">{hint}</span>}
             {j.commit && j.branch && !page.origin && <span className="text-xs text-muted">The repository has no origin, so there&apos;s nowhere to push it.</span>}
             {j.commit && page.origin && !page.github.signed_in && <span className="text-xs text-muted">Sign in to GitHub&apos;s gh on this computer to push.</span>}
-          </div>
+          </>
         )}
       </div>
     </div>

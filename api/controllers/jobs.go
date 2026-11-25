@@ -125,10 +125,12 @@ func (j *Jobs) One(c *gin.Context) error {
 	return nil
 }
 
-// Back sends the job back with the owner's notes: on the whole, and on lines.
+// Back sends the job back with the owner's notes: on the whole, and on lines. Plain is
+// a message as it was written, to a job working (passed on) or done (carried on).
 func (j *Jobs) Back(c *gin.Context) error {
 	var in struct {
 		Note  string `json:"note"`
+		Plain bool   `json:"plain"`
 		Lines []struct {
 			File string `json:"file"`
 			Line int    `json:"line"`
@@ -150,7 +152,11 @@ func (j *Jobs) Back(c *gin.Context) error {
 	if b.Len() == 0 {
 		return utils.Invalid("note", "Say what to change.")
 	}
-	if err := j.Jobs.Reply(c, c.Param("id"), c.Param("job"), "The owner looked at your changes and sends them back:\n"+b.String()); err != nil {
+	text := "The owner looked at your changes and sends them back:\n" + b.String()
+	if in.Plain {
+		text = strings.TrimSpace(b.String())
+	}
+	if err := j.Jobs.Reply(c, c.Param("id"), c.Param("job"), text); err != nil {
 		if errors.Is(err, jobs.ErrNoJob) {
 			return utils.Invalid("job", "That job has ended, and can't be carried on.")
 		}
