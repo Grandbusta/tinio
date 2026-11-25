@@ -82,4 +82,21 @@ func TestYourDayIsEachAgentsMorning(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("a time that isn't HH:MM: %d %v", rec.Code, out)
 	}
+
+	// Resting till tomorrow, they wake when their morning moves, so they don't
+	// sleep through it at its new time.
+	if _, err := ta.db.Exec(ctx, `UPDATE agent_runs SET worker = NULL, wake_at = $1 WHERE agent_id = $2`, time.Now().Add(20*time.Hour).UTC(), zara); err != nil {
+		t.Fatal(err)
+	}
+	rec, out = ta.do(t, "POST", "/v1/agents/"+zara+"/settings", map[string]any{"morning": map[string]any{"on": true, "at": "08:15", "days": []int{1, 2, 3, 4, 5}}}, ada, site)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("moving the morning: %d %v", rec.Code, out)
+	}
+	var wake time.Time
+	if err := ta.db.QueryRow(ctx, `SELECT wake_at FROM agent_runs WHERE agent_id = $1`, zara).Scan(&wake); err != nil {
+		t.Fatal(err)
+	}
+	if wake.After(time.Now().Add(time.Minute)) {
+		t.Errorf("still resting till %v after their morning moved", wake)
+	}
 }

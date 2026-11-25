@@ -228,6 +228,10 @@ func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan s
 		return err
 	}
 	h.Days = true
+	// One owner's few agents: they stay running, ticking each minute, and never
+	// rest out of memory until something's due. Resting is for a server holding
+	// many people's agents.
+	h.RestAfter = 0
 	h.Connections = &connect.Store{DB: d, Key: *cfg.Key}
 	h.Folders = &folders.Store{DB: d, Rules: folders.Rules{Data: cfg.DataDir}, Versions: filepath.Join(cfg.DataDir, "versions")}
 	h.Jobs = svc

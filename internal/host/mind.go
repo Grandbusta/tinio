@@ -426,6 +426,9 @@ func (h *Host) mind(ctx context.Context, r *runner) (m *mind.Mind, done func(), 
 			return nil, nil, err
 		}
 	}
+	if h.Jobs != nil {
+		morning.Jobs = h.codingJobs(r.row.id)
+	}
 	log := h.log.With("agent", r.row.id)
 	var abilities []ability.Ability
 	if sh.models.Library != nil {
@@ -508,4 +511,25 @@ func (h *Host) morning(r agentRow, drafts int) (mind.Morning, error) {
 		}
 	}
 	return mo, nil
+}
+
+// codingJobs is an agent's coding jobs of the last week, for their mornings.
+func (h *Host) codingJobs(agent string) func(ctx context.Context) ([]mind.CodingJob, error) {
+	return func(ctx context.Context) ([]mind.CodingJob, error) {
+		js, err := h.Jobs.Jobs(ctx, agent, 20)
+		if err != nil {
+			return nil, err
+		}
+		week := time.Now().AddDate(0, 0, -7)
+		var out []mind.CodingJob
+		for _, j := range js {
+			if j.StartedAt.Before(week) {
+				continue
+			}
+			c := h.Jobs.CardOf(ctx, j)
+			out = append(out, mind.CodingJob{ID: j.ID, Title: j.Title, Project: filepath.Base(j.Repo), Status: j.Status, Now: c.Now,
+				Verdict: c.Verdict, Asking: c.Asking, Committed: j.CommitSHA != "", Pushed: j.PRURL != "", At: j.StartedAt})
+		}
+		return out, nil
+	}
 }

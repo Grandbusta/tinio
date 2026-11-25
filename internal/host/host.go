@@ -203,7 +203,12 @@ func (h *Host) claim(ctx context.Context, wg *sync.WaitGroup) error {
 	if err != nil {
 		return err
 	}
-	_, err = h.claimWhere(ctx, wg, `(worker IS NULL AND wake_at <= now()) OR lease_until < now()`, h.Max-held-owners)
+	due := `(worker IS NULL AND wake_at <= now()) OR lease_until < now()`
+	if h.RestAfter <= 0 {
+		// They never rest: each is run whatever wake time an earlier rest left.
+		due = `worker IS NULL OR lease_until < now()`
+	}
+	_, err = h.claimWhere(ctx, wg, due, h.Max-held-owners)
 	return err
 }
 

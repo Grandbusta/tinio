@@ -275,6 +275,7 @@ type MorningItem struct {
 	Source    string `json:"source"`
 	Intention string `json:"intention,omitempty"`
 	Work      string `json:"work,omitempty"`
+	Job       string `json:"job,omitempty"` // a coding job it's about
 	Done      bool   `json:"done"`
 }
 

@@ -568,3 +568,25 @@ func TestAPausedAgentIsntClaimed(t *testing.T) {
 		t.Errorf("claimed the paused agent %v, the other %v", h.holds(paused), h.holds(other))
 	}
 }
+
+// Agents that never rest (one owner's, on their computer) are all run, even one
+// an earlier rest left waking tomorrow: it isn't left asleep till then.
+func TestAgentsThatNeverRestAreAllRun(t *testing.T) {
+	pool := openPool(t)
+	ctx := context.Background()
+	h := newHost(t, pool)
+	h.RestAfter = 0
+	kenji := raise(t, pool, "kenji")
+	if _, err := pool.Exec(ctx, `UPDATE agent_runs SET worker = NULL, wake_at = at_plus(now(), 86400) WHERE agent_id = $1`, kenji); err != nil {
+		t.Fatal(err)
+	}
+	runCtx, stop := context.WithCancel(ctx)
+	var running sync.WaitGroup
+	defer func() { stop(); running.Wait(); h.letGo() }()
+	if err := h.claim(runCtx, &running); err != nil {
+		t.Fatal(err)
+	}
+	if !h.holds(kenji) {
+		t.Error("an agent that never rests was left asleep till its old wake time")
+	}
+}

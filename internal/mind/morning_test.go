@@ -104,3 +104,46 @@ func TestNoMorningForAQuietOwnerAndNoDraftsInLightMode(t *testing.T) {
 		t.Errorf("light mode: %d requests, sent %q; want the note alone, nothing drafted", len(s2.requests), r.sent)
 	}
 }
+
+// The morning knows its coding jobs that still want something from the owner:
+// one ready to look at with the agent's word on it, one waiting on an answer,
+// one that stopped; not one that's pushed. An item about one is tied to it.
+func TestTheMorningKnowsItsCodingJobs(t *testing.T) {
+	ctx := context.Background()
+	m, s, s2, _ := morningMind()
+	s2.formats["morning"] = `{"opening":"Morning, Ada.","question":"",
+		"items":[
+			{"what":"Look at the basket fix","how":"I checked it: tests pass. Commit it from its card.","source":"the basket rounding job","draft":false,"brief":"","job":"j1"},
+			{"what":"Book Saturday's tasting","how":"","source":"from the topic Winter blend","draft":false,"brief":"","job":""}]}`
+	started := at(28, 15, 0)
+	m.Morning.Jobs = func(context.Context) ([]CodingJob, error) {
+		return []CodingJob{
+			{ID: "J-READY", Title: "Fix the basket rounding", Project: "shop-site", Status: "ready", Verdict: "It rounds once; the tests pass.", At: started},
+			{ID: "J-ASKS", Title: "Search ignores accents", Project: "shop-site", Status: "waiting", Asking: 1, At: started},
+			{ID: "J-STOP", Title: "Newsletter sign-up", Project: "shop-site", Status: "stopped", Now: "Stopped when Tinio closed.", At: started},
+			{ID: "J-DONE", Title: "Rate limit the login", Project: "tinio-api", Status: "ready", Committed: true, Pushed: true, At: started},
+		}, nil
+	}
+
+	m.tick(ctx, at(29, 6, 45))
+	if len(s2.requests) == 0 {
+		t.Fatal("no morning was prepared")
+	}
+	note := s2.requests[0].Note
+	for _, want := range []string{
+		"j1: Fix the basket rounding, in shop-site", "ready for your owner to look at; you checked it: It rounds once; the tests pass.",
+		"j2: Search ignores accents", "waiting on your owner's answer to a question",
+		"j3: Newsletter sign-up", "can carry it on by replying to its card",
+	} {
+		if !strings.Contains(note, want) {
+			t.Errorf("the morning's note doesn't have %q:\n%s", want, note)
+		}
+	}
+	if strings.Contains(note, "Rate limit the login") {
+		t.Errorf("a pushed job is done with, but the note has it:\n%s", note)
+	}
+	mo := s.mornings["2026-10-29"]
+	if len(mo.Items) != 2 || mo.Items[0].Job != "J-READY" || mo.Items[1].Job != "" {
+		t.Errorf("the items %+v; want the first tied to the ready job", mo.Items)
+	}
+}

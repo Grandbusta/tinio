@@ -175,7 +175,13 @@ func (s *Settings) Save(c *gin.Context) error {
 		changed = true
 	}
 	if changed {
+		// One running starts again with them; one resting wakes now, so its next
+		// wake (a morning at its new time, say) is worked out from them.
+		if _, err := s.DB.Exec(c, `UPDATE agent_runs SET wake_at = now() WHERE agent_id = $1 AND worker IS NULL`, ag.ID); err != nil {
+			return err
+		}
 		s.DB.Notify(host.Changed, ag.ID)
+		s.DB.Notify(host.Raised, ag.ID)
 	}
 	return s.answer(c, ag)
 }

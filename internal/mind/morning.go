@@ -30,6 +30,20 @@ type Morning struct {
 	Drafts int           // things it may draft ahead, at most
 	// Email sends the owner a copy of the note; nil: none.
 	Email func(ctx context.Context, subject, text string) error
+	// Jobs is the agent's coding jobs of the last week, newest first; nil: it
+	// has none.
+	Jobs func(ctx context.Context) ([]CodingJob, error)
+}
+
+// A CodingJob is one of the agent's coding jobs, as its morning sees it.
+type CodingJob struct {
+	ID, Title, Project string
+	Status             string // working, waiting, ready, stopped, failed, cancelled
+	Now                string // what it's doing, or how it ended
+	Verdict            string // the agent's word on it, once checked
+	Asking             int    // questions waiting on the owner
+	Committed, Pushed  bool
+	At                 time.Time // when it started
 }
 
 const (
@@ -122,13 +136,14 @@ var morningFormat = &system2.Format{Name: "morning", Schema: map[string]any{
 		"opening":  map[string]any{"type": "string"},
 		"question": map[string]any{"type": "string", "description": "empty if nothing is missing"},
 		"items": map[string]any{"type": "array", "maxItems": morningItems, "items": map[string]any{
-			"type": "object", "additionalProperties": false, "required": []string{"what", "how", "source", "draft", "brief"},
+			"type": "object", "additionalProperties": false, "required": []string{"what", "how", "source", "draft", "brief", "job"},
 			"properties": map[string]any{
 				"what":   map[string]any{"type": "string"},
 				"how":    map[string]any{"type": "string"},
 				"source": map[string]any{"type": "string", "description": "where it came from, as the owner would say it"},
 				"draft":  map[string]any{"type": "boolean"},
 				"brief":  map[string]any{"type": "string", "description": "what to make for it; empty if no draft"},
+				"job":    map[string]any{"type": "string", "description": "the ref of the coding job it's about, e.g. j1; empty if none"},
 			},
 		}},
 	},
@@ -144,7 +159,7 @@ func (m *Mind) prepareMorning(ctx context.Context, now time.Time, today string, 
 	if drafts {
 		most = m.Morning.Drafts
 	}
-	note, readCost := m.morningNote(ctx, now)
+	note, readCost, jobRefs := m.morningNote(ctx, now)
 	if most > 0 {
 		fmt.Fprintf(note, "\n\nYou may draft up to %d of today's things ahead.", most)
 	} else {
@@ -170,6 +185,7 @@ func (m *Mind) prepareMorning(ctx context.Context, now time.Time, today string, 
 			Source string `json:"source"`
 			Draft  bool   `json:"draft"`
 			Brief  string `json:"brief"`
+			Job    string `json:"job"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal([]byte(resp.Text), &out); err != nil {
@@ -184,7 +200,8 @@ func (m *Mind) prepareMorning(ctx context.Context, now time.Time, today string, 
 		if what == "" || source == "" || len(mo.Items) == morningItems {
 			continue // nothing to do, or nowhere it came from: not sent
 		}
-		item := memory.MorningItem{ID: fmt.Sprint(len(mo.Items) + 1), What: what, How: strings.TrimSpace(it.How), Source: source}
+		item := memory.MorningItem{ID: fmt.Sprint(len(mo.Items) + 1), What: what, How: strings.TrimSpace(it.How), Source: source,
+			Job: jobRefs[strings.TrimSpace(it.Job)]}
 		if brief := strings.TrimSpace(it.Brief); it.Draft && brief != "" && most > 0 {
 			i := memory.Intention{ID: ulid.Make(), Text: brief, Subject: owner, Kind: memory.IntentionActivity, Args: map[string]string{"for": morningDraft},
 				Status: memory.IntentionPending, DueAt: now.UTC(), CreatedAt: now.UTC()}
@@ -208,9 +225,10 @@ func (m *Mind) prepareMorning(ctx context.Context, now time.Time, today string, 
 	return mo, true
 }
 
-// morningNote is what it knows of its owner's yesterday and today, and what
-// reading their calendar cost.
-func (m *Mind) morningNote(ctx context.Context, now time.Time) (*strings.Builder, float64) {
+// morningNote is what it knows of its owner's yesterday and today, what
+// reading their calendar cost, and its coding jobs by the refs the note gives
+// them.
+func (m *Mind) morningNote(ctx context.Context, now time.Time) (*strings.Builder, float64, map[string]string) {
 	var b strings.Builder
 	owner, who := m.policy().Owner, m.ownerName(ctx)
 	midnight := m.startOfDay(now)
@@ -284,6 +302,7 @@ func (m *Mind) morningNote(ctx context.Context, now time.Time) (*strings.Builder
 			fmt.Fprintf(&b, "\n- %s (%s)", it.What, state)
 		}
 	}
+	refs := m.jobsNote(ctx, &b, who)
 	var cost float64
 	if cal, ok := m.Abilities.Get(calendarName); ok && m.allowed(cal) {
 		day := midnight.Format(time.DateOnly)
@@ -295,7 +314,62 @@ func (m *Mind) morningNote(ctx context.Context, now time.Time) (*strings.Builder
 			cost = mat.CostUSD
 		}
 	}
-	return &b, cost
+	return &b, cost, refs
+}
+
+// jobsNote tells the morning about its coding jobs that still want something:
+// one ready for the owner to look at, a question waiting on them, one that
+// stopped, a commit not pushed. It's the jobs by the refs it gives them.
+func (m *Mind) jobsNote(ctx context.Context, b *strings.Builder, who string) map[string]string {
+	refs := map[string]string{}
+	if m.Morning.Jobs == nil {
+		return refs
+	}
+	js, err := m.Morning.Jobs(ctx)
+	if err != nil {
+		m.Log.Warn("reading the coding jobs for the morning failed; going on without them", "err", err)
+		return refs
+	}
+	var lines []string
+	for _, j := range js {
+		var state string
+		switch {
+		case j.Status == "waiting":
+			state = fmt.Sprintf("waiting on %s's answer to %s", who, countQuestions(j.Asking))
+		case j.Status == "ready" && j.Committed && !j.Pushed:
+			state = "committed on its branch, not pushed"
+		case j.Status == "ready" && !j.Committed:
+			state = "ready for " + who + " to look at"
+			if j.Verdict != "" {
+				state += "; you checked it: " + cutRunes(j.Verdict, 300)
+			}
+		case j.Status == "stopped":
+			state = "stopped before it finished (" + cutRunes(j.Now, 120) + "); " + who + " can carry it on by replying to its card"
+		case j.Status == "failed":
+			state = "didn't work out: " + cutRunes(j.Now, 120)
+		case j.Status == "working":
+			state = "working now"
+		default:
+			continue // done with: pushed, or stopped by the owner
+		}
+		ref := fmt.Sprintf("j%d", len(refs)+1)
+		refs[ref] = j.ID
+		lines = append(lines, fmt.Sprintf("%s: %s, in %s, started %s: %s", ref, j.Title, j.Project, j.At.In(m.Zone).Format("Mon 2 Jan"), state))
+	}
+	if len(lines) == 0 {
+		return refs
+	}
+	fmt.Fprintf(b, "\n\nYour coding jobs for %s that still want something:\n- %s", who, strings.Join(lines, "\n- "))
+	fmt.Fprintf(b, "\nAn item about one gives its ref in job and says what %s should do: look at the changes and commit them, answer its question, carry it on. Its card in the chat has it all.", who)
+	b.WriteString("\nIf what you and " + who + " have going has coding work you could do and no job is on it, an item may suggest starting one: " + who + " says yes in the chat.")
+	return refs
+}
+
+func countQuestions(n int) string {
+	if n == 1 {
+		return "a question"
+	}
+	return fmt.Sprintf("%d questions", max(n, 1))
 }
 
 // draftsPending is whether a draft it set out to make is still being made;

@@ -90,6 +90,16 @@ lays it over the page until you pick a chat. The chat keeps a reading width, cen
 where they were fully round; the message box and segmented controls 12px. Avatars, dots,
 round icon buttons and progress bars stay round.
 
+**Coding jobs in the morning:** an agent's morning knows their coding jobs that still
+want something from you: one ready to look at (with what they made of it), a question
+waiting on you, one that stopped, a commit not pushed. A morning item about a job is tied
+to it, and the agent may suggest starting one for coding work you have going.
+
+**Agents stay running:** on your computer an agent no longer rests out of memory when
+idle; resting is for a server holding many people's agents. And changing an agent's
+morning or quiet hours wakes one that was resting, so it doesn't sleep through its
+morning at the new time.
+
 **The agent checks the work:** when Claude Code finishes a round, the agent checks it
 before you see it. Tinio runs the repository's tests in the copy, and the agent reads the
 changes against the brief, what you asked for since, and the repository's rules. Not
