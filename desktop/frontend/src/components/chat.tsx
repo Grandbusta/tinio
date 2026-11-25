@@ -59,6 +59,7 @@ export function Chat({ id }: { id: string }) {
   const [cardError, setCardError] = useState<Record<string, string>>({}); // row id: why your tap didn't count
   const inFlight = useRef(new Set<string>()); // the same, at once, so a double tap sends one answer
   const [draft, setDraft] = useState(""); // their reply as it's being written; "" when none
+  const [making, setMaking] = useState(""); // what they're making for you now (a work you asked for); "" when nothing
   const [now, setNow] = useState(() => Date.now());
   const end = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
@@ -118,9 +119,10 @@ export function Chat({ id }: { id: string }) {
 
   useEffect(() => {
     if (!account) return;
-    call<{ messages: ChatRow[] }>(`/agents/${id}/messages?limit=200`).then((m) => {
+    call<{ messages: ChatRow[]; making?: string }>(`/agents/${id}/messages?limit=200`).then((m) => {
       if (!m.ok) return setError(m.error.message);
       setRows(m.data.messages);
+      setMaking(m.data.making ?? "");
       if (m.data.messages.length === 0) call(`/agents/${id}/hello`, {});
     });
   }, [account, id]);
@@ -149,6 +151,7 @@ export function Chat({ id }: { id: string }) {
         keep(r);
       });
       es.addEventListener("draft", (e) => setDraft(JSON.parse((e as MessageEvent).data).text ?? ""));
+      es.addEventListener("making", (e) => setMaking(JSON.parse((e as MessageEvent).data).text ?? ""));
       es.onopen = () => {
         wait = 1000;
         if (away) catchUp();
@@ -177,6 +180,9 @@ export function Chat({ id }: { id: string }) {
   const all = (rows ?? []).filter((r) => shown.has(r.kind));
   const last = all[all.length - 1];
   const waiting = ready && (all.length === 0 || last.author === "owner");
+  // The questions a job is waiting on you for, oldest first: the first is docked above
+  // the message box.
+  const asking = all.filter((r) => r.kind === "job_ask" && !r.settled_at && !tapped[r.id]);
   const visible = inTopic ? (topicRows[inTopic] ?? []).filter((r) => shown.has(r.kind)) : all;
   // Your last thumb on each work, from the rows you sent.
   const reactions: Record<string, { good: boolean; note?: string }> = {};
@@ -467,7 +473,7 @@ export function Chat({ id }: { id: string }) {
       {keySet === false ? <NoKey name={agent?.name} /> : <UsageBanner />}
       {inTopic && (
         <section aria-label="Where this topic stands" className="border-b border-line bg-accent-soft/50 px-10 py-3.5 max-[900px]:px-3">
-          <div className="mx-auto flex w-full max-w-[680px] flex-col gap-1">
+          <div className="mx-auto flex w-full max-w-[880px] flex-col gap-1">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
               <h2 className="font-display text-[17px] font-semibold tracking-[-0.02em]">{titleOf(inTopic)}</h2>
               <span className="text-[12.5px] text-muted">
@@ -486,7 +492,7 @@ export function Chat({ id }: { id: string }) {
         </section>
       )}
 
-      <div ref={log} role="log" aria-live="polite" aria-label={`Chat with ${name}`} className="mx-auto flex w-full max-w-[760px] flex-1 flex-col px-10 py-6 max-[900px]:px-3 max-[900px]:py-4">
+      <div ref={log} role="log" aria-live="polite" aria-label={`Chat with ${name}`} className="mx-auto flex w-full max-w-[960px] flex-1 flex-col px-10 py-6 max-[900px]:px-3 max-[900px]:py-4">
         {agent && <span className="mb-1 self-center text-xs text-muted">{name} was raised {day(agent.created_at)}</span>}
         {visible.map((r, i) => {
           const before = visible[i - 1];
@@ -563,13 +569,23 @@ export function Chat({ id }: { id: string }) {
         )}
         {/* Read out once, when it's said: the draft changes too often for a screen reader. */}
         {writing && (
-          <div className={`${theirs} ${tail.theirs} mt-3 opacity-85`} aria-hidden="true">
-            {draft}
+          // Drawn as the message it becomes, so nothing jumps when it lands.
+          <div className={`${theirs} ${tail.theirs} mt-3`} aria-hidden="true">
+            <div className="whitespace-normal">
+              <MessageText text={settled(draft)} />
+            </div>
+            <span aria-hidden="true" className="inline-block w-12" />
           </div>
         )}
         {thinking && agent && keySet !== false && (
           <span className={writing ? "sr-only" : "mt-3 self-start text-[13px] text-muted"} aria-live="polite">
             {all.length === 0 ? `${name} is saying hello…` : `${name} is writing…`}
+          </span>
+        )}
+        {making && !writing && agent && (
+          <span className="mt-3 flex items-center gap-2 self-start text-[13px] text-muted" role="status">
+            <span aria-hidden="true" className="size-2 flex-none animate-pulse rounded-full bg-accent" />
+            {making.startsWith(name + " ") ? making : `${name} is on it: ${making}`}
           </span>
         )}
         {waiting && !thinking && agent && keySet !== false && (
@@ -580,7 +596,20 @@ export function Chat({ id }: { id: string }) {
         <div ref={end} />
       </div>
 
-      <form onSubmit={send} className="sticky bottom-0 mx-auto flex w-full max-w-[760px] flex-wrap items-end gap-2.5 bg-chat px-10 pt-1 pb-6 max-[900px]:px-3 max-[900px]:pb-3.5">
+      <form onSubmit={send} className="sticky bottom-0 mx-auto flex w-full max-w-[960px] flex-wrap items-end gap-2.5 bg-chat px-10 pt-1 pb-6 max-[900px]:px-3 max-[900px]:pb-3.5">
+        {asking.length > 0 && (
+          <JobAskCard
+            row={asking[0]}
+            agent={id}
+            name={name}
+            tapped={tapped[asking[0].id]}
+            busy={answering[asking[0].id]}
+            failed={cardError[asking[0].id]}
+            answer={answer}
+            docked
+            more={asking.length - 1}
+          />
+        )}
         {replyTo && (
           <ComposerBar
             title={`Replying to ${replyTo.author === "owner" ? "yourself" : name}${replyTo.topic ? ` · ${titleOf(replyTo.topic)}` : ""}`}
@@ -641,7 +670,7 @@ export function Chat({ id }: { id: string }) {
           <p className="m-0 basis-full px-[18px] text-xs text-muted">What you send now is read at the reset, {resets(usage.resets_at)}.</p>
         )}
       </form>
-      {error && <p role="alert" className="mx-auto w-full max-w-[760px] px-10 pb-4 text-sm text-bad-text max-[900px]:px-3">{error}</p>}
+      {error && <p role="alert" className="mx-auto w-full max-w-[960px] px-10 pb-4 text-sm text-bad-text max-[900px]:px-3">{error}</p>}
     </>
   );
 }
@@ -657,6 +686,15 @@ function day(at: string) {
 // Messages are bubbles, theirs light and yours in the accent, each with its time in the
 // corner; the first of a run has a tail on its side.
 const lift = "shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]";
+// settled is a reply being written, without a mark it hasn't closed yet (a lone ** or
+// `), so the words don't jump from plain to bold when the other half arrives.
+function settled(text: string) {
+  let t = text;
+  if ((t.match(/\*\*/g)?.length ?? 0) % 2 === 1) t = t.slice(0, t.lastIndexOf("**")) + t.slice(t.lastIndexOf("**") + 2);
+  if ((t.match(/`/g)?.length ?? 0) % 2 === 1) t = t.slice(0, t.lastIndexOf("`")) + t.slice(t.lastIndexOf("`") + 1);
+  return t;
+}
+
 const bubble = `relative max-w-[78%] whitespace-pre-wrap rounded-lg px-3 pt-1.5 pb-2 text-[15px] leading-[1.45] ${lift}`;
 const theirs = `${bubble} self-start bg-surface`;
 const yours = `${bubble} self-end bg-accent text-accent-ink`;
@@ -943,7 +981,7 @@ function TopicChips({ agent, topics, shown, show, quietShown, showQuiet, startin
   const open = topics.filter((t) => !t.quiet);
   const quiet = topics.filter((t) => t.quiet);
   const pill = (on: boolean, extra = "") =>
-    `inline-flex min-h-9 flex-none items-center gap-1.5 rounded-lg px-3.5 text-[13px] font-semibold whitespace-nowrap ${on ? "bg-fg text-bg" : "text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)] hover:shadow-[inset_0_0_0_1px_var(--color-fg)]"} ${extra}`;
+    `inline-flex min-h-9 flex-none items-center gap-1.5 rounded-lg px-3.5 text-[13px] font-semibold whitespace-nowrap ${on ? "bg-line text-fg" : "text-muted hover:bg-surface-2 hover:text-fg"} ${extra}`;
   return (
     <nav aria-label="Topics" className="flex items-center gap-2 overflow-x-auto px-5 pb-2.5 max-[900px]:px-3">
       <button type="button" aria-pressed={!shown} onClick={() => show("")} className={pill(!shown)}>

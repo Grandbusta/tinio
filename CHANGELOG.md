@@ -86,9 +86,25 @@ you, and the name shows on hover; the app remembers your choice. A job or a work
 folds it on its own, and so does a window between 901 and 1100px wide, where opening it
 lays it over the page until you pick a chat. The chat keeps a reading width, centred.
 
+**Questions and changes, the way coding tools show them:** a job's question waiting on
+you sits above the message box, where the chat can't scroll it away; in the chat it's one
+quiet line, and once answered, "Allowed once" and the command, opening to all of it. A
+job's page shows every changed file in one scroll, each under a header that folds it
+away, with old and new line numbers; the list beside it jumps to a file.
+
+**Quieter choices:** a selected filter (topics, All, Needs you, Unread, a job's rounds,
+kinds of work) is a soft grey fill, where it was solid white in dark mode; the others are
+plain text. A job's questions are plain cards, and the chat is wider (960px).
+
 **Squarer corners:** buttons, inputs and chips have 8px corners and status pills 6px,
 where they were fully round; the message box and segmented controls 12px. Avatars, dots,
 round icon buttons and progress bars stay round.
+
+**You see what's in hand:** when an agent promises something for within the hour, and
+while they make anything you asked for, the chat says so under the last message
+("Kenji writes Ada a short design doc…, by 22:25"), until it arrives. A reply being
+written is drawn as the message it becomes, formatting and all, so nothing jumps when it
+lands.
 
 **What jobs teach the agent:** when you commit a job, the agent reads its story and keeps
 up to eight short notes about that folder: how its tests run and what was already

@@ -126,7 +126,7 @@ export function WorksPage({ id }: { id: string }) {
               type="button"
               aria-pressed={kind === k}
               onClick={() => setKind(k)}
-              className={`min-h-10 rounded-lg px-4 text-sm first-letter:uppercase ${kind === k ? "bg-fg font-semibold text-bg" : "font-medium text-fg shadow-[inset_0_0_0_1px_var(--color-line)] hover:shadow-[inset_0_0_0_1px_var(--color-fg)]"}`}
+              className={`min-h-10 rounded-lg px-4 text-sm first-letter:uppercase ${kind === k ? "bg-line font-semibold text-fg" : "font-medium text-muted hover:bg-surface-2 hover:text-fg"}`}
             >
               {k || "All"}
             </button>

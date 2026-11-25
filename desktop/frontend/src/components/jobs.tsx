@@ -138,47 +138,82 @@ type AskProps = {
   busy?: boolean;
   failed?: string;
   answer: (row: ChatRow, body: Record<string, unknown>, said: string, path?: string) => void;
+  docked?: boolean; // the one waiting on you, above the message box
+  more?: number; // how many more are waiting after it
 };
 
-// JobAskCard is something the job's rules don't allow, asked of you: exactly what it
-// would do, and why it's asked. Allow once, Allow for this job (the same again isn't
-// asked), or Not this, with what you'd like instead.
-export function JobAskCard({ row, agent, tapped, busy, failed, answer }: AskProps) {
+// JobAskCard is something the job's rules don't allow, asked of you. Waiting, it's
+// docked above the message box (where the chat can't scroll it away): exactly what it
+// would do, why it's asked, and Allow once, Allow for this job (the same again isn't
+// asked) or Not this, with what you'd like instead. In the chat it's one quiet line: where
+// it was asked, and once answered, what you said, opening to the whole command.
+export function JobAskCard({ row, agent, tapped, busy, failed, answer, docked, more = 0 }: AskProps) {
   const p = row.payload ?? {};
   const open = !row.settled_at && !tapped;
   const [noting, setNoting] = useState(false);
   const [note, setNote] = useState("");
   const path = `/agents/${agent}/jobs/${p.job}/asks/${p.ask}`;
   const ended = row.settled_at ? row.text.split("\n\n").pop() : tapped;
+  const verb = (verbs[p.tool ?? ""] ?? `Use ${p.tool}`).toLowerCase();
+  const command = (
+    <code className="block max-h-40 overflow-y-auto rounded-md border border-line bg-surface-2 px-3 py-2 font-mono text-[12.5px] whitespace-pre-wrap text-fg [overflow-wrap:anywhere]">
+      {p.detail}
+    </code>
+  );
+
+  if (!docked) {
+    if (open)
+      return (
+        <span className="flex max-w-full items-center gap-2 self-start py-1 text-[13px] text-muted">
+          <span aria-hidden="true" className="size-2 flex-none animate-pulse rounded-full bg-warn-text" />
+          Claude Code asked to {verb}: your answer is below the chat.
+        </span>
+      );
+    const no = (ended ?? "").startsWith("You said no");
+    return (
+      <details className="group max-w-[78%] self-start text-[13px] max-[560px]:max-w-full">
+        <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 text-muted hover:text-fg">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-none transition-transform group-open:rotate-90">
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+          <span className={`flex-none font-semibold ${no ? "text-bad-text" : "text-good-text"}`}>
+            {no ? "Said no" : (ended ?? "Answered").replace(/^✅\s*/, "").replace(/\.$/, "")}
+          </span>
+          <span className="min-w-0 truncate font-mono text-[12px]">{p.detail}</span>
+        </summary>
+        <div className="mt-1.5 flex flex-col gap-1.5 pl-5">
+          {command}
+          {p.why && <span className="text-muted">Asked because {p.why}.</span>}
+          {no && ended && <span>{ended}</span>}
+        </div>
+      </details>
+    );
+  }
+
   return (
-    <div className={`${card} border border-warn-text/40`}>
+    <div className="flex w-full basis-full flex-col gap-2.5 rounded-xl border border-line bg-surface px-4 py-3.5 shadow-lg">
       <span className="flex items-center gap-2">
-        <ServiceLogo service="claude" size={24} />
-        <b className="text-[14px]">Claude Code wants to {(verbs[p.tool ?? ""] ?? `use ${p.tool}`).toLowerCase()}</b>
+        <ServiceLogo service="claude" size={22} />
+        <b className="text-[14px]">Claude Code wants to {verb}</b>
+        {more > 0 && <span className="ml-auto text-xs text-muted">{more === 1 ? "1 more after this" : `${more} more after this`}</span>}
       </span>
-      <code className="rounded-md bg-fg px-3 py-2.5 font-mono text-[13px] break-all whitespace-pre-wrap text-bg">{p.detail}</code>
-      {p.why && <span className="text-[13px] text-muted">Asked because {p.why}.</span>}
-      {open && !noting && (
+      {command}
+      {p.why && <span className="text-[12.5px] text-muted">Asked because {p.why}.</span>}
+      {!noting && (
         <div className="flex flex-wrap gap-2">
-          <Button type="button" disabled={busy} onClick={() => answer(row, { answer: "once" }, "✅ Allowed once.", path)}>
+          <Button kind="primary" type="button" disabled={busy} onClick={() => answer(row, { answer: "once" }, "✅ Allowed once.", path)}>
             Allow once
           </Button>
           <Button type="button" disabled={busy} onClick={() => answer(row, { answer: "job" }, "✅ Allowed for this job.", path)}>
             Allow for this job
           </Button>
-          <Button kind="primary" type="button" disabled={busy} onClick={() => setNoting(true)}>
+          <Button type="button" disabled={busy} onClick={() => setNoting(true)}>
             Not this
           </Button>
         </div>
       )}
-      {open && noting && (
-        <form
-          className="flex flex-col gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            answer(row, { answer: "no", note }, "You said no.", path);
-          }}
-        >
+      {noting && (
+        <div className="flex flex-col gap-2">
           <label htmlFor={`note-${row.id}`} className="text-[13px] font-semibold">
             What should it do instead? (it reads this)
           </label>
@@ -187,21 +222,26 @@ export function JobAskCard({ row, agent, tapped, busy, failed, answer }: AskProp
             autoFocus
             value={note}
             onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                answer(row, { answer: "no", note }, "You said no.", path);
+              }
+            }}
             placeholder="Use the money helpers we already have."
             maxLength={500}
-            className="min-h-10 rounded-md border border-line-strong bg-surface px-3 text-sm"
+            className="min-h-10 rounded-lg border border-line-strong bg-surface px-3 text-sm"
           />
           <div className="flex flex-wrap gap-2">
-            <Button kind="primary" type="submit" disabled={busy}>
+            <Button kind="primary" type="button" disabled={busy} onClick={() => answer(row, { answer: "no", note }, "You said no.", path)}>
               Say no
             </Button>
             <Button type="button" onClick={() => setNoting(false)}>
               Back
             </Button>
           </div>
-        </form>
+        </div>
       )}
-      {ended && <span className="text-[13px] font-semibold">{ended}</span>}
       {failed && (
         <span role="alert" className="text-[13px] text-bad-text">
           {failed}

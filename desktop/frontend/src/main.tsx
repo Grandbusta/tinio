@@ -31,7 +31,7 @@ async function runtimeOf(): Promise<WailsRuntime | undefined> {
 
 function inTheWindow(wails: WailsRuntime) {
   // A chat's stream is an EventSource on the web. The window can't hold one open on
-  // every system, so here it's the app's events, for that agent: "chat" and "draft" as
+  // every system, so here it's the app's events, for that agent: "chat", "draft" and "making" as
   // the stream sends them, and "behind" closing it, so the chat catches up and opens
   // it again.
   class AppEvents extends EventTarget {
@@ -54,6 +54,10 @@ function inTheWindow(wails: WailsRuntime) {
         wails.EventsOn("draft", (d) => {
           const e = d as { agent: string; text: string };
           if (e.agent === agent) send("draft", { text: e.text });
+        }),
+        wails.EventsOn("making", (d) => {
+          const e = d as { agent: string; text: string };
+          if (e.agent === agent) send("making", { text: e.text });
         }),
         wails.EventsOn("behind", () => {
           this.close();

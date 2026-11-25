@@ -328,7 +328,7 @@ func (ch *Chat) History(c *gin.Context) error {
 	for i, m := range ms {
 		rows[i] = rowOf(m)
 	}
-	utils.SuccessWithData(c, http.StatusOK, gin.H{"messages": rows})
+	utils.SuccessWithData(c, http.StatusOK, gin.H{"messages": rows, "making": store.MakingNow(c.Param("id"))})
 	return nil
 }
 
@@ -409,6 +409,14 @@ func (ch *Chat) Stream(c *gin.Context) error {
 			if !ok {
 				return nil // it fell behind; the browser reconnects and catches up
 			}
+			if ch.making {
+				b, _ := json.Marshal(gin.H{"text": ch.draft})
+				if _, err := fmt.Fprintf(w, "event: making\ndata: %s\n\n", b); err != nil {
+					return nil
+				}
+				w.Flush()
+				continue
+			}
 			if ch.row == "" {
 				b, _ := json.Marshal(gin.H{"text": ch.draft})
 				if _, err := fmt.Fprintf(w, "event: draft\ndata: %s\n\n", b); err != nil {
@@ -440,8 +448,9 @@ type ChatHub struct {
 
 // change is a row added or settled, or, with no row, the reply being written.
 type change struct {
-	row   string
-	draft string
+	row    string
+	draft  string // the reply being written, or with making, what's being made
+	making bool
 }
 
 // Watch is what changes in agent's chat, until stop. If the watcher falls
@@ -493,11 +502,14 @@ func (h *ChatHub) listen(ctx context.Context) {
 	defer stopFrom()
 	drafting, stopDraft := h.DB.Listen(store.Drafting, 1024)
 	defer stopDraft()
+	makingNow, stopMaking := h.DB.Listen(store.Making, 64)
+	defer stopMaking()
 	for {
 		var (
 			payload string
 			ok      bool
 			draft   bool
+			made    bool
 		)
 		select {
 		case <-ctx.Done():
@@ -506,6 +518,8 @@ func (h *ChatHub) listen(ctx context.Context) {
 		case payload, ok = <-fromAgent:
 		case payload, ok = <-drafting:
 			draft = true
+		case payload, ok = <-makingNow:
+			made = true
 		}
 		if !ok {
 			return
@@ -514,6 +528,9 @@ func (h *ChatHub) listen(ctx context.Context) {
 		c := change{row: rest}
 		if draft {
 			c = change{draft: rest}
+		}
+		if made {
+			c = change{making: true, draft: rest}
 		}
 		h.mu.Lock()
 		for ch := range h.watching[agent] {
@@ -532,8 +549,9 @@ func (h *ChatHub) listen(ctx context.Context) {
 
 // ChatEvents tells emit what's said in every agent's chat until ctx is done,
 // for the desktop app's window, which can't hold a stream open: "chat" with a
-// row added or settled ({agent, row}), and "draft" with the reply being
-// written ({agent, text}). If it falls behind, it says "behind", and the app
+// row added or settled ({agent, row}), "draft" with the reply being written
+// ({agent, text}), and "making" with what they're making for their owner
+// ({agent, text}, "" once it's done). If it falls behind, it says "behind", and the app
 // reads the chats again.
 func ChatEvents(ctx context.Context, d *db.DB, emit func(event string, data any)) {
 	for ctx.Err() == nil {
@@ -551,11 +569,14 @@ func chatEvents(ctx context.Context, d *db.DB, emit func(event string, data any)
 	defer stopFrom()
 	drafting, stopDraft := d.Listen(store.Drafting, 1024)
 	defer stopDraft()
+	makingNow, stopMaking := d.Listen(store.Making, 64)
+	defer stopMaking()
 	for {
 		var (
 			payload string
 			ok      bool
 			draft   bool
+			made    bool
 		)
 		select {
 		case <-ctx.Done():
@@ -564,6 +585,8 @@ func chatEvents(ctx context.Context, d *db.DB, emit func(event string, data any)
 		case payload, ok = <-fromAgent:
 		case payload, ok = <-drafting:
 			draft = true
+		case payload, ok = <-makingNow:
+			made = true
 		}
 		if !ok {
 			return
@@ -571,6 +594,10 @@ func chatEvents(ctx context.Context, d *db.DB, emit func(event string, data any)
 		agent, rest, _ := strings.Cut(payload, ":")
 		if draft {
 			emit("draft", gin.H{"agent": agent, "text": rest})
+			continue
+		}
+		if made {
+			emit("making", gin.H{"agent": agent, "text": rest})
 			continue
 		}
 		m, found, err := store.New(d).For(agent).ChatMessage(ctx, rest)

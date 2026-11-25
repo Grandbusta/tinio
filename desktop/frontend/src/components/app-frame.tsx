@@ -393,7 +393,7 @@ function List({ open, fold, over, className }: { open?: string; fold: () => void
                 setFilter(id);
                 setKept("");
               }}
-              className={`min-h-9 rounded-lg px-3.5 text-[13px] font-semibold ${filter === id ? "bg-fg text-bg" : "text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)]"}`}
+              className={`min-h-9 rounded-lg px-3.5 text-[13px] font-semibold ${filter === id ? "bg-line text-fg" : "text-muted hover:bg-surface-2 hover:text-fg"}`}
             >
               {label}
             </button>

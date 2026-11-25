@@ -192,6 +192,11 @@ func (m *Mind) doActivity(ctx context.Context, i memory.Intention, now time.Time
 // if System 2 fails, it's tried again later, a few times (retry).
 func (m *Mind) makeWork(ctx context.Context, i memory.Intention, action, what string, now time.Time) (memory.Work, bool) {
 	log := m.Log.With("intention", i.ID.String())
+	if m.Making != nil && i.Subject == m.policy().Owner {
+		// Their owner sees it's being made, until it's sent or given up.
+		m.Making(cutRunes(i.Text, 90))
+		defer m.Making("")
+	}
 
 	// What it does is a percept of its own life, so facts and decisions point
 	// at it: a new one for each attempt, since a failed attempt is tried again.

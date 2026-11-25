@@ -113,3 +113,21 @@ func TestAnApprovedPDFGoesWithItsFile(t *testing.T) {
 		t.Fatalf("files %d, messages %q", len(filer.sent), r.sent)
 	}
 }
+
+// While it makes something for its owner, the owner's app is told what, and
+// told again once it's done.
+func TestTheOwnerSeesWhatIsBeingMade(t *testing.T) {
+	r := &fakeReplier{}
+	s2 := &fakeSystem2{formats: map[string]string{"activity": weekJSON}}
+	m, s := promiseMind(r, s2)
+	m.Autonomy.Owner = sam
+	var said []string
+	m.Making = func(what string) { said = append(said, what) }
+	i := promised("Tobi writes Sam a plan for the week", "", "", now.Add(-time.Minute))
+	s.intentions = []memory.Intention{i}
+	m.tick(context.Background(), now)
+
+	if len(said) != 2 || said[0] != "Tobi writes Sam a plan for the week" || said[1] != "" {
+		t.Errorf("told %q; want what it's making, then nothing once it's done", said)
+	}
+}

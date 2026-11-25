@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/Grandbusta/tinio/internal/db"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/oklog/ulid/v2"
@@ -16,12 +17,27 @@ import (
 
 // The channels the chat notifies, with "<agent id>:<row id>": the owner's rows
 // go to whichever worker runs the agent, the agent's (and a row settled) to the
-// app. Drafting is the reply being written, "<agent id>:<all of it so far>".
+// app. Drafting is the reply being written, "<agent id>:<all of it so far>";
+// Making is what the agent is making for their owner, "<agent id>:<what>", or
+// "<agent id>:" once it's done.
 const (
 	ToAgent   = "chat_to_agent"
 	FromAgent = "chat_from_agent"
 	Drafting  = "chat_draft"
+	Making    = "chat_making"
 )
+
+// making is what each agent is making now, by agent id, for an app that opens
+// their chat midway: the API and the agents run in one process.
+var making sync.Map
+
+// MakingNow is what agent is making for their owner now; "" if nothing.
+func MakingNow(agent string) string {
+	if v, ok := making.Load(agent); ok {
+		return v.(string)
+	}
+	return ""
+}
 
 // WaitingOwner is the wake_at of an agent whose owner is waiting on them (as
 // SQL): the earliest there is, so workers claim them before anyone who is only
@@ -108,6 +124,20 @@ func (s *Store) Settle(ctx context.Context, id, text string, at time.Time) error
 		s.db.Notify(FromAgent, s.agent+":"+id)
 	}
 	return nil
+}
+
+// Making tells the app what the agent is making for their owner (a work they
+// asked for, say), or "" once it's done.
+func (s *Store) Making(text string) {
+	if s.agent == "" {
+		return
+	}
+	if text == "" {
+		making.Delete(s.agent)
+	} else {
+		making.Store(s.agent, text)
+	}
+	s.db.Notify(Making, s.agent+":"+text)
 }
 
 // Draft tells the app what the agent is writing, all of it so far. Nothing is

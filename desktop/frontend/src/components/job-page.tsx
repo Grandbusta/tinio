@@ -44,7 +44,7 @@ const dot: Record<Step["who"], string> = { agent: "bg-accent", cli: "bg-fg", own
 
 // lines are a patch's lines with their numbers in the new file (or the old, for one taken out).
 function lines(patch: string) {
-  const out: { n: number; sign: "+" | "-" | " " | "@"; text: string }[] = [];
+  const out: { n: number; old: number; new: number; sign: "+" | "-" | " " | "@"; text: string }[] = [];
   let oldN = 0;
   let newN = 0;
   for (const l of patch.split("\n")) {
@@ -52,12 +52,12 @@ function lines(patch: string) {
     if (h) {
       oldN = Number(h[1]);
       newN = Number(h[2]);
-      out.push({ n: 0, sign: "@", text: l });
-    } else if (l.startsWith("+")) out.push({ n: newN++, sign: "+", text: l.slice(1) });
-    else if (l.startsWith("-")) out.push({ n: oldN++, sign: "-", text: l.slice(1) });
+      out.push({ n: 0, old: 0, new: 0, sign: "@", text: l });
+    } else if (l.startsWith("+")) out.push({ n: newN, old: 0, new: newN++, sign: "+", text: l.slice(1) });
+    else if (l.startsWith("-")) out.push({ n: oldN, old: oldN++, new: 0, sign: "-", text: l.slice(1) });
     else if (l.startsWith("\\")) continue;
     else {
-      out.push({ n: newN, sign: " ", text: l.slice(1) });
+      out.push({ n: newN, old: oldN, new: newN, sign: " ", text: l.slice(1) });
       oldN++;
       newN++;
     }
@@ -69,7 +69,7 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
   const { agent: a } = useFrame();
   const [page, setPage] = useState<Page | null>(null);
   const [round, setRound] = useState(0); // 0: all of it
-  const [file, setFile] = useState(0);
+  const [shut, setShut] = useState<Set<string>>(new Set()); // files folded away
   const [noting, setNoting] = useState<{ file: string; line: number } | null>(null);
   const [draft, setDraft] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
@@ -111,10 +111,10 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
   const j = page.job;
   const name = a?.name ?? "Your agent";
   const who = (s: Step) => ({ agent: name, cli: "Claude Code", owner: "You", tinio: "Tinio" })[s.who];
-  const change = page.changes[Math.min(file, Math.max(0, page.changes.length - 1))];
   const added = page.changes.reduce((n, c) => n + c.added, 0);
   const removed = page.changes.reduce((n, c) => n + c.removed, 0);
   const finished = [...page.steps].reverse().find((s) => s.who === "cli" && (s.what === "Finished" || s.what === "Stopped"));
+  const latest = page.steps[page.steps.length - 1];
   const checked = [...page.steps].reverse().find((s) => s.who === "agent" && s.what.startsWith("Checked it"));
   const verdict = j.status === "ready" && checked && checked.what !== "Checked it and sent it back" ? checked.detail : "";
   const [label, tone] = pill[j.status] ?? pill.working;
@@ -154,18 +154,27 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-wrap items-start">
-        <section aria-labelledby="happened" className="flex max-w-[380px] min-w-0 flex-[1_1_300px] flex-col gap-3 px-8 pt-5 pb-8 max-[900px]:px-4">
-          <h2 id="happened" className="font-display text-[17px] font-semibold">
-            What happened
-          </h2>
-          <ol className="m-0 flex list-none flex-col p-0">
+      <div className="flex flex-1 flex-col">
+        <details className="group border-b border-line px-8 py-2.5 max-[900px]:px-4">
+          <summary className="flex min-h-9 cursor-pointer list-none items-center gap-3 text-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-none text-muted transition-transform group-open:rotate-90">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+            <h2 id="happened" className="flex-none font-display text-[15px] font-semibold">
+              What happened
+            </h2>
+            <span className="min-w-0 truncate text-[13px] text-muted">
+              {page.steps.length} {page.steps.length === 1 ? "step" : "steps"}
+              {latest && ` · ${who(latest)}: ${latest.what}`}
+            </span>
+          </summary>
+          <ol className="m-0 mt-3 grid max-h-[50vh] list-none grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-x-8 overflow-y-auto p-0 pb-2">
             {page.steps.map((s, i) => (
               <li key={i} className="flex gap-3 pb-3.5">
                 <span aria-hidden="true" className={`mt-1.5 size-2.5 flex-none rounded-full ${dot[s.who]}`} />
                 <span className="flex min-w-0 flex-col">
                   <span className="text-xs font-semibold text-muted">{who(s)}</span>
-                  <span className="text-sm">{s.what}</span>
+                  <span className="text-sm [overflow-wrap:anywhere]">{s.what}</span>
                   {s.detail && (s.what === "Wrote the brief" || s.what === "Finished") ? (
                     <details className="text-[13px]">
                       <summary className="cursor-pointer text-accent-text">Read it</summary>
@@ -189,10 +198,21 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
               </li>
             ))}
           </ol>
-          {page.notes.length > 0 && (
-            <div className="flex flex-col gap-2 border-t border-line pt-4">
-              <h3 className="text-[14px] font-semibold">What {name} keeps about {j.folder}</h3>
-              <p className="m-0 text-xs text-muted">Learnt from the jobs you&apos;ve committed here. The next job here starts with these.</p>
+        </details>
+        {page.notes.length > 0 && (
+          <details className="group border-b border-line px-8 py-2.5 max-[900px]:px-4">
+            <summary className="flex min-h-9 cursor-pointer list-none items-center gap-3 text-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-none text-muted transition-transform group-open:rotate-90">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+              <h2 className="flex-none font-display text-[15px] font-semibold">
+                What {name} keeps about {j.folder}
+              </h2>
+              <span className="min-w-0 truncate text-[13px] text-muted">
+                {page.notes.length} {page.notes.length === 1 ? "note" : "notes"} · the next job here starts with them
+              </span>
+            </summary>
+            <div className="max-w-[760px] pt-2 pb-2">
               <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
                 {page.notes.map((n, i) => (
                   <li key={i} className="flex items-start gap-2 text-[13px]">
@@ -213,10 +233,10 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
                 ))}
               </ul>
             </div>
-          )}
-        </section>
+          </details>
+        )}
 
-        <section aria-labelledby="changes" className="flex min-w-0 flex-[999_1_480px] flex-col gap-3 border-l border-line px-8 pt-5 pb-8 max-[900px]:border-l-0 max-[900px]:px-4">
+        <section aria-labelledby="changes" className="flex min-w-0 flex-1 flex-col gap-3 px-8 pt-5 pb-8 max-[900px]:px-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 id="changes" className="font-display text-[17px] font-semibold">
               The changes
@@ -233,11 +253,8 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
                   key={r}
                   type="button"
                   aria-pressed={round === r}
-                  onClick={() => {
-                    setRound(r);
-                    setFile(0);
-                  }}
-                  className="min-h-9 rounded-lg border border-line-strong px-3 text-[13px] font-semibold aria-pressed:border-fg aria-pressed:bg-fg aria-pressed:text-bg"
+                  onClick={() => setRound(r)}
+                  className="min-h-9 rounded-lg px-3 text-[13px] font-semibold text-muted hover:bg-surface-2 hover:text-fg aria-pressed:bg-line aria-pressed:text-fg"
                 >
                   {r === 0 ? "All of it" : `Round ${r}`}
                 </button>
@@ -246,103 +263,141 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
           )}
           {page.changes.length === 0 && <p className="m-0 text-sm text-muted">{going ? "Nothing changed yet." : "No changes."}</p>}
           {page.changes.length > 0 && (
-            <div role="group" aria-label="Files changed" className="flex flex-col gap-0.5 rounded-lg border border-line p-1">
-              {page.changes.map((c, i) => (
-                <button
-                  key={c.path}
-                  type="button"
-                  aria-pressed={i === file}
-                  onClick={() => setFile(i)}
-                  className="flex justify-between gap-2.5 rounded-md px-2.5 py-2 text-left font-mono text-[12.5px] hover:bg-surface-2 aria-pressed:bg-accent-soft"
-                >
-                  <span className="break-all">{c.path}</span>
-                  <span className="flex-none">
-                    <b className="text-good-text">+{c.added}</b> <b className="text-bad-text">−{c.removed}</b>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-          {change && (
-            <div role="group" aria-label={change.path} className="overflow-hidden rounded-lg border border-line">
-              <div className="border-b border-line bg-surface-2 px-3 py-2 font-mono text-[12.5px] text-fg/75">{change.path}</div>
-              {lines(change.patch).map((l, i) =>
-                l.sign === "@" ? (
-                  <div key={i} className="bg-surface-2 px-3 py-0.5 font-mono text-[11.5px] text-muted">
-                    {l.text}
-                  </div>
-                ) : (
-                  <div key={i}>
+            <div className="flex items-start gap-4 max-[900px]:flex-col">
+              <div
+                role="group"
+                aria-label="Files changed"
+                className="sticky top-3 flex max-h-[calc(100dvh-220px)] w-[300px] flex-none flex-col gap-0.5 overflow-y-auto rounded-lg border border-line p-1 max-[900px]:static max-[900px]:max-h-none max-[900px]:w-full"
+              >
+                {page.changes.map((c, i) => {
+                  const slash = c.path.lastIndexOf("/");
+                  return (
                     <button
+                      key={c.path}
                       type="button"
-                      aria-label={`${l.sign === "+" ? "Added" : l.sign === "-" ? "Taken out" : "Unchanged"}, line ${l.n}: ${l.text || "blank"}. Tap to say something about it.`}
-                      onClick={() => {
-                        setNoting({ file: change.path, line: l.n });
-                        setDraft("");
-                      }}
-                      className={`flex w-full text-left font-mono text-[12.5px] leading-[1.7] whitespace-pre-wrap hover:outline hover:outline-1 hover:outline-line-strong ${
-                        l.sign === "+" ? "bg-good-soft text-good-text" : l.sign === "-" ? "bg-bad-soft text-bad-text" : ""
-                      }`}
+                      onClick={() => document.getElementById(`file-${i}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                      title={c.path}
+                      className="flex items-start justify-between gap-2.5 rounded-md px-2.5 py-1.5 text-left hover:bg-surface-2"
                     >
-                      <span aria-hidden="true" className="w-11 flex-none pr-2.5 text-right text-muted">
-                        {l.n}
+                      <span className="flex min-w-0 flex-col">
+                        <span className="font-mono text-[12.5px] [overflow-wrap:anywhere]">{c.path.slice(slash + 1)}</span>
+                        {slash > 0 && <span className="font-mono text-[11px] text-muted [overflow-wrap:anywhere]">{c.path.slice(0, slash)}</span>}
                       </span>
-                      <span aria-hidden="true" className="w-4 flex-none">
-                        {l.sign === " " ? "" : l.sign === "-" ? "−" : "+"}
+                      <span className="flex-none font-mono text-[12px]">
+                        <b className="text-good-text">+{c.added}</b> <b className="text-bad-text">−{c.removed}</b>
                       </span>
-                      <span className="min-w-0 flex-1 pr-3 break-all">{l.text}</span>
                     </button>
-                    {noting?.file === change.path && noting.line === l.n && (
-                      <form
-                        className="flex flex-col gap-2 border-y border-accent/30 bg-accent-soft/40 py-2.5 pr-3 pl-15"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          if (draft.trim()) setNotes((ns) => [...ns, { file: change.path, line: l.n, text: draft.trim() }]);
-                          setNoting(null);
-                        }}
-                      >
-                        <label htmlFor="line-note" className="text-[13px] font-semibold">
-                          About line {l.n}, to Claude Code
-                        </label>
-                        <textarea
-                          id="line-note"
-                          autoFocus
-                          value={draft}
-                          onChange={(e) => setDraft(e.target.value)}
-                          rows={2}
-                          className="rounded-md border border-line-strong bg-surface px-3 py-2 text-sm"
-                        />
-                        <div className="flex gap-2">
-                          <Button kind="primary" type="submit">
-                            Add to what goes back
-                          </Button>
-                          <Button type="button" onClick={() => setNoting(null)}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </form>
-                    )}
-                  </div>
-                ),
-              )}
-            </div>
-          )}
-          {notes.length > 0 && (
-            <div className="flex flex-col gap-1.5 rounded-lg bg-accent-soft/40 px-3.5 py-3 text-[13px]">
-              <b>{notes.length === 1 ? "One note" : `${notes.length} notes`} to send back</b>
-              {notes.map((n, i) => (
-                <span key={i} className="flex justify-between gap-2">
-                  <span>
-                    <code>
-                      {n.file}:{n.line}
-                    </code>{" "}
-                    {n.text}
-                  </span>
-                  <button type="button" onClick={() => setNotes((ns) => ns.filter((_, k) => k !== i))} className="font-semibold text-accent-text">
-                    Remove
+                  );
+                })}
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-3 max-[900px]:w-full">
+          {page.changes.map((change, ci) => (
+                <div role="group" aria-label={change.path} id={`file-${ci}`} className="scroll-mt-3 overflow-hidden rounded-lg border border-line">
+                  <button
+                    type="button"
+                    aria-expanded={!shut.has(change.path)}
+                    onClick={() =>
+                      setShut((x) => {
+                        const y = new Set(x);
+                        if (y.has(change.path)) y.delete(change.path);
+                        else y.add(change.path);
+                        return y;
+                      })
+                    }
+                    className="sticky top-0 z-10 flex w-full items-center gap-2 border-b border-line bg-surface-2 px-3 py-2 text-left font-mono text-[12.5px]"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={`flex-none text-muted transition-transform ${shut.has(change.path) ? "" : "rotate-90"}`}>
+                      <path d="M9 6l6 6-6 6" />
+                    </svg>
+                    <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{change.path}</span>
+                    <span className="flex-none">
+                      <b className="text-good-text">+{change.added}</b> <b className="text-bad-text">−{change.removed}</b>
+                    </span>
                   </button>
-                </span>
+                  {!shut.has(change.path) &&
+                    lines(change.patch).map((l, i) =>
+                    l.sign === "@" ? (
+                      <div key={i} className="bg-surface-2 px-3 py-0.5 font-mono text-[11.5px] text-muted">
+                        {l.text}
+                      </div>
+                    ) : (
+                      <div key={i}>
+                        <button
+                          type="button"
+                          aria-label={`${l.sign === "+" ? "Added" : l.sign === "-" ? "Taken out" : "Unchanged"}, line ${l.n}: ${l.text || "blank"}. Tap to say something about it.`}
+                          onClick={() => {
+                            setNoting({ file: change.path, line: l.n });
+                            setDraft("");
+                          }}
+                          className={`flex w-full text-left font-mono text-[12.5px] leading-[1.7] whitespace-pre-wrap hover:outline hover:outline-1 hover:outline-line-strong ${
+                            l.sign === "+" ? "bg-good-soft text-good-text" : l.sign === "-" ? "bg-bad-soft text-bad-text" : ""
+                          }`}
+                        >
+                          <span aria-hidden="true" className="w-10 flex-none pr-2 text-right text-muted/70">
+                            {l.old || ""}
+                          </span>
+                          <span aria-hidden="true" className="w-10 flex-none pr-2.5 text-right text-muted">
+                            {l.new || ""}
+                          </span>
+                          <span aria-hidden="true" className="w-4 flex-none">
+                            {l.sign === " " ? "" : l.sign === "-" ? "−" : "+"}
+                          </span>
+                          <span className="min-w-0 flex-1 pr-3 break-all">{l.text}</span>
+                        </button>
+                        {noting?.file === change.path && noting.line === l.n && (
+                          <form
+                            className="flex flex-col gap-2 border-y border-accent/30 bg-accent-soft/40 py-2.5 pr-3 pl-15"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              if (draft.trim()) setNotes((ns) => [...ns, { file: change.path, line: l.n, text: draft.trim() }]);
+                              setNoting(null);
+                            }}
+                          >
+                            <label htmlFor="line-note" className="text-[13px] font-semibold">
+                              About line {l.n}, to Claude Code
+                            </label>
+                            <textarea
+                              id="line-note"
+                              autoFocus
+                              value={draft}
+                              onChange={(e) => setDraft(e.target.value)}
+                              rows={2}
+                              className="rounded-md border border-line-strong bg-surface px-3 py-2 text-sm"
+                            />
+                            <div className="flex gap-2">
+                              <Button kind="primary" type="submit">
+                                Add to what goes back
+                              </Button>
+                              <Button type="button" onClick={() => setNoting(null)}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </form>
+                        )}
+                      </div>
+                    ),
+                  )}
+                </div>
               ))}
+          {notes.length > 0 && (
+                <div className="flex flex-col gap-1.5 rounded-lg bg-accent-soft/40 px-3.5 py-3 text-[13px]">
+                  <b>{notes.length === 1 ? "One note" : `${notes.length} notes`} to send back</b>
+                  {notes.map((n, i) => (
+                    <span key={i} className="flex justify-between gap-2">
+                      <span>
+                        <code>
+                          {n.file}:{n.line}
+                        </code>{" "}
+                        {n.text}
+                      </span>
+                      <button type="button" onClick={() => setNotes((ns) => ns.filter((_, k) => k !== i))} className="font-semibold text-accent-text">
+                        Remove
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              </div>
             </div>
           )}
         </section>

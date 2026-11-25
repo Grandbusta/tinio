@@ -187,8 +187,11 @@ type Config struct {
 	Store            Store
 	Replier          Replier
 	Drafter          Drafter // nil: a reply shows only once it's written
-	System1          system1.DecisionModel
-	System2          system2.Reasoner
+	// Making tells the owner's app what's being made for them ("" when it's
+	// done); nil: nothing's said.
+	Making  func(what string)
+	System1 system1.DecisionModel
+	System2 system2.Reasoner
 	// DaySystem2 thinks for its own day: planning, learning, the weekly review,
 	// what it watches. nil: System2. Replies, and what it says to someone,
 	// always use System2.
@@ -1182,6 +1185,10 @@ func (m *Mind) savePromises(ctx context.Context, p perception.Percept, person me
 			continue
 		}
 		count++
+		if m.Making != nil && verdict != action.Ask && p.Speaker == m.policy().Owner && due.Sub(p.At) <= time.Hour {
+			// Soon: their owner sees it's in hand from now, not only once it's being made.
+			m.Making(fmt.Sprintf("%s, by %s", cutRunes(pr.What, 90), due.Format("15:04")))
+		}
 		if verdict == action.Ask {
 			what := fmt.Sprintf("%s, by %s", pr.What, due.Format("Mon 2 Jan 15:04"))
 			if err := m.ask(ctx, memory.Approval{Class: string(action.Commit), Person: p.Speaker, What: what, Ref: i.ID, Topic: p.Topic,

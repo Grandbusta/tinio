@@ -14,7 +14,7 @@ import { AppHeader } from "./app-header";
 
 const chip =
   "min-h-11 rounded-lg border px-[18px] font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
-const chipOn = "border-fg bg-fg font-semibold text-bg";
+const chipOn = "border-line-strong bg-line font-semibold text-fg";
 const chipOff = "border-line bg-surface hover:border-fg";
 
 export function WhoYouAre({ characterKey }: { characterKey: string }) {
@@ -125,7 +125,7 @@ export function WhoYouAre({ characterKey }: { characterKey: string }) {
                         type="button"
                         aria-pressed={on}
                         onClick={() => setMorning({ ...morning, days: on ? morning.days.filter((x) => x !== d) : [...morning.days, d] })}
-                        className={`min-h-12 w-12 rounded-[10px] text-sm font-semibold ${on ? "bg-fg text-bg" : "bg-surface shadow-[inset_0_0_0_1px_var(--color-line-strong)]"}`}
+                        className={`min-h-12 w-12 rounded-[10px] text-sm font-semibold ${on ? "bg-line text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)]" : "bg-surface shadow-[inset_0_0_0_1px_var(--color-line)]"}`}
                       >
                         {short}
                       </button>

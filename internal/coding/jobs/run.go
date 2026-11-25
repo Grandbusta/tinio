@@ -143,9 +143,9 @@ func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {
 			r.mu.Lock()
 			r.card.Steps++
 			r.mu.Unlock()
-			r.now(doing(e.Tool, e.Input), false)
+			r.now(r.inCopy(doing(e.Tool, e.Input)), false)
 			if e.Tool != "TodoWrite" {
-				r.s.step(context.Background(), r.job.ID, WhoCLI, doing(e.Tool, e.Input), strings.ReplaceAll(detail(e.Tool, e.Input), r.job.Dir+string(filepath.Separator), ""))
+				r.s.step(context.Background(), r.job.ID, WhoCLI, r.inCopy(doing(e.Tool, e.Input)), r.inCopy(detail(e.Tool, e.Input)))
 			}
 		case coding.Changed:
 			r.mu.Lock()
@@ -251,7 +251,7 @@ func (r *run) roundOver(status, text string, e coding.Event) {
 	r.mu.Unlock()
 	st := store.New(r.s.DB).For(j.Agent)
 	for _, p := range asks {
-		st.Settle(context.Background(), p.row, askText(p.event)+"\n\nThe job ended before you answered.", time.Now().UTC())
+		st.Settle(context.Background(), p.row, r.inCopy(askText(p.event))+"\n\nThe job ended before you answered.", time.Now().UTC())
 	}
 }
 
@@ -286,14 +286,14 @@ func (r *run) ask(e coding.Event) {
 		return
 	}
 	// The owner's: a card with three answers.
-	b, _ := json.Marshal(map[string]any{"job": r.job.ID, "ask": e.AskID, "tool": e.Tool, "detail": detail(e.Tool, e.Input),
+	b, _ := json.Marshal(map[string]any{"job": r.job.ID, "ask": e.AskID, "tool": e.Tool, "detail": r.inCopy(detail(e.Tool, e.Input)),
 		"why": whyAsked(r.gate.Rules, e)})
 	row := ulid.Make().String()
 	r.mu.Lock()
 	j := r.job
 	r.mu.Unlock()
 	if err := store.New(r.s.DB).For(j.Agent).SaveChat(context.Background(), memory.ChatMessage{ID: row, Author: memory.ChatAgent,
-		Kind: memory.ChatJobAsk, Text: askText(e), Payload: b, At: time.Now().UTC(), Topic: j.Topic}); err != nil {
+		Kind: memory.ChatJobAsk, Text: r.inCopy(askText(e)), Payload: b, At: time.Now().UTC(), Topic: j.Topic}); err != nil {
 		r.s.Log.Warn("jobs: asking the owner failed; it's a no", "job", j.ID, "err", err)
 		sess.Answer(e.AskID, false, "Tinio couldn't ask the owner.")
 		return
@@ -303,7 +303,7 @@ func (r *run) ask(e coding.Event) {
 	r.job.Status, r.card.Status = Waiting, Waiting
 	r.card.Asking = len(r.asks)
 	r.mu.Unlock()
-	r.s.step(context.Background(), j.ID, WhoCLI, "Asked to "+strings.ToLower(askVerb(e.Tool)), detail(e.Tool, e.Input))
+	r.s.step(context.Background(), j.ID, WhoCLI, "Asked to "+strings.ToLower(askVerb(e.Tool)), r.inCopy(detail(e.Tool, e.Input)))
 	r.now("Waiting for you: "+strings.ToLower(askVerb(e.Tool)), true)
 	r.s.save(context.Background(), r.snapshot())
 }
@@ -354,7 +354,7 @@ func (r *run) answer(ctx context.Context, ask, answer, note string) error {
 	// once, and what's saved after that would undo its end.
 	r.s.save(ctx, j)
 	r.s.step(ctx, j.ID, WhoOwner, strings.TrimPrefix(strings.TrimSuffix(said, "."), "✅ "), strings.TrimSpace(note))
-	store.New(r.s.DB).For(j.Agent).Settle(ctx, p.row, askText(p.event)+"\n\n"+said, time.Now().UTC())
+	store.New(r.s.DB).For(j.Agent).Settle(ctx, p.row, r.inCopy(askText(p.event))+"\n\n"+said, time.Now().UTC())
 	r.now("", true)
 	return sess.Answer(ask, allow, why)
 }
@@ -372,6 +372,19 @@ func (r *run) send(text string) error {
 	r.s.step(context.Background(), r.job.ID, WhoOwner, "Sent more", text)
 	r.now("Taking in what you said", true)
 	return nil
+}
+
+// inCopy is s with the job's own copy left out of it: a command that starts by
+// going into it, and paths in it, read as they would from inside.
+func (r *run) inCopy(s string) string {
+	dir := r.job.Dir
+	if dir == "" {
+		return s
+	}
+	for _, cd := range []string{`cd "` + dir + `" && `, `cd '` + dir + `' && `, "cd " + dir + " && ", `cd "` + dir + `"; `, "cd " + dir + "; "} {
+		s = strings.ReplaceAll(s, cd, "")
+	}
+	return strings.ReplaceAll(s, dir+string(filepath.Separator), "")
 }
 
 func contains(xs []string, x string) bool {

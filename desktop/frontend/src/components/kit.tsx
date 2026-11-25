@@ -13,7 +13,7 @@ export const box = "flex flex-col gap-3 rounded-lg border border-line px-[22px] 
 export const heading = "font-display text-lg font-semibold tracking-[-0.02em]";
 
 export function chip(on: boolean) {
-  return `min-h-9 rounded-lg px-3.5 text-[13px] font-semibold ${on ? "bg-fg text-bg" : "text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)]"}`;
+  return `min-h-9 rounded-lg px-3.5 text-[13px] font-semibold ${on ? "bg-line text-fg" : "text-muted hover:bg-surface-2 hover:text-fg"}`;
 }
 
 // Page is a full-width page (Connections): on a phone, with a way back to the chats.

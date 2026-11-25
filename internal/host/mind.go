@@ -475,7 +475,7 @@ func (h *Host) mind(ctx context.Context, r *runner) (m *mind.Mind, done func(), 
 	return mind.New(mind.Config{
 		RestAfter: h.RestAfter, Kept: kept,
 		Life: ag.Life, Judgment: ag.Judgment, JudgmentApproved: r.row.ready, Skills: ag.Skills,
-		Percepts: r.percepts, Ticks: r.ticks, Store: st, Replier: chat, Drafter: chat, Asker: chat, Filer: chat,
+		Percepts: r.percepts, Ticks: r.ticks, Store: st, Replier: chat, Drafter: chat, Asker: chat, Filer: chat, Making: st.Making,
 		System1: sh.models.System1, System2: sh.models.System2, DaySystem2: sh.models.Day, WorkSystem2: sh.models.Work,
 		LightSystem2: sh.models.Light,
 		Embedder:     sh.models.Embedder,
