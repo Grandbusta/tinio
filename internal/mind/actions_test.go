@@ -210,3 +210,34 @@ func TestAQuickActionRunsOnTheYes(t *testing.T) {
 		}
 	}
 }
+
+// topicDoer is a quick tool that keeps the topic it's run in.
+type topicDoer struct {
+	quickDoer
+	topic *string
+}
+
+func (t topicDoer) Do(ctx context.Context, args string, now time.Time) (string, error) {
+	*t.topic = TopicOf(ctx)
+	return t.quickDoer.Do(ctx, args, now)
+}
+
+// An action runs knowing the topic it was proposed in (a coding job goes into
+// the conversation it was asked for in, not a topic of its own).
+func TestAnActionKnowsItsTopic(t *testing.T) {
+	d := &fakeDoer{name: "notes.write_file", class: action.Write}
+	m, s, asker, _, _ := actionMind(d, save)
+	s.topics = append(s.topics, memory.Topic{ID: "T-skills", Person: owner, Title: "BSG skills", StartedAt: now, LastAt: now})
+	var got string
+	m.Doers = []Doer{topicDoer{quickDoer{d}, &got}}
+	p := fromOwner("Save that plan to my folder")
+	p.Topic = "T-skills"
+	m.propose(context.Background(), p, []system2.Act{save}, now, true)
+	if len(asker.ids) != 1 {
+		t.Fatalf("asked %d times", len(asker.ids))
+	}
+	m.handle(context.Background(), tap(owner, asker.ids[0], true))
+	if got != "T-skills" {
+		t.Errorf("the action ran in topic %q; want the one it was proposed in", got)
+	}
+}

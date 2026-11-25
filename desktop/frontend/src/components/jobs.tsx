@@ -250,37 +250,3 @@ export function JobAskCard({ row, agent, tapped, busy, failed, answer, docked, m
     </div>
   );
 }
-
-// JobsStrip is the jobs going on, or done today, at the top of the chat: each opens
-// its card.
-export function JobsStrip({ rows }: { rows: ChatRow[] }) {
-  const day = Date.now() - 24 * 3600_000;
-  const jobs = rows.filter((r) => {
-    if (r.kind !== "job") return false;
-    const s = r.payload?.status;
-    return s === "working" || s === "waiting" || ((s === "ready" || s === "stopped") && new Date(r.at).getTime() > day);
-  });
-  if (jobs.length === 0) return null;
-  return (
-    <nav aria-label="Coding jobs" className="flex gap-2 overflow-x-auto border-t border-line px-4 py-2 max-[900px]:px-2">
-      {jobs
-        .slice()
-        .reverse()
-        .map((r) => (
-          <button
-            key={r.id}
-            type="button"
-            onClick={() => document.getElementById(`row-${r.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
-            className="flex min-h-11 max-w-[280px] flex-none items-center gap-2 rounded-xl border border-line bg-surface px-2.5 py-1 text-left hover:border-line-strong"
-          >
-            <ServiceLogo service="claude" size={26} />
-            <span className="flex min-w-0 flex-col">
-              <b className="truncate text-[13px]">{r.text.replace(/^Coding job: /, "").replace(/ · \w+$/, "")}</b>
-              <span className="truncate text-[11.5px] text-muted">{r.payload?.folder}</span>
-            </span>
-            <Pill status={(r.payload?.status ?? "working") as Status} />
-          </button>
-        ))}
-    </nav>
-  );
-}

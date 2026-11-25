@@ -86,7 +86,7 @@ func (m *Mind) actionsHelp(owner string) string {
 	}
 	fmt.Fprintf(&b, "\n- Use one only when %[1]s asks for it, or it plainly serves what you're doing for them: put it in `act`, with "+
 		"its name as tool, its arguments as a JSON object in args, and why in a few words. It runs a minute or so later, once "+
-		"it's allowed (most need %[1]s's OK on Telegram first), so never say it's done: say you'll do it, and that you'll let "+
+		"it's allowed (most need %[1]s's OK in the chat first), so never say it's done: say you'll do it, and that you'll let "+
 		"them know when it is.", owner)
 	return b.String()
 }
@@ -133,6 +133,9 @@ func (m *Mind) propose(ctx context.Context, p perception.Percept, acts []system2
 		if err := m.Store.SaveAction(ctx, a); err != nil {
 			log.Error("save action", "err", err)
 			continue
+		}
+		if p.Topic != "" {
+			m.actionTopics.Store(a.ID, p.Topic)
 		}
 		done++
 		if verdict == action.Ask {
@@ -205,7 +208,7 @@ func (m *Mind) runApproved(ctx context.Context, now time.Time, quickOnly bool) (
 		start := time.Now()
 		if d, ok := ds[a.Tool]; !ok {
 			status, result = memory.ActionDenied, "not allowed any more"
-		} else if text, err := d.Do(ctx, a.Args, now); err != nil {
+		} else if text, err := d.Do(m.withActionTopic(ctx, a.ID), a.Args, now); err != nil {
 			status, result = memory.ActionFailed, err.Error()
 		} else {
 			result = text
@@ -261,4 +264,21 @@ func (m *Mind) tellOwner(ctx context.Context, kind, setID, text string, ok bool,
 	if err := m.Store.SaveDecision(ctx, d); err != nil {
 		m.Log.Error("save decision", "err", err)
 	}
+}
+
+type topicKey struct{}
+
+// TopicOf is the topic of the conversation an action being run was proposed in;
+// "" if there's none, or it's no longer known (Tinio started again since).
+func TopicOf(ctx context.Context) string {
+	t, _ := ctx.Value(topicKey{}).(string)
+	return t
+}
+
+// withActionTopic is ctx carrying the topic action id was proposed in, if known.
+func (m *Mind) withActionTopic(ctx context.Context, id ulid.ULID) context.Context {
+	if t, ok := m.actionTopics.LoadAndDelete(id); ok {
+		return context.WithValue(ctx, topicKey{}, t.(string))
+	}
+	return ctx
 }

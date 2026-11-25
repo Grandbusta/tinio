@@ -291,6 +291,7 @@ type Mind struct {
 
 	// Only the life loop touches these.
 	lastTick     time.Time
+	actionTopics sync.Map // action id: the topic it was proposed in, until it's run
 	reviewed     time.Time
 	reviewTries  tries                // the weekly review failing in a row
 	morningDone  string               // the local date of the last morning it sent, or had none to send

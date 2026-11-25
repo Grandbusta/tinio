@@ -28,6 +28,7 @@ import (
 	"github.com/Grandbusta/tinio/internal/coding"
 	"github.com/Grandbusta/tinio/internal/db"
 	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/mind"
 	"github.com/Grandbusta/tinio/internal/providers/system2"
 	"github.com/Grandbusta/tinio/internal/store"
 )
@@ -321,8 +322,11 @@ func (s *Service) Begin(ctx context.Context, agent string, f Folder, title, brie
 		}
 	}
 	st := store.New(s.DB).For(agent)
-	if j.Topic, err = s.projectTopic(ctx, st, agent, f.Name); err != nil {
-		s.Log.Warn("jobs: no topic for the project; the job is in none", "job", id, "err", err)
+	// The job belongs where it was asked for; a project's own topic otherwise.
+	if j.Topic = mind.TopicOf(ctx); j.Topic == "" {
+		if j.Topic, err = s.projectTopic(ctx, st, agent, f.Name); err != nil {
+			s.Log.Warn("jobs: no topic for the project; the job is in none", "job", id, "err", err)
+		}
 	}
 	c := cardOf(j)
 	c.Now = "Starting Claude Code"

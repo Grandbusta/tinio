@@ -8,7 +8,8 @@ import { FileIcon, kindOf } from "@/components/file-icon";
 import { MessageText } from "@/components/message-text";
 import { WorkPreview } from "@/components/work-preview";
 import { NoKey } from "@/components/first-run";
-import { JobAskCard, JobCard, JobsStrip } from "@/components/jobs";
+import { JobAskCard, JobCard } from "@/components/jobs";
+import { PanelIcons, SidePanel, useJobs, usePanel } from "@/components/chat-panel";
 import { ComposerFolders } from "@/components/folders";
 import { resets, UsageBanner } from "@/components/usage";
 import { call, type ChatRow, type Topic } from "@/lib/api";
@@ -66,11 +67,11 @@ export function Chat({ id }: { id: string }) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [inTopic, setInTopic] = useState("");
   const [topicRows, setTopicRows] = useState<Record<string, ChatRow[]>>({}); // each topic shown so far, all of it
-  const [quietShown, setQuietShown] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatRow | null>(null);
   const [starting, setStarting] = useState(false); // what you send next starts a topic
   const [menu, setMenu] = useState(""); // the row whose menu is open
   const [searching, setSearching] = useState(false);
+  const [panel, setPanel] = usePanel();
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<ChatRow[] | null>(null); // what a search found, newest first
   const [hit, setHit] = useState(0); // the one shown
@@ -183,11 +184,12 @@ export function Chat({ id }: { id: string }) {
   // The questions a job is waiting on you for, oldest first: the first is docked above
   // the message box.
   const asking = all.filter((r) => r.kind === "job_ask" && !r.settled_at && !tapped[r.id]);
+  // The jobs, read again whenever a job's card changes.
+  const jobs = useJobs(id, all.filter((r) => r.kind === "job").map((r) => r.id + (r.payload?.status ?? "") + (r.payload?.commit ?? "")).join());
   const visible = inTopic ? (topicRows[inTopic] ?? []).filter((r) => shown.has(r.kind)) : all;
   // Your last thumb on each work, from the rows you sent.
   const reactions: Record<string, { good: boolean; note?: string }> = {};
   for (const r of rows ?? []) if (r.kind === "react" && r.payload?.work) reactions[r.payload.work] = { good: !!r.payload.good, note: r.payload.note };
-  const topic = topics.find((t) => t.id === inTopic);
   const titleOf = (t?: string) => {
     const found = topics.find((x) => x.id === t);
     return found ? found.title || "New topic" : "An earlier topic";
@@ -382,8 +384,15 @@ export function Chat({ id }: { id: string }) {
   }
 
   const name = agent?.name ?? "";
+  const startTopic = () => {
+    setStarting(true);
+    setReplyTo(null);
+    show("");
+    box.current?.focus();
+  };
   return (
-    <>
+    <div className="flex min-h-full">
+      <div className="flex min-w-0 flex-1 flex-col">
       <header className="sticky top-0 z-10 flex flex-col border-b border-line bg-bg">
         <div className="flex items-center gap-1 px-4 py-2 max-[900px]:px-2 max-[900px]:py-1.5">
           <Link href="/agents" aria-label="Back to chats" className="grid size-11 flex-none place-items-center rounded-full text-muted hover:text-fg min-[901px]:hidden">
@@ -413,6 +422,17 @@ export function Chat({ id }: { id: string }) {
             <path d="M16 16l4.5 4.5" />
           </svg>
         </button>
+        {inTopic && (
+          <span className="mx-1 inline-flex max-w-[220px] flex-none items-center gap-1 rounded-lg bg-line py-1 pr-1 pl-2.5 text-[13px] font-semibold max-[560px]:hidden">
+            <span className="truncate">In: {titleOf(inTopic)}</span>
+            <button type="button" aria-label="Show everything again" onClick={() => show("")} className="grid size-6 flex-none place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </span>
+        )}
+        <PanelIcons panel={panel} open={setPanel} needsYou={jobs.some((j) => j.status === "waiting")} />
         <button type="button" aria-label={`About ${name}`} aria-expanded={aboutOpen} onClick={toggleAbout} className="grid size-11 flex-none place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-fg">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <circle cx="12" cy="12" r="9" />
@@ -451,46 +471,8 @@ export function Chat({ id }: { id: string }) {
             </button>
           </form>
         )}
-        {ready && (
-          <TopicChips
-            agent={id}
-            topics={topics}
-            shown={inTopic}
-            show={show}
-            quietShown={quietShown}
-            showQuiet={() => setQuietShown(true)}
-            starting={starting}
-            start={() => {
-              setStarting(true);
-              setReplyTo(null);
-              show("");
-              box.current?.focus();
-            }}
-          />
-        )}
-        {ready && <JobsStrip rows={rows ?? []} />}
       </header>
       {keySet === false ? <NoKey name={agent?.name} /> : <UsageBanner />}
-      {inTopic && (
-        <section aria-label="Where this topic stands" className="border-b border-line bg-accent-soft/50 px-10 py-3.5 max-[900px]:px-3">
-          <div className="mx-auto flex w-full max-w-[880px] flex-col gap-1">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-              <h2 className="font-display text-[17px] font-semibold tracking-[-0.02em]">{titleOf(inTopic)}</h2>
-              <span className="text-[12.5px] text-muted">
-                {topic ? `${topic.quiet ? "Quiet" : "Open"} · since ${dayName(topic.started_at)}` : ""}
-                {topic && " · "}
-                <Link href={`/agents/${id}/topics`} className="font-semibold text-accent-text">All topics</Link>
-              </span>
-            </div>
-            <p className="m-0 text-sm text-fg">{topic?.summary || topic?.status || `${name} writes down where it stands once you pause.`}</p>
-            {!!topic?.settled.length && (
-              <p className="m-0 text-[13px] text-muted">
-                <b className="font-semibold text-fg">Settled:</b> {topic.settled.join(" · ")}
-              </p>
-            )}
-          </div>
-        </section>
-      )}
 
       <div ref={log} role="log" aria-live="polite" aria-label={`Chat with ${name}`} className="mx-auto flex w-full max-w-[960px] flex-1 flex-col px-10 py-6 max-[900px]:px-3 max-[900px]:py-4">
         {agent && <span className="mb-1 self-center text-xs text-muted">{name} was raised {day(agent.created_at)}</span>}
@@ -671,7 +653,19 @@ export function Chat({ id }: { id: string }) {
         )}
       </form>
       {error && <p role="alert" className="mx-auto w-full max-w-[960px] px-10 pb-4 text-sm text-bad-text max-[900px]:px-3">{error}</p>}
-    </>
+      </div>
+      <SidePanel
+        agent={id}
+        name={name}
+        panel={panel}
+        close={() => setPanel("")}
+        topics={topics}
+        inTopic={inTopic}
+        show={show}
+        startTopic={startTopic}
+        jobs={jobs}
+      />
+    </div>
   );
 }
 
@@ -962,72 +956,6 @@ function size(bytes: number) {
 }
 
 const rowAction = "grid size-9 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-fg";
-
-const quietChips = 10;
-
-// TopicChips is the row under the header: the whole chat, each open topic (a dot on one
-// waiting for you), the newest quiet ones once asked for (the rest are in About's Topics),
-// and + to start one.
-function TopicChips({ agent, topics, shown, show, quietShown, showQuiet, starting, start }: {
-  agent: string;
-  topics: Topic[];
-  shown: string;
-  show: (topic: string) => void;
-  quietShown: boolean;
-  showQuiet: () => void;
-  starting: boolean;
-  start: () => void;
-}) {
-  const open = topics.filter((t) => !t.quiet);
-  const quiet = topics.filter((t) => t.quiet);
-  const pill = (on: boolean, extra = "") =>
-    `inline-flex min-h-9 flex-none items-center gap-1.5 rounded-lg px-3.5 text-[13px] font-semibold whitespace-nowrap ${on ? "bg-line text-fg" : "text-muted hover:bg-surface-2 hover:text-fg"} ${extra}`;
-  return (
-    <nav aria-label="Topics" className="flex items-center gap-2 overflow-x-auto px-5 pb-2.5 max-[900px]:px-3">
-      <button type="button" aria-pressed={!shown} onClick={() => show("")} className={pill(!shown)}>
-        Everything
-      </button>
-      {open.map((t) => (
-        <button key={t.id} type="button" aria-pressed={shown === t.id} onClick={() => show(t.id)} className={pill(shown === t.id)}>
-          {t.title || "New topic"}
-          {t.waiting > 0 && <span aria-label="needs you" className="size-2 rounded-full bg-warn-text" />}
-        </button>
-      ))}
-      {quiet.length > 0 &&
-        (quietShown ? (
-          <>
-            {quiet.slice(0, quietChips).map((t) => (
-              <button key={t.id} type="button" aria-pressed={shown === t.id} onClick={() => show(t.id)} className={pill(shown === t.id, "font-medium text-muted [border-style:dashed]")}>
-                {t.title || "New topic"}
-              </button>
-            ))}
-            {quiet.length > quietChips && (
-              <Link href={`/agents/${agent}/topics`} className={pill(false, "font-medium text-accent-text no-underline")}>
-                All topics
-              </Link>
-            )}
-          </>
-        ) : (
-          <button type="button" onClick={showQuiet} className={pill(false, "font-medium text-muted")}>
-            {quiet.length} quiet
-          </button>
-        ))}
-      <button
-        type="button"
-        aria-label="Start a topic"
-        title="Start a topic"
-        aria-pressed={starting}
-        onClick={start}
-        className={`grid size-9 flex-none place-items-center rounded-full ${starting ? "bg-accent text-accent-ink" : "text-accent-text shadow-[inset_0_0_0_1px_var(--color-accent)] hover:bg-accent-soft"}`}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-          <path d="M12 5v14" />
-          <path d="M5 12h14" />
-        </svg>
-      </button>
-    </nav>
-  );
-}
 
 // RowMenu is a message's menu: reply to it, or move it to another topic, a new one or none.
 function RowMenu({ row, mine, topics, close, reply, copy, move }: {

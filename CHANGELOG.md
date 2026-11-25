@@ -86,6 +86,16 @@ you, and the name shows on hover; the app remembers your choice. A job or a work
 folds it on its own, and so does a window between 901 and 1100px wide, where opening it
 lays it over the page until you pick a chat. The chat keeps a reading width, centred.
 
+**A side panel for topics, jobs and files:** the chat's header is one line, with icons
+that open a panel beside the chat (over it in a narrow window): Topics (every one, open
+first, the one you're in with where it stands, labelled with the folders its jobs worked
+in), Coding jobs (every job by what it wants from you, narrowed to one folder if you
+like) and Files (all they've sent). A dot on Coding jobs means one needs you. The topic
+you're in shows as "In: …" with an x. The topic row, the jobs strip and the topic band
+above the chat are gone, and the app remembers the panel you had open. A coding job now
+stays in the conversation it was asked for in, and agents no longer say approvals come
+on Telegram.
+
 **Questions and changes, the way coding tools show them:** a job's question waiting on
 you sits above the message box, where the chat can't scroll it away; in the chat it's one
 quiet line, and once answered, "Allowed once" and the command, opening to all of it. A
