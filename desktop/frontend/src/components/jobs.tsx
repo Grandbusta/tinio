@@ -26,7 +26,7 @@ const pills: Record<Status, { label: string; tone: string }> = {
 
 function Pill({ status }: { status: Status }) {
   const p = pills[status] ?? pills.working;
-  return <span className={`flex-none rounded-full px-2.5 py-0.5 text-xs font-semibold ${p.tone}`}>{p.label}</span>;
+  return <span className={`flex-none rounded-md px-2.5 py-0.5 text-xs font-semibold ${p.tone}`}>{p.label}</span>;
 }
 
 const money = (usd: number) => (usd < 0.01 ? "under a cent" : `$${usd.toFixed(2)}`);
@@ -55,10 +55,19 @@ export function JobCard({ row, agent, name }: { row: ChatRow; agent: string; nam
         {going && <span aria-hidden="true" className="size-2 flex-none animate-pulse rounded-full bg-accent" />}
         {p.now}
       </span>
-      {p.summary && !going && (
-        <div className="rounded-md bg-surface-2 px-3 py-2.5 text-sm">
-          <MessageText text={p.summary} />
+      {p.verdict && !going && (
+        <div className="flex flex-col gap-0.5 rounded-md bg-accent-soft px-3 py-2.5 text-sm">
+          <b className="text-[12.5px] text-accent-text">{name} checked it</b>
+          <MessageText text={p.verdict} />
         </div>
+      )}
+      {p.summary && !going && (
+        <details className="text-[13px]">
+          <summary className="cursor-pointer font-semibold text-accent-text">What Claude Code said</summary>
+          <div className="mt-1.5 rounded-md bg-surface-2 px-3 py-2.5 text-sm">
+            <MessageText text={p.summary} />
+          </div>
+        </details>
       )}
       <span className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-2.5 text-[12.5px] text-muted">
         <span>
@@ -87,7 +96,7 @@ export function JobCard({ row, agent, name }: { row: ChatRow; agent: string; nam
       <div className="flex flex-wrap items-center gap-2">
         <Link
           href={`/agents/${agent}/jobs/${p.job}`}
-          className="inline-flex min-h-10 items-center rounded-full border border-line-strong px-4 text-[13px] font-semibold text-fg no-underline hover:border-fg"
+          className="inline-flex min-h-10 items-center rounded-lg border border-line-strong px-4 text-[13px] font-semibold text-fg no-underline hover:border-fg"
         >
           {going ? "Open the job" : "Look at the changes"}
         </Link>

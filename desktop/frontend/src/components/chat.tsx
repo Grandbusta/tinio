@@ -428,7 +428,7 @@ export function Chat({ id }: { id: string }) {
               }}
               autoFocus
               maxLength={100}
-              className="min-h-10 min-w-0 flex-1 rounded-full border border-line-strong bg-surface px-4 text-sm focus:outline-2 focus:outline-offset-1 focus:outline-accent"
+              className="min-h-10 min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-4 text-sm focus:outline-2 focus:outline-offset-1 focus:outline-accent"
             />
             <span role="status" className="px-1 text-[13px] whitespace-nowrap text-muted">
               {hits === null ? "" : hits.length === 0 ? "Not found" : `${hit + 1} of ${hits.length}${hits.length === 50 ? "+" : ""}`}
@@ -616,7 +616,7 @@ export function Chat({ id }: { id: string }) {
             }
           }}
           placeholder={starting ? "What's it about?" : inTopic ? `Message ${name} about ${titleOf(inTopic)}` : `Message ${name}`}
-          className="max-h-48 min-h-12 min-w-0 flex-1 resize-none rounded-3xl border border-line-strong bg-surface px-[18px] py-3 text-[15px] leading-6 text-fg focus:outline-2 focus:outline-offset-1 focus:outline-accent"
+          className="max-h-48 min-h-12 min-w-0 flex-1 resize-none rounded-xl border border-line-strong bg-surface px-[18px] py-3 text-[15px] leading-6 text-fg focus:outline-2 focus:outline-offset-1 focus:outline-accent"
         />
         <button
           type="submit"
@@ -742,7 +742,7 @@ function Row({ agent, first, quote, ...props }: Card & { agent: string; first: b
               {kindOf(p.name ?? "").name} · {size(p.size ?? 0)}
             </span>
           </div>
-          <a className="inline-flex min-h-9 items-center rounded-full border border-line-strong px-3.5 text-[13px] font-semibold text-fg hover:border-fg" href={`/api/agents/${agent}/files/${p.file}`} download={p.name}>
+          <a className="inline-flex min-h-9 items-center rounded-lg border border-line-strong px-3.5 text-[13px] font-semibold text-fg hover:border-fg" href={`/api/agents/${agent}/files/${p.file}`} download={p.name}>
             {kindOf(p.name ?? "").name === "Calendar" ? "Add to calendar" : "Download"}
           </a>
         </div>
@@ -943,7 +943,7 @@ function TopicChips({ agent, topics, shown, show, quietShown, showQuiet, startin
   const open = topics.filter((t) => !t.quiet);
   const quiet = topics.filter((t) => t.quiet);
   const pill = (on: boolean, extra = "") =>
-    `inline-flex min-h-9 flex-none items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold whitespace-nowrap ${on ? "bg-fg text-bg" : "text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)] hover:shadow-[inset_0_0_0_1px_var(--color-fg)]"} ${extra}`;
+    `inline-flex min-h-9 flex-none items-center gap-1.5 rounded-lg px-3.5 text-[13px] font-semibold whitespace-nowrap ${on ? "bg-fg text-bg" : "text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)] hover:shadow-[inset_0_0_0_1px_var(--color-fg)]"} ${extra}`;
   return (
     <nav aria-label="Topics" className="flex items-center gap-2 overflow-x-auto px-5 pb-2.5 max-[900px]:px-3">
       <button type="button" aria-pressed={!shown} onClick={() => show("")} className={pill(!shown)}>
@@ -1063,7 +1063,7 @@ function ComposerBar({ title, text, stop, onStop, dashed }: { title: string; tex
 // a tap; several are picked, then sent. Typing anything else works as ever.
 function Answers({ answers, many, busy, send }: { answers: string[]; many: boolean; busy: boolean; send: (said: string) => void }) {
   const [picked, setPicked] = useState<string[]>([]);
-  const answer = "inline-flex min-h-10 items-center gap-1.5 rounded-full border border-accent px-4 text-sm font-semibold text-accent-text hover:bg-accent-soft disabled:opacity-60";
+  const answer = "inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-accent px-4 text-sm font-semibold text-accent-text hover:bg-accent-soft disabled:opacity-60";
   const join = (xs: string[]) => new Intl.ListFormat("en-GB", { type: "conjunction" }).format(xs);
   return (
     <div role="group" aria-label="Answers to tap" className="mt-2 flex flex-col gap-2 self-start pl-1">

@@ -65,12 +65,12 @@ function counted(f: { files: number; skipped: number; more: boolean }) {
   return f.skipped ? `${files} · ${f.skipped.toLocaleString("en-GB")} never read: hidden files, keys and shortcuts` : files;
 }
 
-const seg = "inline-flex flex-wrap gap-1 self-start rounded-full border border-line bg-surface-2 p-1";
-const segBtn = (on: boolean) => `min-h-9 rounded-full px-3 text-[13px] font-semibold ${on ? "bg-bg text-accent-text shadow-sm" : "text-muted hover:text-fg"}`;
+const seg = "inline-flex flex-wrap gap-1 self-start rounded-xl border border-line bg-surface-2 p-1";
+const segBtn = (on: boolean) => `min-h-9 rounded-lg px-3 text-[13px] font-semibold ${on ? "bg-bg text-accent-text shadow-sm" : "text-muted hover:text-fg"}`;
 const whoBtn = (on: boolean) =>
-  `inline-flex min-h-10 items-center gap-2 rounded-full py-1 pr-3.5 pl-1 text-sm font-semibold ${on ? "border-2 border-accent bg-accent-soft/50 text-accent-text" : "border border-line bg-bg text-fg"}`;
-const btn = "inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-line-strong bg-bg px-4 text-[13px] font-semibold text-fg hover:border-fg disabled:opacity-50";
-const primary = "inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-accent px-4 text-[13px] font-semibold text-accent-ink no-underline hover:bg-accent-hover hover:text-accent-ink disabled:opacity-50";
+  `inline-flex min-h-10 items-center gap-2 rounded-lg py-1 pr-3.5 pl-1 text-sm font-semibold ${on ? "border-2 border-accent bg-accent-soft/50 text-accent-text" : "border border-line bg-bg text-fg"}`;
+const btn = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line-strong bg-bg px-4 text-[13px] font-semibold text-fg hover:border-fg disabled:opacity-50";
+const primary = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-[13px] font-semibold text-accent-ink no-underline hover:bg-accent-hover hover:text-accent-ink disabled:opacity-50";
 
 // FoldersSection is Folders in Settings: every folder, what agents may do in it and
 // who may use it; adding and removing.
@@ -131,7 +131,7 @@ export function FoldersSection() {
             <div role="alert" className="flex flex-wrap items-center justify-between gap-2.5 border-b border-line bg-bad-soft px-[18px] py-3 text-sm">
               <span>Your agents stop using {f.name}. The folder and its files stay just as they are.</span>
               <span className="flex gap-2">
-                <button type="button" className="inline-flex min-h-10 items-center rounded-full bg-bad px-4 text-[13px] font-semibold text-white" onClick={() => change(`/folders/${f.id}/remove`, {})}>
+                <button type="button" className="inline-flex min-h-10 items-center rounded-lg bg-bad px-4 text-[13px] font-semibold text-white" onClick={() => change(`/folders/${f.id}/remove`, {})}>
                   Remove it
                 </button>
                 <button type="button" className={btn} onClick={() => setAsking("")}>
@@ -249,7 +249,7 @@ export function AddFolderPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[880px] flex-col gap-6 px-10 pt-8 pb-12 max-[900px]:px-4 max-[900px]:pt-4">
-      <Link href="/settings#folders" className="-ml-2 inline-flex min-h-11 items-center self-start rounded-full px-2 text-sm font-semibold text-accent-text no-underline hover:bg-accent-soft">
+      <Link href="/settings#folders" className="-ml-2 inline-flex min-h-11 items-center self-start rounded-lg px-2 text-sm font-semibold text-accent-text no-underline hover:bg-accent-soft">
         ‹ Settings
       </Link>
       <div className="flex flex-col gap-1.5">
@@ -388,7 +388,7 @@ export function AgentFolders({ id, name, changes }: { id: string; name: string; 
   if (!folders) return null;
   const mine = folders.filter((f) => f.agents.includes(id));
   const others = folders.filter((f) => !f.agents.includes(id));
-  const pill = (v: string) => `flex-none rounded-full px-2.5 py-0.5 text-xs font-semibold ${v === "auto" ? "bg-good-soft text-good-text" : v === "ask" ? "bg-warn-soft text-warn-text" : "bg-surface-2 text-muted"}`;
+  const pill = (v: string) => `flex-none rounded-md px-2.5 py-0.5 text-xs font-semibold ${v === "auto" ? "bg-good-soft text-good-text" : v === "ask" ? "bg-warn-soft text-warn-text" : "bg-surface-2 text-muted"}`;
   const writes = changes ?? "ask";
   return (
     <section className="flex flex-col gap-2.5">
@@ -528,7 +528,7 @@ export function ComposerFolders({ id, name }: { id: string; name: string }) {
             <ul aria-label={`Folders ${name} can use`} className="m-0 flex list-none flex-wrap items-center gap-1.5 p-0 text-[13px]">
               <li className="text-muted">{name} can use</li>
               {mine.map((f) => (
-                <li key={f.id} className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-line bg-surface py-0.5 pr-1 pl-2.5">
+                <li key={f.id} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-line bg-surface py-0.5 pr-1 pl-2.5">
                   <FolderGlyph size={15} className="text-accent-text" />
                   <Link href="/settings#folders" className="font-semibold text-fg no-underline">
                     {f.name}

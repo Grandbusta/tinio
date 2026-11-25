@@ -53,7 +53,7 @@ function WhoToggles({ connection, onSaved }: { connection: Connection; onSaved: 
             disabled={busy}
             aria-pressed={connection.agents.includes(a.id)}
             onClick={() => toggle(a.id)}
-            className={`inline-flex min-h-10 items-center gap-2 rounded-full py-1 pr-3.5 pl-1 text-sm font-semibold disabled:opacity-60 ${
+            className={`inline-flex min-h-10 items-center gap-2 rounded-lg py-1 pr-3.5 pl-1 text-sm font-semibold disabled:opacity-60 ${
               connection.agents.includes(a.id) ? "bg-accent-soft text-accent-text shadow-[inset_0_0_0_2px_var(--color-accent)]" : "shadow-[inset_0_0_0_1px_var(--color-line-strong)]"
             }`}
           >
@@ -106,7 +106,7 @@ export function ConnectionsPage({ failed }: { failed?: string }) {
               <div className="flex min-w-0 flex-[1_1_240px] flex-col gap-0.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <b className="text-[17px]">{k.name}</b>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.state === "ok" ? "bg-good-soft text-good-text" : "bg-warn-soft text-warn-text"}`}>
+                  <span className={`rounded-md px-2.5 py-0.5 text-xs font-semibold ${c.state === "ok" ? "bg-good-soft text-good-text" : "bg-warn-soft text-warn-text"}`}>
                     {c.state === "ok" ? "Connected" : "Needs you: sign in again"}
                   </span>
                 </div>
@@ -142,7 +142,7 @@ export function ConnectionsPage({ failed }: { failed?: string }) {
                       {p.id === "drive" && on && c.access.files && c.access.files.length > 0 && ` Picked: ${c.access.files.map((f) => f.name).join(", ")}.`}
                     </span>
                     <span
-                      className={`flex-none rounded-full px-2.5 py-0.5 text-xs font-semibold ${p.later ? "bg-surface-2 text-muted" : on ? "bg-good-soft text-good-text" : "bg-surface-2 text-muted"}`}
+                      className={`flex-none rounded-md px-2.5 py-0.5 text-xs font-semibold ${p.later ? "bg-surface-2 text-muted" : on ? "bg-good-soft text-good-text" : "bg-surface-2 text-muted"}`}
                     >
                       {p.later ? "Later" : on ? "On" : "Off"}
                     </span>
@@ -170,7 +170,7 @@ export function ConnectionsPage({ failed }: { failed?: string }) {
                   <b className="text-[15px]">{k.name}</b>
                   <span className="flex-grow text-[13px] text-muted">{k.about}</span>
                   {!connectionsOpen ? (
-                    <span className="self-start rounded-full bg-surface-2 px-2.5 py-1 text-xs font-semibold text-muted">Coming soon</span>
+                    <span className="self-start rounded-md bg-surface-2 px-2.5 py-1 text-xs font-semibold text-muted">Coming soon</span>
                   ) : k.ready ? (
                     <Link href={`/connections/${k.id}`} className={`${linkButton} self-start`}>
                       Connect
@@ -318,7 +318,7 @@ export function ConnectPage({ connector, connected, forId, failed }: { connector
           <li
             key={label}
             aria-current={i === at ? "step" : undefined}
-            className={`rounded-full px-3 py-1.5 ${i === at && step !== "done" ? "bg-accent-soft text-accent-text" : i < at || step === "done" ? "bg-good-soft text-good-text" : "text-muted shadow-[inset_0_0_0_1px_var(--color-line)]"}`}
+            className={`rounded-md px-3 py-1.5 ${i === at && step !== "done" ? "bg-accent-soft text-accent-text" : i < at || step === "done" ? "bg-good-soft text-good-text" : "text-muted shadow-[inset_0_0_0_1px_var(--color-line)]"}`}
           >
             {label}
           </li>
@@ -429,7 +429,7 @@ export function ConnectPage({ connector, connected, forId, failed }: { connector
 
 function BackLink() {
   return (
-    <Link href="/connections" className="-mb-2 -ml-2 inline-flex min-h-11 items-center self-start rounded-full px-2 text-sm font-semibold text-accent-text no-underline hover:bg-accent-soft">
+    <Link href="/connections" className="-mb-2 -ml-2 inline-flex min-h-11 items-center self-start rounded-lg px-2 text-sm font-semibold text-accent-text no-underline hover:bg-accent-soft">
       ‹ Connections
     </Link>
   );
@@ -470,7 +470,7 @@ export function AgentToolsPage({ id }: { id: string }) {
 
   if (missing) return <p role="alert" className="p-10 text-bad-text">We can&apos;t find that agent among yours.</p>;
   const name = agent?.name ?? "They";
-  const pill = (v: string) => `flex-none rounded-full px-2.5 py-0.5 text-xs font-semibold ${v === "auto" ? "bg-good-soft text-good-text" : v === "ask" ? "bg-warn-soft text-warn-text" : "bg-surface-2 text-muted"}`;
+  const pill = (v: string) => `flex-none rounded-md px-2.5 py-0.5 text-xs font-semibold ${v === "auto" ? "bg-good-soft text-good-text" : v === "ask" ? "bg-warn-soft text-warn-text" : "bg-surface-2 text-muted"}`;
   return (
     <div className="flex max-w-[860px] flex-col gap-6 px-10 pt-8 pb-12 max-[900px]:px-4 max-[900px]:pt-3">
       <Back id={id} />
@@ -558,7 +558,7 @@ export function AgentToolsPage({ id }: { id: string }) {
                     </Link>
                   </div>
                 ) : (
-                  <span className="self-start rounded-full bg-surface-2 px-2.5 py-1 text-xs font-semibold text-muted">Coming soon</span>
+                  <span className="self-start rounded-md bg-surface-2 px-2.5 py-1 text-xs font-semibold text-muted">Coming soon</span>
                 )}
               </article>
             )}

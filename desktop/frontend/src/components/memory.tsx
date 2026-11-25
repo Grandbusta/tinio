@@ -33,7 +33,7 @@ function Row({ f, onCorrect, onForget }: { f: Fact; onCorrect: (f: Fact, text: s
   const [draft, setDraft] = useState(f.text);
   const [busy, setBusy] = useState(false);
   const link = "min-h-9 text-[13px] font-semibold text-accent-text hover:underline";
-  const button = "inline-flex min-h-9 items-center rounded-full px-3.5 text-[13px] font-semibold disabled:opacity-60";
+  const button = "inline-flex min-h-9 items-center rounded-lg px-3.5 text-[13px] font-semibold disabled:opacity-60";
   return (
     <li className={`flex flex-col gap-2 rounded-lg border px-4 py-3 ${mode === "edit" ? "border-accent bg-accent-soft" : "border-line"}`}>
       {mode === "edit" ? (

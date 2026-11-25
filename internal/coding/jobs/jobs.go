@@ -28,6 +28,7 @@ import (
 	"github.com/Grandbusta/tinio/internal/coding"
 	"github.com/Grandbusta/tinio/internal/db"
 	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
 	"github.com/Grandbusta/tinio/internal/store"
 )
 
@@ -38,6 +39,7 @@ type Settings struct {
 	Copy      bool   // on a copy of the repository, on its own branch
 	Minutes   int    // the longest a job runs before it's stopped
 	MaxSteps  int
+	Review    bool // the agent checks each round before the owner sees it
 }
 
 // Statuses of a job.
@@ -62,9 +64,26 @@ type Service struct {
 	// Adapter starts jobs; nil: Claude Code, as the Finder finds it.
 	Adapter coding.Adapter
 
-	ctx  context.Context
-	mu   sync.Mutex
-	runs map[string]*run // by job id: those with a CLI running
+	ctx      context.Context
+	mu       sync.Mutex
+	runs     map[string]*run   // by job id: those with a CLI running
+	reviewer system2.Reasoner // what agents check work with; nil: they don't
+	gates    map[string]*coding.Gate // by job id: what the owner allowed for the job, kept across its rounds
+}
+
+// gate is job's gate, the same each round while Tinio runs.
+func (s *Service) gate(j Job) *coding.Gate {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.gates == nil {
+		s.gates = map[string]*coding.Gate{}
+	}
+	g, ok := s.gates[j.ID]
+	if !ok {
+		g = &coding.Gate{Rules: coding.Rules{Dir: j.Dir, Commands: coding.Commands(j.Dir)}}
+		s.gates[j.ID] = g
+	}
+	return g
 }
 
 // Start is the service, from now until ctx is done. Jobs that were running
@@ -184,6 +203,7 @@ type Card struct {
 	Rounds  int      `json:"rounds"`
 	Commit  string   `json:"commit"` // its commit's short sha, on the owner's yes
 	PR      string   `json:"pr"`     // its pull request, on their second
+	Verdict string   `json:"verdict"` // the agent's word on it, once they've checked it
 }
 
 func cardOf(j Job) Card {
@@ -314,7 +334,7 @@ func (s *Service) Begin(ctx context.Context, agent string, f Folder, title, brie
 	}
 	s.step(ctx, j.ID, WhoAgent, "Wrote the brief", j.Brief)
 	s.step(ctx, j.ID, WhoOwner, "Started the job", "")
-	r := &run{s: s, job: j, card: c, gate: &coding.Gate{Rules: coding.Rules{Dir: j.Dir, Commands: coding.Commands(j.Dir)}}, asks: map[string]pending{}, over: make(chan struct{})}
+	r := &run{s: s, job: j, card: c, gate: s.gate(j), asks: map[string]pending{}, over: make(chan struct{})}
 	r.owner = s.ownerName(ctx, agent)
 	s.mu.Lock()
 	s.runs[id] = r
@@ -380,6 +400,10 @@ func (s *Service) Answer(ctx context.Context, agent, job, ask, answer, note stri
 // has finished or stopped, carrying it on with them.
 func (s *Service) Reply(ctx context.Context, agent, job, text string) error {
 	if r, ok := s.running(agent, job); ok {
+		if r.hear(text) {
+			s.step(ctx, job, WhoOwner, "Sent more", text)
+			return nil
+		}
 		if st := r.snapshot().Status; st == Working || st == Waiting {
 			if err := r.send(text); err == nil {
 				return nil
@@ -394,6 +418,12 @@ func (s *Service) Reply(ctx context.Context, agent, job, text string) error {
 	if j.Session == "" || j.Status == Cancelled {
 		return ErrNoJob
 	}
+	s.step(ctx, j.ID, WhoOwner, "Sent more", text)
+	return s.carryOn(ctx, j, text, "Carrying on with what you said")
+}
+
+// carryOn starts another round of j, in its CLI session, with text.
+func (s *Service) carryOn(ctx context.Context, j Job, text, now string) error {
 	ad, err := s.adapter()
 	if err != nil {
 		return err
@@ -403,10 +433,9 @@ func (s *Service) Reply(ctx context.Context, agent, job, text string) error {
 		return err
 	}
 	j.Status, j.EndedAt = Working, time.Time{}
-	s.step(ctx, j.ID, WhoOwner, "Sent more", text)
-	r := &run{s: s, job: j, card: s.card(ctx, j), gate: &coding.Gate{Rules: coding.Rules{Dir: j.Dir, Commands: coding.Commands(j.Dir)}}, asks: map[string]pending{}, over: make(chan struct{})}
-	r.owner = s.ownerName(ctx, agent)
-	r.card.Now, r.card.Status, r.card.Summary = "Carrying on with what you said", Working, ""
+	r := &run{s: s, job: j, card: s.card(ctx, j), gate: s.gate(j), asks: map[string]pending{}, over: make(chan struct{})}
+	r.owner = s.ownerName(ctx, j.Agent)
+	r.card.Now, r.card.Status, r.card.Summary, r.card.Verdict = now, Working, "", ""
 	s.mu.Lock()
 	s.runs[j.ID] = r
 	s.mu.Unlock()

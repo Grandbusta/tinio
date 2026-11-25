@@ -8,7 +8,7 @@ import { call, type Judgment, type Principle } from "@/lib/api";
 // you've kept here; ones their weekly look back draws from your calls wait for you. Below,
 // the calls you answered and what they'd guessed.
 
-const button = "inline-flex min-h-9 items-center justify-center rounded-full px-3.5 text-[13px] font-semibold disabled:opacity-60";
+const button = "inline-flex min-h-9 items-center justify-center rounded-lg px-3.5 text-[13px] font-semibold disabled:opacity-60";
 
 function origin(p: Principle, name: string) {
   const from =

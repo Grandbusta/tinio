@@ -122,9 +122,9 @@ export function SettingsPage({ id }: { id: string }) {
                     <span className="text-[13px] text-muted">{info.note}</span>
                   </div>
                   {c.choices.length === 0 ? (
-                    <span className="rounded-full bg-surface-2 px-3 py-1.5 text-[13px] font-semibold text-muted">{verdictName[c.verdict]}</span>
+                    <span className="rounded-md bg-surface-2 px-3 py-1.5 text-[13px] font-semibold text-muted">{verdictName[c.verdict]}</span>
                   ) : (
-                    <div role="group" aria-label={info.label} className="flex flex-wrap gap-1 rounded-full border border-line bg-surface-2 p-1">
+                    <div role="group" aria-label={info.label} className="flex flex-wrap gap-1 rounded-xl border border-line bg-surface-2 p-1">
                       {c.choices.map((v) => (
                         <button
                           key={v}
@@ -132,7 +132,7 @@ export function SettingsPage({ id }: { id: string }) {
                           disabled={busy}
                           aria-pressed={c.verdict === v}
                           onClick={() => c.verdict !== v && save({ classes: { [c.class]: v } })}
-                          className={`min-h-9 rounded-full px-3 text-[13px] font-semibold disabled:cursor-wait ${c.verdict === v ? "bg-bg text-accent-text shadow-sm" : "text-muted hover:text-fg"}`}
+                          className={`min-h-9 rounded-lg px-3 text-[13px] font-semibold disabled:cursor-wait ${c.verdict === v ? "bg-bg text-accent-text shadow-sm" : "text-muted hover:text-fg"}`}
                         >
                           {verdictName[v]}
                         </button>
@@ -209,12 +209,12 @@ export function SettingsPage({ id }: { id: string }) {
                 <button
                   type="submit"
                   disabled={busy || (quiet.from === s.quiet.from && quiet.until === s.quiet.until) || !quiet.from !== !quiet.until}
-                  className="min-h-11 rounded-full bg-accent px-4 text-[13px] font-semibold text-accent-ink hover:bg-accent-hover disabled:opacity-50"
+                  className="min-h-11 rounded-lg bg-accent px-4 text-[13px] font-semibold text-accent-ink hover:bg-accent-hover disabled:opacity-50"
                 >
                   Save
                 </button>
                 {s.quiet.from && (
-                  <button type="button" disabled={busy} onClick={() => save({ quiet: { from: "", until: "" } })} className="min-h-11 rounded-full border border-line-strong px-4 text-[13px] font-semibold hover:border-fg">
+                  <button type="button" disabled={busy} onClick={() => save({ quiet: { from: "", until: "" } })} className="min-h-11 rounded-lg border border-line-strong px-4 text-[13px] font-semibold hover:border-fg">
                     No quiet hours
                   </button>
                 )}
@@ -229,14 +229,14 @@ export function SettingsPage({ id }: { id: string }) {
                 <b className="text-[15px] font-semibold">In your browser</b>
                 <span className="text-[13px] text-muted">Always on, on any device.</span>
               </div>
-              <span className="rounded-full bg-good-soft px-2.5 py-1 text-xs font-semibold text-good-text">On</span>
+              <span className="rounded-md bg-good-soft px-2.5 py-1 text-xs font-semibold text-good-text">On</span>
             </div>
             <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
               <div className="flex flex-col">
                 <b className="text-[15px] font-semibold">Telegram</b>
                 <span className="text-[13px] text-muted">{name} gets their own bot. Coming soon.</span>
               </div>
-              <span className="rounded-full px-2.5 py-1 text-xs font-semibold text-muted shadow-[inset_0_0_0_1px_var(--color-line)]">Soon</span>
+              <span className="rounded-md px-2.5 py-1 text-xs font-semibold text-muted shadow-[inset_0_0_0_1px_var(--color-line)]">Soon</span>
             </div>
           </section>
 
@@ -262,7 +262,7 @@ export function SettingsPage({ id }: { id: string }) {
                 type="button"
                 disabled={busy}
                 onClick={() => pause(!s.paused)}
-                className={`min-h-10 rounded-full px-4 text-[13px] font-semibold ${s.paused ? "bg-accent text-accent-ink hover:bg-accent-hover" : "border border-line-strong hover:border-fg"}`}
+                className={`min-h-10 rounded-lg px-4 text-[13px] font-semibold ${s.paused ? "bg-accent text-accent-ink hover:bg-accent-hover" : "border border-line-strong hover:border-fg"}`}
               >
                 {s.paused ? "Resume" : "Pause"}
               </button>
@@ -274,7 +274,7 @@ export function SettingsPage({ id }: { id: string }) {
                   <span className="text-[13px] text-muted">Their memory, what they made, their chat and their files go for good. It can&apos;t be undone.</span>
                 </div>
                 {!deleting && (
-                  <button type="button" onClick={() => setDeleting(true)} className="min-h-10 rounded-full border border-bad px-4 text-[13px] font-semibold text-bad-text hover:bg-bad-soft">
+                  <button type="button" onClick={() => setDeleting(true)} className="min-h-10 rounded-lg border border-bad px-4 text-[13px] font-semibold text-bad-text hover:bg-bad-soft">
                     Delete
                   </button>
                 )}
@@ -293,11 +293,11 @@ export function SettingsPage({ id }: { id: string }) {
                     <button
                       type="submit"
                       disabled={busy || confirm.trim().toLowerCase() !== name.toLowerCase()}
-                      className="min-h-11 rounded-full bg-bad px-4 text-[13px] font-semibold text-white disabled:opacity-50"
+                      className="min-h-11 rounded-lg bg-bad px-4 text-[13px] font-semibold text-white disabled:opacity-50"
                     >
                       Delete {name} for good
                     </button>
-                    <button type="button" onClick={() => (setDeleting(false), setConfirm(""))} className="min-h-11 rounded-full border border-line-strong px-4 text-[13px] font-semibold hover:border-fg">
+                    <button type="button" onClick={() => (setDeleting(false), setConfirm(""))} className="min-h-11 rounded-lg border border-line-strong px-4 text-[13px] font-semibold hover:border-fg">
                       Cancel
                     </button>
                   </div>

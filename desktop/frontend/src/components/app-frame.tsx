@@ -381,7 +381,7 @@ function List({ open, fold, over, className }: { open?: string; fold: () => void
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search your agents"
-          className="min-h-11 rounded-full border border-line-strong bg-surface px-4 text-[15px] focus:outline-2 focus:outline-offset-1 focus:outline-accent"
+          className="min-h-11 rounded-lg border border-line-strong bg-surface px-4 text-[15px] focus:outline-2 focus:outline-offset-1 focus:outline-accent"
         />
         <div role="group" aria-label="Show" className="flex flex-wrap gap-2">
           {filters.map(([id, label]) => (
@@ -393,7 +393,7 @@ function List({ open, fold, over, className }: { open?: string; fold: () => void
                 setFilter(id);
                 setKept("");
               }}
-              className={`min-h-9 rounded-full px-3.5 text-[13px] font-semibold ${filter === id ? "bg-fg text-bg" : "text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)]"}`}
+              className={`min-h-9 rounded-lg px-3.5 text-[13px] font-semibold ${filter === id ? "bg-fg text-bg" : "text-fg shadow-[inset_0_0_0_1px_var(--color-line-strong)]"}`}
             >
               {label}
             </button>
@@ -477,7 +477,7 @@ function Faces({ open, unfold }: { open?: string; unfold: () => void }) {
               aria-current={current ? "page" : undefined}
               aria-label={label}
               title={label}
-              className={`relative grid size-[52px] flex-none place-items-center rounded-[14px] ${current ? "bg-accent-soft" : "hover:bg-surface-2"}`}
+              className={`relative grid size-[52px] flex-none place-items-center rounded-xl ${current ? "bg-accent-soft" : "hover:bg-surface-2"}`}
             >
               <span className={`grid place-items-center rounded-full ${a.waiting > 0 ? "ring-[3px] ring-warn-text" : ""}`}>
                 <Avatar agent={a} size={40} />
@@ -518,7 +518,7 @@ function Row({ agent: a, current, unread, onOpen }: { agent: Summary; current: b
         </span>
         <span className="flex items-center gap-1.5">
           <span className={`min-w-0 flex-auto truncate text-sm ${unread ? "font-medium text-fg" : "text-muted"}`}>{preview}</span>
-          {a.waiting > 0 && <span className="flex-none rounded-full bg-warn-soft px-2 py-0.5 text-[11.5px] font-bold text-warn-text">Needs you</span>}
+          {a.waiting > 0 && <span className="flex-none rounded-md bg-warn-soft px-2 py-0.5 text-[11.5px] font-bold text-warn-text">Needs you</span>}
           {unread > 0 && (
             <span className="grid h-5 min-w-5 flex-none place-items-center rounded-full bg-accent px-1.5 text-xs font-bold text-accent-ink" aria-label={`${unread} unread`}>
               {unread}
@@ -538,7 +538,7 @@ export function Back({ id }: { id: string }) {
     <Link
       href={`/agents/${id}?about`}
       aria-label={agent ? `Back to About ${agent.name}` : "Back"}
-      className="-ml-2 inline-flex min-h-11 items-center gap-1 self-start rounded-full px-2 text-sm font-semibold text-accent-text hover:bg-accent-soft"
+      className="-ml-2 inline-flex min-h-11 items-center gap-1 self-start rounded-lg px-2 text-sm font-semibold text-accent-text hover:bg-accent-soft"
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M15 6l-6 6 6 6" />

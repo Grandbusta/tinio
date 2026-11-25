@@ -12,7 +12,7 @@ import { call, type CharacterSheet } from "@/lib/api";
 type Draft = { story: string[]; personality: string[] };
 const field =
   "min-h-11 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-3.5 text-[15px] focus:outline-2 focus:outline-offset-1 focus:outline-accent";
-const button = "inline-flex min-h-10 items-center justify-center rounded-full px-4 text-[13px] font-semibold disabled:opacity-60";
+const button = "inline-flex min-h-10 items-center justify-center rounded-lg px-4 text-[13px] font-semibold disabled:opacity-60";
 
 function draftOf(c: CharacterSheet): Draft {
   return { story: [...c.story], personality: [...c.personality] };
@@ -130,11 +130,11 @@ export function CharacterPage({ id }: { id: string }) {
         </p>
       </div>
       <div role="group" aria-label="Sections" className="flex flex-wrap gap-1 border-b border-line pb-2.5">
-        <span className="inline-flex min-h-10 items-center rounded-full bg-surface-2 px-3.5 text-sm font-semibold text-fg">Character</span>
-        <Link href={`/agents/${id}/settings#mornings`} className="inline-flex min-h-10 items-center rounded-full px-3.5 text-sm font-medium text-muted hover:text-fg">
+        <span className="inline-flex min-h-10 items-center rounded-lg bg-surface-2 px-3.5 text-sm font-semibold text-fg">Character</span>
+        <Link href={`/agents/${id}/settings#mornings`} className="inline-flex min-h-10 items-center rounded-lg px-3.5 text-sm font-medium text-muted hover:text-fg">
           Mornings
         </Link>
-        <Link href={`/agents/${id}/judgment`} className="inline-flex min-h-10 items-center rounded-full px-3.5 text-sm font-medium text-muted hover:text-fg">
+        <Link href={`/agents/${id}/judgment`} className="inline-flex min-h-10 items-center rounded-lg px-3.5 text-sm font-medium text-muted hover:text-fg">
           How you decide
         </Link>
       </div>
@@ -151,7 +151,7 @@ export function CharacterPage({ id }: { id: string }) {
                     <span className="text-sm font-semibold">What {name} makes</span>
                     <div className="flex flex-wrap gap-2">
                       {c.makes.map((m) => (
-                        <span key={m.kind} title={m.about} className="rounded-full bg-accent-soft px-3 py-1.5 text-[13px] font-semibold text-accent-text first-letter:uppercase">
+                        <span key={m.kind} title={m.about} className="rounded-md bg-accent-soft px-3 py-1.5 text-[13px] font-semibold text-accent-text first-letter:uppercase">
                           {m.kind}
                         </span>
                       ))}
@@ -178,7 +178,7 @@ export function CharacterPage({ id }: { id: string }) {
                     <span className="text-xs text-muted">{when(v.at)}</span>
                   </div>
                   {i === 0 ? (
-                    <span className="rounded-full bg-good-soft px-2.5 py-[3px] text-xs font-semibold text-good-text">In use</span>
+                    <span className="rounded-md bg-good-soft px-2.5 py-[3px] text-xs font-semibold text-good-text">In use</span>
                   ) : (
                     <button type="button" disabled={busy} onClick={() => goBack(v.id)} className={`${button} min-h-8 border border-line-strong px-3 text-xs hover:border-fg`}>
                       Go back

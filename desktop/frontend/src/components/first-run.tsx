@@ -94,7 +94,7 @@ export function KeyForm({ onSaved, first }: { onSaved?: () => void; first?: bool
     return (
       <div className="flex flex-wrap items-center gap-3">
         <span className="font-mono text-sm">{k.shown}</span>
-        <button type="button" onClick={() => setEditing(true)} className="min-h-10 rounded-full border border-line-strong px-4 text-[13px] font-semibold hover:border-fg">
+        <button type="button" onClick={() => setEditing(true)} className="min-h-10 rounded-lg border border-line-strong px-4 text-[13px] font-semibold hover:border-fg">
           Change
         </button>
       </div>
@@ -135,12 +135,12 @@ export function KeyForm({ onSaved, first }: { onSaved?: () => void; first?: bool
         <button
           type="submit"
           disabled={saving || value.trim() === ""}
-          className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-ink hover:bg-accent-hover disabled:opacity-50"
+          className="min-h-11 rounded-lg bg-accent px-5 text-sm font-semibold text-accent-ink hover:bg-accent-hover disabled:opacity-50"
         >
           {saving ? "Saving" : first ? "Continue" : "Save"}
         </button>
         {editing && (
-          <button type="button" onClick={() => setEditing(false)} className="min-h-11 rounded-full px-4 text-sm font-semibold text-muted hover:text-fg">
+          <button type="button" onClick={() => setEditing(false)} className="min-h-11 rounded-lg px-4 text-sm font-semibold text-muted hover:text-fg">
             Cancel
           </button>
         )}
@@ -180,7 +180,7 @@ export function FirstRun({ sources, onDone, onSkip, onAgain }: { sources: Source
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
           <b className="text-base">{name}</b>
-          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted">{pill}</span>
+          <span className="rounded-md bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted">{pill}</span>
         </span>
         <span className="text-[13.5px] text-muted">{status}</span>
       </span>
@@ -244,14 +244,14 @@ export function FirstRun({ sources, onDone, onSkip, onAgain }: { sources: Source
               type="button"
               onClick={useClaude}
               disabled={saving}
-              className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-ink hover:bg-accent-hover disabled:opacity-50"
+              className="min-h-11 rounded-lg bg-accent px-5 text-sm font-semibold text-accent-ink hover:bg-accent-hover disabled:opacity-50"
             >
               {saving ? "Starting" : "Use Claude Code"}
             </button>
           ) : (
             <span />
           )}
-          <button type="button" onClick={onSkip} className="min-h-11 rounded-full px-4 text-sm font-semibold text-muted hover:bg-surface-2 hover:text-fg">
+          <button type="button" onClick={onSkip} className="min-h-11 rounded-lg px-4 text-sm font-semibold text-muted hover:bg-surface-2 hover:text-fg">
             Skip for now
           </button>
         </div>
@@ -292,7 +292,7 @@ export function NoKey({ name, compact }: { name?: string; compact?: boolean }) {
       </div>
       <Link
         href="/settings"
-        className="inline-flex min-h-9 items-center rounded-full bg-accent px-3.5 text-[13px] font-semibold text-accent-ink no-underline hover:bg-accent-hover"
+        className="inline-flex min-h-9 items-center rounded-lg bg-accent px-3.5 text-[13px] font-semibold text-accent-ink no-underline hover:bg-accent-hover"
       >
         Choose in Settings
       </Link>

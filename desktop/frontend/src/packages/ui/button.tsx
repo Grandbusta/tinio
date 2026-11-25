@@ -4,7 +4,7 @@ import type { AnchorHTMLAttributes, ButtonHTMLAttributes } from "react";
 type Kind = "primary" | "secondary";
 
 const base =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold " +
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold " +
   "transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent " +
   "disabled:cursor-not-allowed disabled:opacity-50";
 const kinds: Record<Kind, string> = {

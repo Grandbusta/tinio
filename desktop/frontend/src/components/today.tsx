@@ -96,7 +96,7 @@ export function TodayPage({ id }: { id?: string }) {
                             {it.how && <span className="text-sm text-muted">{it.how}</span>}
                             <div className="flex flex-wrap items-center gap-2">
                               {it.work && (
-                                <Link href={`/agents/${d.agent}/works/${it.work.id}`} className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-accent-soft px-3 text-[13px] font-semibold text-accent-text hover:brightness-95">
+                                <Link href={`/agents/${d.agent}/works/${it.work.id}`} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-accent-soft px-3 text-[13px] font-semibold text-accent-text hover:brightness-95">
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                     <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
                                     <path d="M14 3v5h5" />
@@ -107,7 +107,7 @@ export function TodayPage({ id }: { id?: string }) {
                               <span className="text-xs text-muted first-letter:uppercase">{it.source}</span>
                             </div>
                           </div>
-                          {it.done && <span className="self-start rounded-full bg-good-soft px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-good-text">Done</span>}
+                          {it.done && <span className="self-start rounded-md bg-good-soft px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-good-text">Done</span>}
                         </li>
                       ))}
                     </ol>
@@ -134,7 +134,7 @@ export function TodayPage({ id }: { id?: string }) {
               <section aria-labelledby="waiting" className="flex flex-col gap-3 rounded-lg border border-line px-5 py-[18px]">
                 <div className="flex items-center justify-between gap-2.5">
                   <h2 id="waiting" className="font-display text-base font-semibold tracking-[-0.02em]">Waiting on you</h2>
-                  <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-bold text-accent-ink">{waiting}</span>
+                  <span className="rounded-md bg-accent px-2.5 py-0.5 text-xs font-bold text-accent-ink">{waiting}</span>
                 </div>
                 {days
                   .filter((d) => d.waiting > 0)

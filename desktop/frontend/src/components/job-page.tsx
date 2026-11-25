@@ -7,8 +7,8 @@ import { ServiceLogo } from "@/components/service-logo";
 import { call } from "@/lib/api";
 
 // A coding job, opened from its card: what happened, told by who did it; its changes, by
-// file and by round, where a tapped line takes a note that goes back with "Send it back";
-// and the decision: commit it (on its branch, on this computer), send it back, or go back
+// file and by round, where a tapped line takes a note that goes with "Ask for changes";
+// and the decision: commit it (on its branch, on this computer), ask for changes, or undo
 // a round. Once committed, pushing it and opening a pull request is a second yes.
 
 type Job = {
@@ -79,6 +79,7 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
   const [committing, setCommitting] = useState(false);
   const [message, setMessage] = useState("");
   const [pushing, setPushing] = useState(false);
+  const [undoing, setUndoing] = useState(false);
 
   const load = useCallback(() => {
     call<Page>(`/agents/${agent}/jobs/${job}${round ? `?round=${round}` : ""}`).then((res) => {
@@ -114,6 +115,8 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
   const added = page.changes.reduce((n, c) => n + c.added, 0);
   const removed = page.changes.reduce((n, c) => n + c.removed, 0);
   const finished = [...page.steps].reverse().find((s) => s.who === "cli" && (s.what === "Finished" || s.what === "Stopped"));
+  const checked = [...page.steps].reverse().find((s) => s.who === "agent" && s.what.startsWith("Checked it"));
+  const verdict = j.status === "ready" && checked && checked.what !== "Checked it and sent it back" ? checked.detail : "";
   const [label, tone] = pill[j.status] ?? pill.working;
   const canDecide = !going && !j.commit;
 
@@ -128,7 +131,7 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
         </Link>
         <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
           <h1 className="font-display text-[28px] leading-tight font-medium tracking-[-0.02em]">{j.title}</h1>
-          <span className={`rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold ${tone}`}>{j.commit && !j.pr ? "Committed" : j.pr ? "Pull request open" : label}</span>
+          <span className={`rounded-md px-2.5 py-0.5 text-[12.5px] font-semibold ${tone}`}>{j.commit && !j.pr ? "Committed" : j.pr ? "Pull request open" : label}</span>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13.5px] text-fg/75">
           <span>{j.folder}</span>
@@ -163,16 +166,23 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
                 <span className="flex min-w-0 flex-col">
                   <span className="text-xs font-semibold text-muted">{who(s)}</span>
                   <span className="text-sm">{s.what}</span>
-                  {s.detail && s.what !== "Wrote the brief" && s.what !== "Finished" && !s.what.includes(s.detail.slice(0, 24)) && (
-                    <span className="line-clamp-3 font-mono text-[12px] break-all text-muted">{s.detail}</span>
-                  )}
-                  {s.detail && (s.what === "Wrote the brief" || s.what === "Finished") && (
+                  {s.detail && (s.what === "Wrote the brief" || s.what === "Finished") ? (
                     <details className="text-[13px]">
                       <summary className="cursor-pointer text-accent-text">Read it</summary>
                       <div className="mt-1 text-fg/85">
                         <MessageText text={s.detail} />
                       </div>
                     </details>
+                  ) : s.detail && s.what.startsWith("Ran ") ? (
+                    <details className="text-[13px]">
+                      <summary className="cursor-pointer text-accent-text">What it printed</summary>
+                      <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-surface-2 p-2 font-mono text-[11.5px] whitespace-pre-wrap">{s.detail}</pre>
+                    </details>
+                  ) : s.detail && (s.who === "agent" || s.who === "owner") ? (
+                    <span className="text-[13px] text-fg/80">{s.detail}</span>
+                  ) : (
+                    s.detail &&
+                    !s.what.includes(s.detail.slice(0, 24)) && <span className="line-clamp-3 font-mono text-[12px] break-all text-muted">{s.detail}</span>
                   )}
                 </span>
               </li>
@@ -201,7 +211,7 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
                     setRound(r);
                     setFile(0);
                   }}
-                  className="min-h-9 rounded-full border border-line-strong px-3 text-[13px] font-semibold aria-pressed:border-fg aria-pressed:bg-fg aria-pressed:text-bg"
+                  className="min-h-9 rounded-lg border border-line-strong px-3 text-[13px] font-semibold aria-pressed:border-fg aria-pressed:bg-fg aria-pressed:text-bg"
                 >
                   {r === 0 ? "All of it" : `Round ${r}`}
                 </button>
@@ -342,6 +352,23 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
               </Button>
             </div>
           </form>
+        ) : undoing ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-sm">
+              {j.rounds > 1
+                ? `This puts the job's copy back as it was after round ${j.rounds - 1}, and round ${j.rounds}'s changes are gone.`
+                : "This puts the job's copy back as it was before the job started, and all its changes are gone."}{" "}
+              Only the job's own copy changes: your checkout and {j.base} are untouched. It can't be redone.
+            </span>
+            <div className="flex gap-2">
+              <Button kind="primary" type="button" disabled={!!busy} onClick={() => act("goback", "goback", {}, () => setUndoing(false))}>
+                {busy === "goback" ? "Undoing" : j.rounds > 1 ? "Undo the last round" : "Discard the changes"}
+              </Button>
+              <Button type="button" onClick={() => setUndoing(false)}>
+                Keep them
+              </Button>
+            </div>
+          </div>
         ) : pushing ? (
           <div className="flex flex-col gap-2">
             <span className="text-sm">
@@ -365,8 +392,10 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
                   ? "The pull request is open. Carry the job on from its card to change it."
                   : j.commit
                     ? `Committed on ${j.branch || j.base}, on this computer.`
-                    : page.changes.length
-                      ? "Look it over: commit it, send it back with your notes, or go back a round."
+                    : verdict
+                      ? `${name}: ${verdict}`
+                      : page.changes.length
+                      ? "Look it over: commit it, ask for changes, or undo it."
                       : "It made no changes."}
             </span>
             {canDecide && (
@@ -378,15 +407,15 @@ export function JobPage({ agent, job }: { agent: string; job: string }) {
                   id="back-note"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="What to change (for Send it back)"
-                  className="min-h-10 min-w-0 flex-[1_1_220px] rounded-full border border-line-strong bg-surface px-4 text-sm"
+                  placeholder="What to change"
+                  className="min-h-10 min-w-0 flex-[1_1_220px] rounded-lg border border-line-strong bg-surface px-4 text-sm"
                 />
                 <Button type="button" disabled={!!busy || (!note.trim() && notes.length === 0)} onClick={() => act("back", "back", { note, lines: notes }, () => (setNotes([]), setNote("")))}>
-                  {busy === "back" ? "Sending" : "Send it back"}
+                  {busy === "back" ? "Asking" : "Ask for changes"}
                 </Button>
                 {j.rounds > 0 && (
-                  <Button type="button" disabled={!!busy} onClick={() => act("goback", "goback", {})}>
-                    Go back a round
+                  <Button type="button" disabled={!!busy} onClick={() => setUndoing(true)}>
+                    {j.rounds > 1 ? "Undo the last round" : "Discard the changes"}
                   </Button>
                 )}
                 {page.changes.length > 0 && (

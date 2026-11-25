@@ -86,10 +86,23 @@ you, and the name shows on hover; the app remembers your choice. A job or a work
 folds it on its own, and so does a window between 901 and 1100px wide, where opening it
 lays it over the page until you pick a chat. The chat keeps a reading width, centred.
 
+**Squarer corners:** buttons, inputs and chips have 8px corners and status pills 6px,
+where they were fully round; the message box and segmented controls 12px. Avatars, dots,
+round icon buttons and progress bars stay round.
+
+**The agent checks the work:** when Claude Code finishes a round, the agent checks it
+before you see it. Tinio runs the repository's tests in the copy, and the agent reads the
+changes against the brief, what you asked for since, and the repository's rules. Not
+right: it sends it back to Claude Code saying what to fix, up to three times for each
+thing you ask. Right: it's ready for you, with the agent's word on its card ("Kenji
+checked it") and on its page, and the history shows each check. What you say while it's
+being checked goes into the next round. What you allow for a job is kept across its
+rounds. It's on by default; Settings › Coding jobs turns it off.
+
 **A job's page:** open a job from its card to see what happened, told by who did it (the
 agent, Claude Code, you), and its changes, file by file, for the whole job or one round at
-a time. Tap a line to say something about it; Send it back takes your notes, and the line
-each is about, for another round. Go back a round undoes the last one. Commit it commits
+a time. Tap a line to say something about it; Ask for changes takes your notes, and the line
+each is about, for another round. Undo the last round (Discard the changes, after one round) puts the copy back, once you confirm. Commit it commits
 on the job's branch, on this computer, as you; then, if the repository has an origin and
 GitHub's gh is signed in, Push and open a pull request is a second yes.
 

@@ -100,7 +100,7 @@ export function PickCharacter() {
                   <span className="text-xs font-semibold tracking-[0.04em] text-muted uppercase">Born with</span>
                   <div className="flex flex-wrap gap-1.5">
                     {current.born_with.map((s) => (
-                      <span key={s} className="rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium">{s}</span>
+                      <span key={s} className="rounded-md bg-surface-2 px-2.5 py-1 text-xs font-medium">{s}</span>
                     ))}
                   </div>
                 </div>

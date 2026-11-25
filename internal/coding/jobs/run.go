@@ -31,6 +31,11 @@ type run struct {
 	shown   time.Time          // when the card was last shown
 	stop    context.CancelFunc
 	over    chan struct{} // closed when the CLI has ended
+	again   string        // what the agent sent back, for another round once this one is over
+	// While the agent checks a round the CLI isn't listening: what the owner
+	// says then goes into the next round.
+	reviewing bool
+	heard     []string
 	showing sync.Mutex    // one card update at a time, each of the latest state
 }
 
@@ -87,6 +92,22 @@ func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {
 		}
 		r.s.mu.Unlock()
 		close(r.over)
+		r.mu.Lock()
+		again := r.again
+		if len(r.heard) > 0 {
+			if again != "" {
+				again += "\n\n"
+			}
+			again += r.owner + " also said: " + strings.Join(r.heard, "\n")
+		}
+		r.mu.Unlock()
+		if again != "" && !r.cancelled() {
+			// The agent sent it back: another round, in the same session.
+			if err := r.s.carryOn(r.s.ctx, r.snapshot(), again, "Doing another round"); err != nil {
+				r.s.Log.Warn("jobs: sending the job back failed", "job", r.job.ID, "err", err)
+				r.finish(Stopped, "It couldn't go back for another round: "+err.Error())
+			}
+		}
 	}()
 
 	sess, err := ad.Start(ctx, cj)
@@ -114,7 +135,7 @@ func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {
 			r.mu.Unlock()
 			r.now(doing(e.Tool, e.Input), false)
 			if e.Tool != "TodoWrite" {
-				r.s.step(context.Background(), r.job.ID, WhoCLI, doing(e.Tool, e.Input), detail(e.Tool, e.Input))
+				r.s.step(context.Background(), r.job.ID, WhoCLI, doing(e.Tool, e.Input), strings.ReplaceAll(detail(e.Tool, e.Input), r.job.Dir+string(filepath.Separator), ""))
 			}
 		case coding.Changed:
 			r.mu.Lock()
@@ -131,8 +152,13 @@ func (r *run) drive(ad coding.Adapter, set Settings, cj coding.Job) {
 		case coding.Done:
 			ended = true
 			status := map[string]string{coding.Completed: Ready, coding.Stopped: Stopped, coding.Failed: Failed}[e.Status]
-			r.end(status, e.Text, e)
 			go sess.Close()
+			r.roundOver(status, e.Text, e)
+			if rv := r.s.reviewerNow(); status == Ready && set.Review && rv != nil && !r.cancelled() {
+				r.review(ctx, rv, e.Text)
+			} else {
+				r.finish(status, e.Text)
+			}
 		}
 	}
 	if !ended {
@@ -183,7 +209,15 @@ func (r *run) now(what string, force bool) {
 	}
 }
 
+// end is the round over, and the job with it, as status.
 func (r *run) end(status, text string, e coding.Event) {
+	r.roundOver(status, text, e)
+	r.finish(status, text)
+}
+
+// roundOver is what's kept when the CLI finishes a round: a snapshot of the
+// copy, what it said, what it cost, and the questions it can no longer ask.
+func (r *run) roundOver(status, text string, e coding.Event) {
 	// A snapshot of the copy as the round left it, for its changes and to go back to.
 	if r.job.Dir != "" {
 		if n, err := r.s.checkpoint(context.Background(), r.snapshot()); err != nil {
@@ -197,17 +231,9 @@ func (r *run) end(status, text string, e coding.Event) {
 	what := map[string]string{Ready: "Finished", Stopped: "Stopped", Failed: "Didn't work out", Cancelled: "Stopped by you"}[status]
 	r.s.step(context.Background(), r.job.ID, WhoCLI, what, strings.TrimSpace(text))
 	r.mu.Lock()
-	if r.job.Status == Cancelled {
-		status = Cancelled
-	}
-	r.job.Status, r.card.Status = status, status
-	r.job.EndedAt = time.Now().UTC()
 	r.job.CostUSD += e.CostUSD
 	r.job.Turns += e.Turns
-	r.card.CostUSD, r.card.Asking, r.card.Rounds = r.job.CostUSD, 0, r.job.Rounds
-	r.card.Summary = strings.TrimSpace(text)
-	r.card.Now = map[string]string{Ready: "Done: for you to look at", Stopped: "Stopped: reply here to carry it on",
-		Failed: "It didn't work out", Cancelled: "You stopped it"}[status]
+	r.card.Asking = 0
 	// What's still asked can't be answered now.
 	asks := r.asks
 	r.asks = map[string]pending{}
@@ -217,6 +243,25 @@ func (r *run) end(status, text string, e coding.Event) {
 	for _, p := range asks {
 		st.Settle(context.Background(), p.row, askText(p.event)+"\n\nThe job ended before you answered.", time.Now().UTC())
 	}
+}
+
+// finish ends the job as status, for now: the owner can carry it on.
+func (r *run) finish(status, text string) {
+	r.mu.Lock()
+	if r.job.Status == Cancelled {
+		status = Cancelled
+	}
+	r.job.Status, r.card.Status = status, status
+	r.job.EndedAt = time.Now().UTC()
+	r.card.CostUSD, r.card.Rounds = r.job.CostUSD, r.job.Rounds
+	r.card.Summary = strings.TrimSpace(text)
+	r.card.Now = map[string]string{Ready: "Done: for you to look at", Stopped: "Stopped: reply here to carry it on",
+		Failed: "It didn't work out", Cancelled: "You stopped it"}[status]
+	if status != Ready {
+		r.card.Verdict = ""
+	}
+	j := r.job
+	r.mu.Unlock()
 	r.s.save(context.Background(), j)
 	r.show()
 }

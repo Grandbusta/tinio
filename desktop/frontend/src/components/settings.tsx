@@ -110,7 +110,7 @@ function ThinkSection({ sources, onChange }: { sources: Sources | null; onChange
       type="button"
       disabled={!!switching}
       onClick={() => use(source)}
-      className="min-h-10 rounded-full border border-line-strong px-4 text-[13px] font-semibold hover:border-fg disabled:opacity-50"
+      className="min-h-10 rounded-lg border border-line-strong px-4 text-[13px] font-semibold hover:border-fg disabled:opacity-50"
     >
       {switching === source ? "Starting" : label}
     </button>

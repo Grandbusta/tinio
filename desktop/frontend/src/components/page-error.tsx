@@ -22,11 +22,11 @@ class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-ink hover:bg-accent-hover"
+            className="min-h-11 rounded-lg bg-accent px-5 text-sm font-semibold text-accent-ink hover:bg-accent-hover"
           >
             Try again
           </button>
-          <a href="/agents" className="inline-flex min-h-11 items-center rounded-full border border-line-strong px-5 text-sm font-semibold text-fg no-underline hover:border-fg">
+          <a href="/agents" className="inline-flex min-h-11 items-center rounded-lg border border-line-strong px-5 text-sm font-semibold text-fg no-underline hover:border-fg">
             Your chats
           </a>
         </div>

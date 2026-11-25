@@ -19,7 +19,7 @@ function Ladder({ s }: { s: AgentSkill }) {
         <li
           key={r}
           aria-current={i === at ? "step" : undefined}
-          className={`rounded-full px-2.5 py-2 text-center text-[13px] font-semibold ${
+          className={`rounded-lg px-2.5 py-2 text-center text-[13px] font-semibold ${
             i === at ? "bg-accent text-accent-ink" : i < at ? "bg-accent-soft text-accent-text" : "font-medium text-muted shadow-[inset_0_0_0_1px_var(--color-line)]"
           }`}
         >
@@ -70,7 +70,7 @@ export function SkillsPage({ id }: { id: string }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={`/agents/${id}/skills/import`} className="inline-flex min-h-10 items-center rounded-full bg-accent px-4 text-[13px] font-semibold text-accent-ink no-underline hover:bg-accent-hover hover:text-accent-ink">
+          <Link href={`/agents/${id}/skills/import`} className="inline-flex min-h-10 items-center rounded-lg bg-accent px-4 text-[13px] font-semibold text-accent-ink no-underline hover:bg-accent-hover hover:text-accent-ink">
             Import a skill
           </Link>
         </div>
@@ -130,7 +130,7 @@ export function SkillsPage({ id }: { id: string }) {
                   type="button"
                   disabled={busy === k.name}
                   onClick={() => remove(k.name)}
-                  className="min-h-9 rounded-full border border-line-strong px-3.5 text-[13px] font-semibold hover:border-fg disabled:opacity-60"
+                  className="min-h-9 rounded-lg border border-line-strong px-3.5 text-[13px] font-semibold hover:border-fg disabled:opacity-60"
                 >
                   Remove
                 </button>
@@ -188,7 +188,7 @@ export function SkillImportPage({ id }: { id: string }) {
 
   return (
     <div className="flex max-w-[820px] flex-col gap-5 px-10 pt-8 pb-12 max-[900px]:px-4 max-[900px]:pt-3">
-      <Link href={`/agents/${id}/skills`} className="-ml-2 inline-flex min-h-11 items-center self-start rounded-full px-2 text-sm font-semibold text-accent-text">
+      <Link href={`/agents/${id}/skills`} className="-ml-2 inline-flex min-h-11 items-center self-start rounded-lg px-2 text-sm font-semibold text-accent-text">
         ‹ {agent ? `${agent.name}'s skills` : "Their skills"}
       </Link>
       <div className="flex flex-col gap-1.5">
@@ -233,10 +233,10 @@ export function SkillImportPage({ id }: { id: string }) {
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={busy} onClick={keep} className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-ink hover:bg-accent-hover disabled:opacity-60">
+            <button type="button" disabled={busy} onClick={keep} className="min-h-11 rounded-lg bg-accent px-5 text-sm font-semibold text-accent-ink hover:bg-accent-hover disabled:opacity-60">
               {busy ? "Importing…" : "Import it"}
             </button>
-            <button type="button" disabled={busy} onClick={() => (setChecked(null), setFile(null))} className="min-h-11 rounded-full border border-line-strong px-5 text-sm font-semibold hover:border-fg">
+            <button type="button" disabled={busy} onClick={() => (setChecked(null), setFile(null))} className="min-h-11 rounded-lg border border-line-strong px-5 text-sm font-semibold hover:border-fg">
               Choose another
             </button>
           </div>
@@ -248,10 +248,10 @@ export function SkillImportPage({ id }: { id: string }) {
           <b className="text-base text-good-text">Imported {done}</b>
           <span className="text-sm text-good-text">{name} has it within a minute, and reads it when a task fits.</span>
           <div className="flex flex-wrap gap-2">
-            <Link href={`/agents/${id}/skills`} className="inline-flex min-h-10 items-center rounded-full border border-line-strong bg-bg px-4 text-[13px] font-semibold text-fg no-underline hover:border-fg">
+            <Link href={`/agents/${id}/skills`} className="inline-flex min-h-10 items-center rounded-lg border border-line-strong bg-bg px-4 text-[13px] font-semibold text-fg no-underline hover:border-fg">
               Back to their skills
             </Link>
-            <button type="button" onClick={() => setDone("")} className="min-h-10 rounded-full px-4 text-[13px] font-semibold text-accent-text">
+            <button type="button" onClick={() => setDone("")} className="min-h-10 rounded-lg px-4 text-[13px] font-semibold text-accent-text">
               Import another
             </button>
           </div>
@@ -306,7 +306,7 @@ export function SkillDrop({ busy, file, onFile }: { busy: boolean; file?: File |
         </>
       )}
       <label
-        className={`inline-flex min-h-11 cursor-pointer items-center rounded-full px-5 text-sm font-semibold ${
+        className={`inline-flex min-h-11 cursor-pointer items-center rounded-lg px-5 text-sm font-semibold ${
           file ? "border border-line-strong text-fg hover:border-fg" : "bg-accent text-accent-ink hover:bg-accent-hover"
         }`}
       >

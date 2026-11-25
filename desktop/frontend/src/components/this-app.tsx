@@ -51,7 +51,7 @@ export function ThisApp() {
           setQuitting(true);
           await call("/app/quit", {});
         }}
-        className="min-h-10 self-start rounded-full border border-line-strong px-4 text-[13px] font-semibold hover:border-fg disabled:opacity-60"
+        className="min-h-10 self-start rounded-lg border border-line-strong px-4 text-[13px] font-semibold hover:border-fg disabled:opacity-60"
       >
         {quitting ? "Quitting" : "Quit Tinio"}
       </button>

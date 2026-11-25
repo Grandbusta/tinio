@@ -231,6 +231,12 @@ func workOnce(ctx context.Context, cfg config.Config, d *db.DB, changed <-chan s
 	h.Connections = &connect.Store{DB: d, Key: *cfg.Key}
 	h.Folders = &folders.Store{DB: d, Rules: folders.Rules{Data: cfg.DataDir}, Versions: filepath.Join(cfg.DataDir, "versions")}
 	h.Jobs = svc
+	// Agents check coding jobs' work with the model they make works with.
+	if ms.Work != nil {
+		svc.SetReviewer(ms.Work)
+	} else {
+		svc.SetReviewer(ms.System2)
+	}
 	if cl, ok := finder.Get(ctx, clis.Claude); ok && cl.SignedIn {
 		if set, err := codingSettings(ctx, d); err == nil {
 			h.Coder = set.ModelName // agents may start coding jobs
@@ -409,5 +415,5 @@ func codingSettings(ctx context.Context, d *db.DB) (jobs.Settings, error) {
 			name = m.Name
 		}
 	}
-	return jobs.Settings{Model: id, ModelName: name, Copy: c.Copy, Minutes: c.Minutes, MaxSteps: c.MaxSteps}, nil
+	return jobs.Settings{Model: id, ModelName: name, Copy: c.Copy, Minutes: c.Minutes, MaxSteps: c.MaxSteps, Review: c.Review}, nil
 }

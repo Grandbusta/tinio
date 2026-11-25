@@ -30,7 +30,7 @@ function Downloads({ id, w }: { id: string; w: Work }) {
           key={f}
           href={`/api/agents/${id}/works/${w.id}/files/${f}`}
           download
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line-strong pr-3 pl-2 text-xs font-semibold text-fg hover:border-fg"
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line-strong pr-3 pl-2 text-xs font-semibold text-fg hover:border-fg"
         >
           <FileIcon file={f} size={14} />
           {formatNames[f] ?? f.toUpperCase()}
@@ -60,7 +60,7 @@ function SendToMe({ id, w }: { id: string; w: Work }) {
       type="button"
       disabled={state === "sending"}
       onClick={send}
-      className="inline-flex min-h-9 items-center rounded-full border border-line-strong px-3 text-xs font-semibold text-fg hover:border-fg disabled:opacity-60"
+      className="inline-flex min-h-9 items-center rounded-lg border border-line-strong px-3 text-xs font-semibold text-fg hover:border-fg disabled:opacity-60"
     >
       {state === "failed" ? "Couldn't send. Try again" : "Send to me"}
     </button>
@@ -126,7 +126,7 @@ export function WorksPage({ id }: { id: string }) {
               type="button"
               aria-pressed={kind === k}
               onClick={() => setKind(k)}
-              className={`min-h-10 rounded-full px-4 text-sm first-letter:uppercase ${kind === k ? "bg-fg font-semibold text-bg" : "font-medium text-fg shadow-[inset_0_0_0_1px_var(--color-line)] hover:shadow-[inset_0_0_0_1px_var(--color-fg)]"}`}
+              className={`min-h-10 rounded-lg px-4 text-sm first-letter:uppercase ${kind === k ? "bg-fg font-semibold text-bg" : "font-medium text-fg shadow-[inset_0_0_0_1px_var(--color-line)] hover:shadow-[inset_0_0_0_1px_var(--color-fg)]"}`}
             >
               {k || "All"}
             </button>
@@ -144,7 +144,7 @@ export function WorksPage({ id }: { id: string }) {
             <p className="m-0 line-clamp-3 flex-grow text-sm text-muted">{w.peek}</p>
             <span className="text-xs text-muted">{made(w, name)}</span>
             <div className="flex flex-wrap gap-1.5 border-t border-line pt-2.5">
-              <Link href={`/agents/${id}/works/${w.id}`} className="inline-flex min-h-9 items-center rounded-full bg-accent-soft px-3 text-xs font-semibold text-accent-text">
+              <Link href={`/agents/${id}/works/${w.id}`} className="inline-flex min-h-9 items-center rounded-lg bg-accent-soft px-3 text-xs font-semibold text-accent-text">
                 Read
               </Link>
               <Downloads id={id} w={w} />
@@ -170,7 +170,7 @@ export function WorkPage({ id, work }: { id: string; work: string }) {
   const name = agent?.name ?? "";
   return (
     <div className="flex max-w-[760px] flex-col gap-5 px-10 pt-8 pb-12 max-[900px]:px-4 max-[900px]:pt-3">
-      <Link href={`/agents/${id}/works`} className="-ml-2 inline-flex min-h-11 items-center gap-1 self-start rounded-full px-2 text-sm font-semibold text-accent-text">
+      <Link href={`/agents/${id}/works`} className="-ml-2 inline-flex min-h-11 items-center gap-1 self-start rounded-lg px-2 text-sm font-semibold text-accent-text">
         ‹ All of {name ? `${name}'s` : "their"} works
       </Link>
       {error && <p role="alert" className="text-bad-text">{error}</p>}

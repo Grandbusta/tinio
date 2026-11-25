@@ -115,7 +115,7 @@ export function UsageBanner() {
           <span className="text-[13px] text-fg/80">{b.body}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/you" className="inline-flex min-h-9 items-center rounded-full border border-line-strong bg-bg px-3.5 text-[13px] font-semibold text-fg no-underline hover:border-fg">
+          <Link href="/you" className="inline-flex min-h-9 items-center rounded-lg border border-line-strong bg-bg px-3.5 text-[13px] font-semibold text-fg no-underline hover:border-fg">
             {level === "light" || level === "resting" ? "Change the cap" : "See usage"}
           </Link>
           {dismissible && (
@@ -153,14 +153,14 @@ export function Appearance() {
   return (
     <div className="flex flex-col gap-2">
       <span id="appearance" className="text-sm font-semibold">Appearance</span>
-      <div role="group" aria-labelledby="appearance" className="flex flex-wrap gap-1 self-start rounded-full border border-line bg-surface-2 p-1">
+      <div role="group" aria-labelledby="appearance" className="flex flex-wrap gap-1 self-start rounded-xl border border-line bg-surface-2 p-1">
         {options.map(([t, label]) => (
           <button
             key={t}
             type="button"
             aria-pressed={theme === t}
             onClick={() => choose(t)}
-            className={`min-h-9 rounded-full px-3.5 text-[13px] font-semibold ${theme === t ? "bg-bg text-accent-text shadow-sm" : "text-muted hover:text-fg"}`}
+            className={`min-h-9 rounded-lg px-3.5 text-[13px] font-semibold ${theme === t ? "bg-bg text-accent-text shadow-sm" : "text-muted hover:text-fg"}`}
           >
             {label}
           </button>
@@ -208,7 +208,7 @@ export function YouPage() {
             <div className="flex items-center justify-between gap-3">
               <h2 id="week" className="font-display text-lg font-semibold tracking-[-0.02em]">This week</h2>
               <span
-                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${usage.state === "normal" ? "bg-accent-soft text-accent-text" : usage.state === "light" ? "bg-warn-soft text-warn-text" : "bg-surface-2 text-fg"}`}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold ${usage.state === "normal" ? "bg-accent-soft text-accent-text" : usage.state === "light" ? "bg-warn-soft text-warn-text" : "bg-surface-2 text-fg"}`}
               >
                 {usage.state === "normal" ? "As usual" : usage.state === "light" ? "Light mode" : "Resting"}
               </span>
@@ -270,7 +270,7 @@ export function YouPage() {
                       <b className="text-sm font-semibold">{s.title}</b>
                       <span className="text-[13px] text-muted">{s.text}</span>
                     </span>
-                    {i === now && <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent-text">Now</span>}
+                    {i === now && <span className="rounded-md bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent-text">Now</span>}
                   </li>
                 ))}
               </ol>
@@ -319,7 +319,7 @@ function CapForm({ usage, onSaved }: { usage: Usage; onSaved: () => void }) {
         <button
           type="submit"
           disabled={!changed || saving || cap === ""}
-          className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-ink hover:bg-accent-hover disabled:opacity-50"
+          className="min-h-11 rounded-lg bg-accent px-5 text-sm font-semibold text-accent-ink hover:bg-accent-hover disabled:opacity-50"
         >
           {saving ? "Saving" : "Save"}
         </button>

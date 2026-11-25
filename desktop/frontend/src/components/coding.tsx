@@ -165,7 +165,7 @@ export function CodingSection() {
         <div className="flex min-w-0 flex-[1_1_300px] flex-col">
           <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <b className="text-sm font-semibold">GitHub, through your gh</b>
-            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted">
+            <span className="rounded-md bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted">
               {!gh.installed ? "Not found" : gh.signed_in ? `Signed in${gh.account ? ` as ${gh.account}` : ""}` : "Not signed in"}
             </span>
           </span>

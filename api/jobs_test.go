@@ -15,6 +15,7 @@ import (
 	"github.com/Grandbusta/tinio/internal/coding"
 	"github.com/Grandbusta/tinio/internal/coding/jobs"
 	"github.com/Grandbusta/tinio/internal/memory"
+	"github.com/Grandbusta/tinio/internal/providers/system2"
 	"github.com/Grandbusta/tinio/internal/store"
 )
 
@@ -309,5 +310,134 @@ func TestAJobsChangesCommitAndPullRequest(t *testing.T) {
 	json.Unmarshal(card.Payload, &c)
 	if c.PR != "https://github.com/ada/shop/pull/7" || c.Commit == "" || len(c.Files) == 0 {
 		t.Errorf("card %+v", c)
+	}
+}
+
+// fakeReviewer is the agent's model checking work: it sends the first round
+// back and passes the second.
+type fakeReviewer struct {
+	mu   sync.Mutex
+	seen []string // what it was asked, each time
+}
+
+func (f *fakeReviewer) Reason(_ context.Context, req system2.Request) (system2.Response, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.seen = append(f.seen, req.Message)
+	if len(f.seen) == 1 {
+		return system2.Response{Text: `{"ready": false, "to_owner": "", "to_cli": "Add a note with the 15% case."}`, CostUSD: 0.02}, nil
+	}
+	return system2.Response{Text: `{"ready": true, "to_owner": "It rounds once, the tests pass, and the note has the 15% case.", "to_cli": ""}`, CostUSD: 0.02}, nil
+}
+
+// The agent checks each round before the owner sees it: Tinio runs the
+// repository's tests in the copy, the agent reads the changes against the
+// brief, sends the first round back with what to fix, and passes the second;
+// only then is it ready for the owner, with the agent's word on its card.
+func TestTheAgentChecksTheWork(t *testing.T) {
+	ta := newTestAPI(t)
+	ada := ta.signUp(t)
+	zara := ta.raiseZara(t, ada)
+	fake, reviewer := &fakeCoder{}, &fakeReviewer{}
+	ta.jobs.Adapter = fake
+	ta.jobs.SetReviewer(reviewer)
+	t.Cleanup(func() { ta.jobs.SetReviewer(nil) })
+	repo := gitRepo(t)
+	os.Remove(filepath.Join(repo, "package.json"))
+	os.WriteFile(filepath.Join(repo, "go.mod"), []byte("module shop\n\ngo 1.22\n"), 0o644)
+	os.WriteFile(filepath.Join(repo, "basket_test.go"), []byte("package shop\n\nimport \"testing\"\n\nfunc TestTotal(t *testing.T) {\n\tif Total() != 1131 {\n\t\tt.Fatal(Total())\n\t}\n}\n"), 0o644)
+	for _, args := range [][]string{{"add", "-A"}, {"-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "a test"}} {
+		if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+	}
+	ctx := context.Background()
+	st := store.New(ta.db).For(zara)
+	j, err := ta.jobs.Begin(ctx, zara, jobs.Folder{ID: "f1", Name: "shop-site", Path: repo}, "Fix the basket rounding", "Round once, on the total.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		for end := time.Now().Add(30 * time.Second); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
+			rows, _ := st.Chat(ctx, "", 100)
+			for _, r := range rows {
+				if r.Kind == memory.ChatJobAsk && r.SettledAt.IsZero() {
+					var p struct{ Job, Ask string }
+					json.Unmarshal(r.Payload, &p)
+					ta.jobs.Answer(ctx, zara, p.Job, p.Ask, jobs.Once, "")
+				}
+			}
+		}
+	}()
+	for end := time.Now().Add(60 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		g, _ := ta.jobs.Get(ctx, zara, j.ID)
+		if g.Status == jobs.Ready && g.Rounds == 2 {
+			break
+		}
+		if time.Now().After(end) {
+			steps, _ := ta.jobs.Steps(ctx, j.ID)
+			t.Fatalf("waited for the second round to pass; it's %s after %d rounds: %+v", g.Status, g.Rounds, steps)
+		}
+	}
+
+	fake.mu.Lock()
+	started := fake.started
+	fake.mu.Unlock()
+	if len(started) != 2 || started[1].Resume != "s-1" || started[1].Brief != "Add a note with the 15% case." {
+		t.Fatalf("the second round should carry on the session with what the agent said: %+v", started)
+	}
+	reviewer.mu.Lock()
+	seen := reviewer.seen
+	reviewer.mu.Unlock()
+	if len(seen) != 2 || !strings.Contains(seen[0], "Round once, on the total.") || !strings.Contains(seen[0], "+func Total() int { return 1131 }") ||
+		!strings.Contains(seen[0], "$ go test ./...: passed") || !strings.Contains(seen[1], "notes.txt") || strings.Contains(seen[0], "asked for since") {
+		t.Fatalf("the agent should read the brief, the tests and the changes: %q", seen)
+	}
+	steps, err := ta.jobs.Steps(ctx, j.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var story []string
+	for _, s := range steps {
+		if s.Who == jobs.WhoAgent {
+			story = append(story, s.What)
+		}
+	}
+	want := []string{"Wrote the brief", "Ran go test ./...: passed", "Checked it and sent it back", "Ran go test ./...: passed", "Checked it: ready for you"}
+	if strings.Join(story, " | ") != strings.Join(want, " | ") {
+		t.Errorf("the agent's part of the story:\n%q\nwant\n%q", story, want)
+	}
+	g, _ := ta.jobs.Get(ctx, zara, j.ID)
+	card, _, _ := st.ChatMessage(ctx, g.Card)
+	var c jobs.Card
+	json.Unmarshal(card.Payload, &c)
+	if c.Status != jobs.Ready || c.Verdict != "It rounds once, the tests pass, and the note has the 15% case." || c.Summary != "Added the test." {
+		t.Errorf("the card: %+v", c)
+	}
+	if g.CostUSD < 0.23 { // two rounds (0.15 and 0.05) and two checks (0.02 each)
+		t.Errorf("the job's cost %v should count the checks", g.CostUSD)
+	}
+
+	// What the owner asks for later is part of what the agent checks against.
+	if err := ta.jobs.Reply(ctx, zara, j.ID, "Also cover 20% off."); err != nil {
+		t.Fatal(err)
+	}
+	for end := time.Now().Add(60 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		reviewer.mu.Lock()
+		n := len(reviewer.seen)
+		reviewer.mu.Unlock()
+		g, _ := ta.jobs.Get(ctx, zara, j.ID)
+		if n == 3 && g.Status == jobs.Ready {
+			break
+		}
+		if time.Now().After(end) {
+			t.Fatalf("waited for the third check; %d so far, the job %s", n, g.Status)
+		}
+	}
+	reviewer.mu.Lock()
+	third := reviewer.seen[2]
+	reviewer.mu.Unlock()
+	if !strings.Contains(third, "asked for since") || !strings.Contains(third, "- Also cover 20% off.") {
+		t.Errorf("the check should know what the owner asked for since the brief:\n%s", third)
 	}
 }

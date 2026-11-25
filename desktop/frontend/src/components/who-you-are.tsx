@@ -13,7 +13,7 @@ import { AppHeader } from "./app-header";
 // agent.
 
 const chip =
-  "min-h-11 rounded-full border px-[18px] font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+  "min-h-11 rounded-lg border px-[18px] font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 const chipOn = "border-fg bg-fg font-semibold text-bg";
 const chipOff = "border-line bg-surface hover:border-fg";
 

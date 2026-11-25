@@ -117,7 +117,7 @@ function TopicCard({ agent, topic: t, others, open, toggle, act }: {
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex flex-wrap items-center gap-2">
             <b className="font-display text-base font-semibold">{t.title || "New topic"}</b>
-            {t.waiting > 0 && <span className="rounded-full bg-warn-soft px-2 py-0.5 text-xs font-semibold text-warn-text">Needs you</span>}
+            {t.waiting > 0 && <span className="rounded-md bg-warn-soft px-2 py-0.5 text-xs font-semibold text-warn-text">Needs you</span>}
           </span>
           {t.status && <span className="text-sm text-fg">{t.status}</span>}
           <span className="text-[12.5px] text-muted">{meta}</span>
@@ -157,7 +157,7 @@ function TopicCard({ agent, topic: t, others, open, toggle, act }: {
                   <Link key={x.id} href={`/agents/${agent}?topic=${t.id}`} className="flex min-h-11 items-center gap-3 rounded-lg bg-surface-2 px-2.5 py-1 text-fg no-underline">
                     <span className="w-10 flex-none text-[11px] font-bold tracking-[0.04em] text-muted uppercase">{x.kind === "ask" ? "Ask" : "Call"}</span>
                     <span className="min-w-0 flex-1 truncate text-sm">{x.payload?.title || x.text.split("\n")[0]}</span>
-                    <span className={`flex-none rounded-full px-2 py-0.5 text-xs font-semibold ${x.settled ? "bg-surface text-muted" : "bg-warn-soft text-warn-text"}`}>{x.settled ? "Answered" : "Needs you"}</span>
+                    <span className={`flex-none rounded-md px-2 py-0.5 text-xs font-semibold ${x.settled ? "bg-surface text-muted" : "bg-warn-soft text-warn-text"}`}>{x.settled ? "Answered" : "Needs you"}</span>
                   </Link>
                 ),
               )}
@@ -195,7 +195,7 @@ function TopicCard({ agent, topic: t, others, open, toggle, act }: {
               </Link>
               <Button type="button" onClick={() => setRenaming(true)} className="min-h-10 px-4 text-[13px]">Rename</Button>
               {others.length > 0 && <Button type="button" onClick={() => setMerging(true)} className="min-h-10 px-4 text-[13px]">Merge with…</Button>}
-              <button type="button" onClick={() => act(`${t.id}/close`)} className="inline-flex min-h-10 items-center rounded-full px-4 text-[13px] font-semibold text-muted hover:bg-surface-2 hover:text-fg">Close it</button>
+              <button type="button" onClick={() => act(`${t.id}/close`)} className="inline-flex min-h-10 items-center rounded-lg px-4 text-[13px] font-semibold text-muted hover:bg-surface-2 hover:text-fg">Close it</button>
             </div>
           )}
         </div>

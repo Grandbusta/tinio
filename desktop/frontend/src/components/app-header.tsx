@@ -26,7 +26,7 @@ export function AppHeader({ account, step, picked }: { account: Account | null; 
               const label = `${i + 1} · ${i === 0 && picked && step > 0 ? picked : s}`;
               const tone = i < step ? "bg-good-soft text-good-text" : i === step ? "bg-accent-soft text-accent-text" : "text-muted ring-1 ring-line ring-inset";
               return (
-                <li key={s} aria-current={i === step ? "step" : undefined} className={`rounded-full px-3 py-1.5 ${tone}`}>
+                <li key={s} aria-current={i === step ? "step" : undefined} className={`rounded-md px-3 py-1.5 ${tone}`}>
                   {label}
                 </li>
               );

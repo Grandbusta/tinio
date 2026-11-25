@@ -343,4 +343,5 @@ export type JobPayload = {
   rounds?: number;
   commit?: string;
   pr?: string;
+  verdict?: string;
 };

@@ -74,7 +74,7 @@ function Step({ d, q, onLabel }: { d: Decision; q: Chain["questions"]; onLabel: 
   return (
     <li className="flex flex-col gap-2 rounded-lg border border-line p-3.5">
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`rounded-full bg-surface-2 py-0.5 pr-2.5 pl-2 text-[11.5px] font-semibold ${tierRing[d.tier]}`}>{tierName[d.tier]}</span>
+        <span className={`rounded-md bg-surface-2 py-0.5 pr-2.5 pl-2 text-[11.5px] font-semibold ${tierRing[d.tier]}`}>{tierName[d.tier]}</span>
         <span className="text-xs text-muted">{meta}</span>
       </div>
       {answers.map(([name, a]) => {
@@ -103,7 +103,7 @@ function Step({ d, q, onLabel }: { d: Decision; q: Chain["questions"]; onLabel: 
                     {info.choices
                       .filter((c) => c.value !== a.choice)
                       .map((c) => (
-                        <button key={c.value} type="button" title={c.description} onClick={() => onLabel(d, name, c.value)} className="min-h-8 rounded-full border border-line-strong px-2.5 hover:border-fg">
+                        <button key={c.value} type="button" title={c.description} onClick={() => onLabel(d, name, c.value)} className="min-h-8 rounded-lg border border-line-strong px-2.5 hover:border-fg">
                           {words(c.value)}
                         </button>
                       ))}
@@ -111,10 +111,10 @@ function Step({ d, q, onLabel }: { d: Decision; q: Chain["questions"]; onLabel: 
                 ) : (
                   <>
                     <span className="text-muted">Was this read right?</span>
-                    <button type="button" onClick={() => onLabel(d, name, a.choice ?? "")} className="min-h-8 rounded-full border border-line-strong px-2.5 font-semibold hover:border-fg">
+                    <button type="button" onClick={() => onLabel(d, name, a.choice ?? "")} className="min-h-8 rounded-lg border border-line-strong px-2.5 font-semibold hover:border-fg">
                       Right
                     </button>
-                    <button type="button" onClick={() => setWrong(name)} className="min-h-8 rounded-full border border-line-strong px-2.5 font-semibold hover:border-fg">
+                    <button type="button" onClick={() => setWrong(name)} className="min-h-8 rounded-lg border border-line-strong px-2.5 font-semibold hover:border-fg">
                       Wrong
                     </button>
                   </>
