@@ -77,8 +77,8 @@ Approved tools that only start something (a job) run as soon as you say yes.
 **A truer blue:** the app's blue is a royal blue now, in both modes. In dark mode buttons
 are a strong blue with white text, where they were a pale blue with dark text, and links
 and pills keep a lighter blue that reads well on the dark. Dark mode is darker and plainer:
-near-black with neutral greys, the rail the page's own colour, and the chat's pattern
-dimmed so it stays a texture.
+near-black with neutral greys, and the rail the page's own colour. The chat's pattern is
+gone: the chat sits on a plain, soft tint, and its messages stand out on their own.
 
 **More room for the work:** the chat list is narrower (320px), and folds to a column of
 faces with its button or ⌘\. Folded, a face keeps its unread dot, a ring means they need

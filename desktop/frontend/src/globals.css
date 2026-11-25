@@ -20,25 +20,6 @@ body {
   font-family: var(--font-sans);
 }
 
-/* Behind the chat, faint doodles of what agents make, so it isn't a blank page. Mid-grey
-   at low opacity reads on the light and the dark background alike; it stays put while the
-   messages scroll over it. */
-.chat-wallpaper {
-  background-image: url("/chat-wallpaper.svg");
-  background-size: 320px 320px;
-}
-
-/* In the dark the pattern is dimmed under a veil of the page's own colour, so it stays a
-   texture and not a haze. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .chat-wallpaper {
-    background-image: linear-gradient(rgb(11 12 14 / 0.62), rgb(11 12 14 / 0.62)), url("/chat-wallpaper.svg");
-  }
-}
-:root[data-theme="dark"] .chat-wallpaper {
-  background-image: linear-gradient(rgb(11 12 14 / 0.62), rgb(11 12 14 / 0.62)), url("/chat-wallpaper.svg");
-}
-
 /* Opening or closing About, and arriving from a page outside the frame: the page area
    eases in, the rail and the list stay still. */
 @view-transition {

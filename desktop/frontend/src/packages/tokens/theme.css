@@ -44,6 +44,7 @@
   --line: #e3e7ec;
   --line-strong: #8a919b;
   --rail: #f7f8fa;
+  --chat: #f3f5f8;
   --accent: #2748bd;
   --accent-hover: #1f3c9f;
   --accent-ink: #ffffff;
@@ -71,6 +72,7 @@
     --line: #24282d;
     --line-strong: #686e75;
     --rail: #0b0c0e;
+    --chat: #0b0c0e;
     --accent: #3358e0;
     --accent-hover: #4366e6;
     --accent-ink: #ffffff;
@@ -89,6 +91,7 @@
 /* Dark chosen by hand (data-theme="dark"), whatever the system says; the same colours. */
 :root[data-theme="dark"] {
   --rail: #0b0c0e;
+  --chat: #0b0c0e;
   --bg: #0b0c0e;
   --surface: #141619;
   --surface-2: #1b1e22;
@@ -119,6 +122,7 @@
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
   --color-rail: var(--rail);
+  --color-chat: var(--chat);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-ink: var(--accent-ink);

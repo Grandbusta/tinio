@@ -580,7 +580,7 @@ export function Chat({ id }: { id: string }) {
         <div ref={end} />
       </div>
 
-      <form onSubmit={send} className="sticky bottom-0 mx-auto flex w-full max-w-[760px] flex-wrap items-end gap-2.5 bg-bg px-10 pt-1 pb-6 max-[900px]:px-3 max-[900px]:pb-3.5">
+      <form onSubmit={send} className="sticky bottom-0 mx-auto flex w-full max-w-[760px] flex-wrap items-end gap-2.5 bg-chat px-10 pt-1 pb-6 max-[900px]:px-3 max-[900px]:pb-3.5">
         {replyTo && (
           <ComposerBar
             title={`Replying to ${replyTo.author === "owner" ? "yourself" : name}${replyTo.topic ? ` · ${titleOf(replyTo.topic)}` : ""}`}
