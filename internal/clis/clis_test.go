@@ -72,3 +72,16 @@ func TestEnvLeavesOutTiniosOwn(t *testing.T) {
 		t.Fatalf("env = %v", env)
 	}
 }
+
+func TestFindsGitHubSignedIn(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PATH", t.TempDir())
+	fake(t, dir, "gh", map[string]string{
+		"--version":                         "gh version 2.97.0 (2026-07-31)",
+		"auth status --hostname github.com": "github.com\n  ✓ Logged in to github.com account ada-okafor (keyring)",
+	})
+	g := (&Finder{Dirs: []string{dir}}).GH(context.Background())
+	if !g.Installed || g.Version != "2.97.0" || !g.SignedIn || g.Account != "ada-okafor" {
+		t.Fatalf("gh = %+v", g)
+	}
+}

@@ -301,6 +301,9 @@ func setupRouter(cfg config.Config, auth *controllers.Auth, agents *controllers.
 	sources := &controllers.Sources{DB: keys.DB, Key: keys.Key, Finder: finder}
 	v1.GET("/sources", signedIn, h(sources.Get))
 	v1.POST("/sources", ours, signedIn, h(sources.Use))
+	coding := &controllers.Coding{DB: keys.DB, Finder: finder}
+	v1.GET("/coding", signedIn, h(coding.Get))
+	v1.POST("/coding", ours, signedIn, h(coding.Change))
 	fd := &controllers.Folders{DB: keys.DB, Rules: folders.Rules{Data: cfg.DataDir}}
 	v1.GET("/folders", signedIn, h(fd.List))
 	v1.GET("/folders/peek", signedIn, h(fd.Peek))

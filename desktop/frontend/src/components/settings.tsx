@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useFrame } from "@/components/app-frame";
+import { CodingSection } from "@/components/coding";
 import { FoldersSection } from "@/components/folders";
 import { cliStatus, KeyForm, ready, type Sources, useSources } from "@/components/first-run";
 import { ServiceLogo } from "@/components/service-logo";
@@ -60,6 +61,8 @@ export function SettingsPage() {
       <ThinkSection sources={sources} onChange={changed} />
 
       <ModelsSection sources={sources} onChange={refresh} />
+
+      <CodingSection />
 
       <FoldersSection />
 

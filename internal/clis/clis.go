@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -212,4 +213,42 @@ func Env(environ []string, program string) []string {
 		dirs = append(dirs, path)
 	}
 	return append(out, "PATH="+strings.Join(dirs, string(os.PathListSeparator)))
+}
+
+// A GitHub is the `gh` on this computer, which pushes and opens pull requests
+// for coding jobs, as the owner: Tinio holds no GitHub token.
+type GitHub struct {
+	Path      string `json:"-"`
+	Installed bool   `json:"installed"`
+	Version   string `json:"version"`
+	SignedIn  bool   `json:"signed_in"`
+	Account   string `json:"account"` // their GitHub login, when it says
+}
+
+// account is the login in `gh auth status`'s "Logged in to github.com account X".
+var account = regexp.MustCompile(`account (\S+)`)
+
+// GH is the `gh` on this computer, asked whether it's signed in to github.com.
+func (f *Finder) GH(ctx context.Context) GitHub {
+	g := GitHub{Path: f.Path("gh")}
+	if g.Path == "" {
+		return g
+	}
+	g.Installed = true
+	if out, err := f.run(ctx, g.Path, "--version"); err == nil {
+		g.Version = version(out)
+	}
+	// It says on stderr, and exits 1 when signed out.
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, g.Path, "auth", "status", "--hostname", "github.com")
+	cmd.Env = Env(os.Environ(), g.Path)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		g.SignedIn = true
+		if m := account.FindSubmatch(out); m != nil {
+			g.Account = string(m[1])
+		}
+	}
+	return g
 }

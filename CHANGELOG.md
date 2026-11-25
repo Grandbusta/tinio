@@ -58,6 +58,14 @@ mornings and light mode, Opus 5.5 for works. Settings shows where they can think
 Code, and OpenCode and Codex when found) and lets each job pick a model from Claude Code or
 your key; what Claude Code says a call would cost counts toward the week's cap.
 
+**Coding jobs, the groundwork:** Settings has Coding jobs: who writes the code (Opus 5.5
+to start), working on a copy, the agent checking the work, how long a job may run, and
+GitHub through your own `gh`. Underneath, `internal/coding` runs a job with Claude Code and
+answers what it asks: on its own it reads, changes files in the copy and runs the
+repository's own test, lint and build commands; anything else is for you. A job follows
+the repository's CLAUDE.md and `.claude` settings, never your own Claude Code setup.
+Agents start jobs from the chat in the next step.
+
 **Folders on your computer:** add a folder in Settings, or with the + beside the message
 box, and choose which agents may use it, Read or Read and make files. They list, search
 and read what's in it (text, Word, Excel, PDF) on their own; making or changing a file
