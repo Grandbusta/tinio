@@ -74,6 +74,18 @@ stopped, and a reply carries them on. Settings has Coding jobs: who writes the c
 5.5 to start), on a copy or not, how long a job runs, and GitHub through your own gh.
 Approved tools that only start something (a job) run as soon as you say yes.
 
+**A truer blue:** the app's blue is a royal blue now, in both modes. In dark mode buttons
+are a strong blue with white text, where they were a pale blue with dark text, and links
+and pills keep a lighter blue that reads well on the dark. Dark mode is darker and plainer:
+near-black with neutral greys, the rail the page's own colour, and the chat's pattern
+dimmed so it stays a texture.
+
+**More room for the work:** the chat list is narrower (320px), and folds to a column of
+faces with its button or ⌘\. Folded, a face keeps its unread dot, a ring means they need
+you, and the name shows on hover; the app remembers your choice. A job or a work opened
+folds it on its own, and so does a window between 901 and 1100px wide, where opening it
+lays it over the page until you pick a chat. The chat keeps a reading width, centred.
+
 **A job's page:** open a job from its card to see what happened, told by who did it (the
 agent, Claude Code, you), and its changes, file by file, for the whole job or one round at
 a time. Tap a line to say something about it; Send it back takes your notes, and the line

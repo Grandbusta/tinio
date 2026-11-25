@@ -467,7 +467,7 @@ export function Chat({ id }: { id: string }) {
       {keySet === false ? <NoKey name={agent?.name} /> : <UsageBanner />}
       {inTopic && (
         <section aria-label="Where this topic stands" className="border-b border-line bg-accent-soft/50 px-10 py-3.5 max-[900px]:px-3">
-          <div className="flex max-w-[680px] flex-col gap-1">
+          <div className="mx-auto flex w-full max-w-[680px] flex-col gap-1">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
               <h2 className="font-display text-[17px] font-semibold tracking-[-0.02em]">{titleOf(inTopic)}</h2>
               <span className="text-[12.5px] text-muted">
@@ -486,7 +486,7 @@ export function Chat({ id }: { id: string }) {
         </section>
       )}
 
-      <div ref={log} role="log" aria-live="polite" aria-label={`Chat with ${name}`} className="flex w-full max-w-[760px] flex-1 flex-col px-10 py-6 max-[900px]:px-3 max-[900px]:py-4">
+      <div ref={log} role="log" aria-live="polite" aria-label={`Chat with ${name}`} className="mx-auto flex w-full max-w-[760px] flex-1 flex-col px-10 py-6 max-[900px]:px-3 max-[900px]:py-4">
         {agent && <span className="mb-1 self-center text-xs text-muted">{name} was raised {day(agent.created_at)}</span>}
         {visible.map((r, i) => {
           const before = visible[i - 1];
@@ -580,7 +580,7 @@ export function Chat({ id }: { id: string }) {
         <div ref={end} />
       </div>
 
-      <form onSubmit={send} className="sticky bottom-0 flex w-full max-w-[760px] flex-wrap items-end gap-2.5 bg-bg px-10 pt-1 pb-6 max-[900px]:px-3 max-[900px]:pb-3.5">
+      <form onSubmit={send} className="sticky bottom-0 mx-auto flex w-full max-w-[760px] flex-wrap items-end gap-2.5 bg-bg px-10 pt-1 pb-6 max-[900px]:px-3 max-[900px]:pb-3.5">
         {replyTo && (
           <ComposerBar
             title={`Replying to ${replyTo.author === "owner" ? "yourself" : name}${replyTo.topic ? ` · ${titleOf(replyTo.topic)}` : ""}`}
@@ -641,7 +641,7 @@ export function Chat({ id }: { id: string }) {
           <p className="m-0 basis-full px-[18px] text-xs text-muted">What you send now is read at the reset, {resets(usage.resets_at)}.</p>
         )}
       </form>
-      {error && <p role="alert" className="max-w-[760px] px-10 pb-4 text-sm text-bad-text max-[900px]:px-3">{error}</p>}
+      {error && <p role="alert" className="mx-auto w-full max-w-[760px] px-10 pb-4 text-sm text-bad-text max-[900px]:px-3">{error}</p>}
     </>
   );
 }

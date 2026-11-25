@@ -43,11 +43,12 @@
   --muted: #565e69;
   --line: #e3e7ec;
   --line-strong: #8a919b;
-  --accent: #0f4b92;
-  --accent-hover: #0c3c75;
+  --rail: #f7f8fa;
+  --accent: #2748bd;
+  --accent-hover: #1f3c9f;
   --accent-ink: #ffffff;
-  --accent-soft: #e5f0fe;
-  --accent-text: #0f4b92;
+  --accent-soft: #e8ecfd;
+  --accent-text: #2342ad;
   --band: #06162c;
   --good: #1f7a4d;
   --good-soft: #ddf3e6;
@@ -62,18 +63,19 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e1114;
-    --surface: #14171c;
-    --surface-2: #1b2025;
-    --fg: #ebeff4;
-    --muted: #abb2bb;
-    --line: #292e35;
-    --line-strong: #6b727b;
-    --accent: #a9cdff;
-    --accent-hover: #cce2ff;
-    --accent-ink: #06162c;
-    --accent-soft: #112743;
-    --accent-text: #a9cdff;
+    --bg: #0b0c0e;
+    --surface: #141619;
+    --surface-2: #1b1e22;
+    --fg: #edf0f3;
+    --muted: #a3aab3;
+    --line: #24282d;
+    --line-strong: #686e75;
+    --rail: #0b0c0e;
+    --accent: #3358e0;
+    --accent-hover: #4366e6;
+    --accent-ink: #ffffff;
+    --accent-soft: #18244d;
+    --accent-text: #8ea6ff;
     --good-soft: #163526;
     --good-text: #8fe0b5;
     --warn-soft: #24210f;
@@ -86,18 +88,19 @@
 
 /* Dark chosen by hand (data-theme="dark"), whatever the system says; the same colours. */
 :root[data-theme="dark"] {
-  --bg: #0e1114;
-  --surface: #14171c;
-  --surface-2: #1b2025;
-  --fg: #ebeff4;
-  --muted: #abb2bb;
-  --line: #292e35;
-  --line-strong: #6b727b;
-  --accent: #a9cdff;
-  --accent-hover: #cce2ff;
-  --accent-ink: #06162c;
-  --accent-soft: #112743;
-  --accent-text: #a9cdff;
+  --rail: #0b0c0e;
+  --bg: #0b0c0e;
+  --surface: #141619;
+  --surface-2: #1b1e22;
+  --fg: #edf0f3;
+  --muted: #a3aab3;
+  --line: #24282d;
+  --line-strong: #686e75;
+  --accent: #3358e0;
+  --accent-hover: #4366e6;
+  --accent-ink: #ffffff;
+  --accent-soft: #18244d;
+  --accent-text: #8ea6ff;
   --good-soft: #163526;
   --good-text: #8fe0b5;
   --warn-soft: #24210f;
@@ -115,6 +118,7 @@
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  --color-rail: var(--rail);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-ink: var(--accent-ink);

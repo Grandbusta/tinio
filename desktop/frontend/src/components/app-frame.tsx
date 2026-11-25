@@ -41,9 +41,24 @@ export function useFrame(): Frame {
 
 const refreshEvery = 30_000;
 
+// The chat list folds to a column of faces, from its button or ⌘\. Folded or not is
+// remembered on this computer. A job or a work opened folds it on its own, as does a
+// window between 901 and 1100px wide; there, unfolding is for now only, and the list
+// opens over the page.
+const foldKey = "tinio.chats-folded";
+const between = "(min-width: 901px) and (max-width: 1100px)";
+
+function foldedBefore() {
+  try {
+    return localStorage.getItem(foldKey) === "1";
+  } catch {
+    return false;
+  }
+}
+
 const fullWidth: Page[] = ["you", "settings", "connections"];
 
-type Page = "list" | "you" | "settings" | "connections" | "chat" | "today" | "works" | "growth" | "judgment" | "mind" | "memory" | "character" | "settings" | "skills";
+type Page = "list" | "jobs" | "you" | "settings" | "connections" | "chat" | "today" | "works" | "growth" | "judgment" | "mind" | "memory" | "character" | "settings" | "skills";
 
 // where is the agent open and the page shown, from the path: /agents is the list, /you
 // the week's usage, /settings your keys, models and the app, /connections[/...] the
@@ -105,6 +120,46 @@ export function AppFrame({ children }: { children: ReactNode }) {
     };
   }, [account, refresh]);
 
+  const [chosenFold, setChosenFold] = useState(foldedBefore);
+  const [narrow, setNarrow] = useState(() => window.matchMedia(between).matches);
+  const [foldNow, setFoldNow] = useState<boolean | null>(null); // unfolded or folded for this page only
+  useEffect(() => {
+    const m = window.matchMedia(between);
+    const on = () => setNarrow(m.matches);
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  useEffect(() => setFoldNow(null), [path]);
+  const onOne = page === "jobs" || (page === "works" && path.split("/").length > 4);
+  const auto = narrow || onOne;
+  const folded = foldNow ?? (chosenFold || auto);
+  const toggleFold = useCallback(() => {
+    if (auto) return setFoldNow(!folded);
+    setChosenFold(!folded);
+    try {
+      localStorage.setItem(foldKey, folded ? "0" : "1");
+    } catch {
+      // not remembered, then
+    }
+  }, [auto, folded]);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+        e.preventDefault();
+        toggleFold();
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [toggleFold]);
+  const over = narrow && !folded && page !== "list"; // the list opened over the page
+  useEffect(() => {
+    if (!over) return;
+    const close = (e: KeyboardEvent) => e.key === "Escape" && setFoldNow(true);
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [over]);
+
   const agent = overview?.agents.find((a) => a.id === open) ?? null;
   const frame: Frame = {
     account,
@@ -138,10 +193,18 @@ export function AppFrame({ children }: { children: ReactNode }) {
   }, [showsAbout, showAbout]);
   return (
     <FrameContext.Provider value={frame}>
-      <div className="flex h-dvh overflow-hidden bg-bg text-fg">
+      <div className="relative flex h-dvh overflow-hidden bg-bg text-fg">
         <Rail account={account} on={page === "you" || page === "settings" || page === "connections" || page === "today" ? page : "chats"} />
         {/* You and connections aren't chats: they have the whole width, with the rail to go back. */}
-        {!fullWidth.includes(page) && <List open={open} className={page === "list" ? "" : "max-[900px]:hidden"} />}
+        {!fullWidth.includes(page) && folded && <Faces open={open} unfold={toggleFold} />}
+        {!fullWidth.includes(page) && (!folded || page === "list") && (
+          <List
+            open={open}
+            fold={toggleFold}
+            over={over}
+            className={`${folded ? "min-[901px]:hidden" : page === "list" ? "" : "max-[900px]:hidden"} ${over ? "absolute inset-y-0 left-[76px] z-30 bg-bg shadow-2xl" : ""}`}
+          />
+        )}
         <main
           ref={pageArea}
           className={`flex min-w-0 flex-1 flex-col overflow-y-auto [view-transition-name:page] ${page === "chat" ? "chat-wallpaper" : ""} ${showsAbout ? "hidden" : ""}`}
@@ -186,7 +249,7 @@ const railItem = "relative flex min-h-14 w-16 flex-col items-center justify-cent
 function Rail({ account, on }: { account: Account | null; on: "chats" | "today" | "you" | "settings" | "connections" }) {
   const { dark, choose } = useTheme();
   return (
-    <nav aria-label="Main" className="flex w-[76px] flex-none flex-col items-center gap-1 border-r border-line bg-surface-2/60 pb-4 max-[900px]:hidden">
+    <nav aria-label="Main" className="flex w-[76px] flex-none flex-col items-center gap-1 border-r border-line bg-rail pb-4 max-[900px]:hidden">
       {/* Room for the window's buttons (macOS puts them here, with the same room either side in the rail's 76px), and a place to drag it by. */}
       <div aria-hidden="true" className="h-8 w-full flex-none [--wails-draggable:drag]" />
       <Link href="/agents" aria-label="Tinio, your agents" className="mb-2 grid size-14 place-items-center text-accent-text">
@@ -262,7 +325,7 @@ type Filter = "all" | "needs" | "unread";
 // and what's unread. The open one is current, and has nothing unread.
 // A filter shows only the chats that match it. One opened from the filtered list stays
 // until the filter changes, though reading it means it no longer matches.
-function List({ open, className }: { open?: string; className: string }) {
+function List({ open, fold, over, className }: { open?: string; fold: () => void; over: boolean; className: string }) {
   const { overview } = useFrame();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -281,11 +344,20 @@ function List({ open, className }: { open?: string; className: string }) {
     ["unread", "Unread"],
   ];
   return (
-    <section aria-label="Chats" className={`flex w-[380px] flex-none flex-col border-r border-line max-[900px]:w-full max-[900px]:border-r-0 ${className}`}>
+    <section aria-label="Chats" className={`flex w-[320px] flex-none flex-col border-r border-line max-[900px]:w-full max-[900px]:border-r-0 ${className}`}>
       <div className="flex flex-col gap-3 px-4 pt-3.5 pb-2.5">
         <div className="flex items-center justify-between gap-2">
           <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em] max-[900px]:text-[28px] max-[900px]:font-medium">Chats</h1>
           <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={fold}
+              aria-label="Fold the list (⌘\)"
+              title="Fold the list (⌘\)"
+              className="grid size-11 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-fg max-[900px]:hidden"
+            >
+              <PanelIcon folded={false} />
+            </button>
             <Link href="/agents" aria-label="Overview of your agents" className="grid size-11 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-fg max-[900px]:hidden">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="4" y="4" width="6" height="6" rx="1" />
@@ -332,7 +404,7 @@ function List({ open, className }: { open?: string; className: string }) {
       <div className="min-h-0 flex-auto overflow-y-auto border-t border-line">
         {!open && <NoKey compact />}
         {shown.map((a) => (
-          <Row key={a.id} agent={a} current={a.id === open} unread={unread(a)} onOpen={() => setKept(a.id)} />
+          <Row key={a.id} agent={a} current={a.id === open} unread={unread(a)} onOpen={() => (setKept(a.id), over && fold())} />
         ))}
         {overview && shown.length === 0 && (
           <p className="m-0 px-4 py-5 text-sm text-muted">
@@ -362,6 +434,67 @@ function List({ open, className }: { open?: string; className: string }) {
           You
         </Link>
       </nav>
+    </section>
+  );
+}
+
+function PanelIcon({ folded }: { folded: boolean }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      <path d="M9 4v16" />
+      <path d={folded ? "M14 10l2 2-2 2" : "M16 10l-2 2 2 2"} />
+    </svg>
+  );
+}
+
+// Faces is the chat list folded: each agent's face, a ring when they need you, a dot
+// when something's unread, and their name on hover and to screen readers.
+function Faces({ open, unfold }: { open?: string; unfold: () => void }) {
+  const { overview } = useFrame();
+  const agents = overview?.agents ?? [];
+  return (
+    <section aria-label="Chats" className="flex w-[72px] flex-none flex-col items-center gap-1.5 border-r border-line pt-3.5 pb-3 max-[900px]:hidden">
+      <button
+        type="button"
+        onClick={unfold}
+        aria-label="Open the list (⌘\)"
+        title="Open the list (⌘\)"
+        className="grid size-11 flex-none place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-fg"
+      >
+        <PanelIcon folded />
+      </button>
+      <span aria-hidden="true" className="my-1 h-px w-8 flex-none bg-line" />
+      <nav aria-label="Your agents" className="flex min-h-0 flex-auto flex-col items-center gap-1 overflow-y-auto">
+        {agents.map((a) => {
+          const current = a.id === open;
+          const unread = current ? 0 : a.unread;
+          const label = `${a.name}${a.waiting > 0 ? ", needs you" : ""}${unread > 0 ? `, ${unread} unread` : ""}`;
+          return (
+            <Link
+              key={a.id}
+              href={`/agents/${a.id}`}
+              aria-current={current ? "page" : undefined}
+              aria-label={label}
+              title={label}
+              className={`relative grid size-[52px] flex-none place-items-center rounded-[14px] ${current ? "bg-accent-soft" : "hover:bg-surface-2"}`}
+            >
+              <span className={`grid place-items-center rounded-full ${a.waiting > 0 ? "ring-[3px] ring-warn-text" : ""}`}>
+                <Avatar agent={a} size={40} />
+              </span>
+              {unread > 0 && <span aria-hidden="true" className="absolute top-1 right-1 size-[11px] rounded-full border-2 border-bg bg-accent" />}
+            </Link>
+          );
+        })}
+      </nav>
+      <Link
+        href="/raise"
+        aria-label="Raise another agent"
+        title="Raise another agent"
+        className="grid size-11 flex-none place-items-center rounded-full border border-dashed border-line-strong text-[20px] text-accent-text"
+      >
+        +
+      </Link>
     </section>
   );
 }
