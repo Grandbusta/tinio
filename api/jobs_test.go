@@ -99,7 +99,9 @@ func (s *fakeSession) Answer(_ string, allow bool, why string, stop bool) error 
 func gitRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "--allow-empty", "-m", "start"}} {
+	// Its own name and email, as a person's checkout has: a machine with none (CI) can't commit.
+	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"config", "user.name", "t"}, {"config", "user.email", "t@example.invalid"},
+		{"commit", "-q", "--allow-empty", "-m", "start"}} {
 		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %s", args, out)
 		}
@@ -268,7 +270,9 @@ func TestACodingJob(t *testing.T) {
 	if err := carry.Check(args); err != nil {
 		t.Fatal(err)
 	}
-	if title, _, quote := carry.(interface{ Explain(string) (string, string, string) }).Explain(args); title != "Carry on the coding job Fix the basket rounding?" || quote != "Also add a requirements-gathering skill." {
+	if title, _, quote := carry.(interface {
+		Explain(string) (string, string, string)
+	}).Explain(args); title != "Carry on the coding job Fix the basket rounding?" || quote != "Also add a requirements-gathering skill." {
 		t.Errorf("the owner's card: %q %q", title, quote)
 	}
 	if _, err := carry.Do(ctx, args, time.Now()); err != nil {
@@ -286,7 +290,10 @@ func TestACodingJob(t *testing.T) {
 	if err := carry.Check(`{"job": "Nothing like it", "what": "x"}`); err == nil {
 		t.Error("carried on a job that isn't theirs")
 	}
-	waitFor(t, "it to finish a fourth time", func() bool { g, _ := ta.jobs.Get(ctx, zara, j.ID); return g.Status == jobs.Ready && !ta.jobs.Checking(j.ID) })
+	waitFor(t, "it to finish a fourth time", func() bool {
+		g, _ := ta.jobs.Get(ctx, zara, j.ID)
+		return g.Status == jobs.Ready && !ta.jobs.Checking(j.ID)
+	})
 }
 
 // After a job: its page shows what it did and its changes, by round; going
